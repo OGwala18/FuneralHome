@@ -1,0 +1,26 @@
+[
+  {
+    "id": "g-001",
+    "title": "Community Memorial Service",
+    "category": "Our Work",
+    "image": "/src/assets/gallery/work-001.jpg",
+    "alt": "Community memorial service setup with floral arrangements",
+    "shortDescription": "Organised and supported a full memorial service with family coordination."
+  },
+  {
+    "id": "g-002",
+    "title": "Family Transport & Coordination",
+    "category": "Services",
+    "image": "/src/assets/gallery/services-001.jpg",
+    "alt": "Coordinated family transport vehicles",
+    "shortDescription": "Door-to-door logistics for families and elders."
+  },
+  {
+    "id": "g-003",
+    "title": "Serving Local Communities",
+    "category": "Happy Families",
+    "image": "/src/assets/gallery/clients-001.jpg",
+    "alt": "Smiling family after service",
+    "shortDescription": "Ongoing support for diverse families across our communities."
+  }
+]

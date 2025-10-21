@@ -1,0 +1,26 @@
+[
+  {
+    "id": "t-001",
+    "name": "Nomsa M.",
+    "relation": "Family Member",
+    "rating": 5,
+    "message": "Compassionate and professional from start to finish. We felt truly supported.",
+    "dateISO": "2025-10-10"
+  },
+  {
+    "id": "t-002",
+    "name": "—",
+    "relation": "Friend of the Deceased",
+    "rating": 4,
+    "message": "They handled details we didn't even think about. Thank you for the dignity and care.",
+    "dateISO": "2025-10-12"
+  },
+  {
+    "id": "t-003",
+    "name": "The Dlamini Family",
+    "relation": "Family",
+    "rating": 5,
+    "message": "Professional service and warm guidance through a difficult week.",
+    "dateISO": "2025-10-14"
+  }
+]

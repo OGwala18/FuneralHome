@@ -1,0 +1,16 @@
+{
+  "name": "Founder Name",
+  "photo": "/src/assets/founder/founder.jpg",
+  "tagline": "Serving families with dignity and care.",
+  "longFormStory": [
+    "I grew up in a community where neighbours became family in moments of need. Those experiences shaped my belief that care is more than a service — it's a responsibility.",
+    "Induduzo Care was built to support families with compassion, respect, and cultural understanding. Our journey has always been about walking alongside people through difficult days, not merely providing logistics.",
+    "Today, our team continues that mission: professional excellence anchored in humanity."
+  ],
+  "milestones": [
+    { "year": "2015", "text": "Began coordinating community memorials as a volunteer." },
+    { "year": "2019", "text": "Registered Induduzo Care and opened our first small office." },
+    { "year": "2022", "text": "Expanded services to include full family logistics and support." },
+    { "year": "2025", "text": "Launched outreach partnerships with local organisations." }
+  ]
+}
