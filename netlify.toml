@@ -1,0 +1,14 @@
+[build]
+  base = "FuneralHome/induduzo-care-site-main"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+
