@@ -49,6 +49,16 @@ All colors MUST be HSL.
 
     --radius: 0.75rem;
 
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 210 8% 14%;
+    --sidebar-primary: 4 66% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 11% 97%;
+    --sidebar-accent-foreground: 210 8% 14%;
+    --sidebar-border: 210 20% 92%;
+    --sidebar-ring: 4 66% 45%;
+
     /* Custom design tokens */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.08);
