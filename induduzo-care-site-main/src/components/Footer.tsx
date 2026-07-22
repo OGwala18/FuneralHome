@@ -40,9 +40,9 @@ export const Footer = () => {
           <div>
             <h4 className="font-semibold mb-4">{t("footer_contact_info")}</h4>
             <div className="space-y-3 text-base">
-              <a href="tel:0829549241" className="flex items-center hover:text-primary transition-colors">
+              <a href="tel:0697060387" className="flex items-center hover:text-primary transition-colors">
                 <Phone className="h-5 w-5 mr-2" />
-                082 954 9241
+                069 706 0387
               </a>
               <a href="mailto:info@induduzofuneralhome.co.za" className="flex items-center hover:text-primary transition-colors">
                 <Mail className="h-5 w-5 mr-2" />

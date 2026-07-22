@@ -177,7 +177,7 @@ export const Header = () => {
           </div>
 
           <Button asChild size="sm" className="hidden md:flex">
-            <a href="tel:0829549241">
+            <a href="tel:0697060387">
               <Phone className="mr-2 h-4 w-4" />
               {t("cta_call")}
             </a>
