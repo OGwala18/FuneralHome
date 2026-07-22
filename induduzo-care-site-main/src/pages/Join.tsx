@@ -330,12 +330,12 @@ export default function Join() {
                 </p>
                 <div className="flex flex-wrap gap-4 justify-center">
                   <Button size="lg" variant="secondary" asChild>
-                    <a href="tel:0829549241">
+                    <a href="tel:0697060387">
                       {t("cta_call")}
                     </a>
                   </Button>
                   <Button size="lg" variant="secondary" asChild>
-                    <a href="https://wa.me/27829549241" target="_blank" rel="noopener noreferrer">
+                    <a href="https://wa.me/27697060387" target="_blank" rel="noopener noreferrer">
                       WhatsApp
                     </a>
                   </Button>

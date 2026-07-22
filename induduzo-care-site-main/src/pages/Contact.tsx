@@ -45,8 +45,8 @@ export default function Contact() {
                   <Phone className="h-8 w-8 text-primary" />
                 </div>
                 <h3 className="mb-3 text-xl">{t("contact_phone")}</h3>
-                <a href="tel:0829549241" className="text-lg font-semibold text-primary hover:underline">
-                  082 954 9241
+                <a href="tel:0697060387" className="text-lg font-semibold text-primary hover:underline">
+                  069 706 0387
                 </a>
                 <p className="text-sm text-muted-foreground mt-2">24/7 {t("cta_call")}</p>
               </CardContent>
@@ -59,12 +59,12 @@ export default function Contact() {
                 </div>
                 <h3 className="mb-3 text-xl">{t("contact_whatsapp")}</h3>
                 <a 
-                  href="https://wa.me/27829549241" 
+                  href="https://wa.me/27697060387" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-lg font-semibold text-[#25D366] hover:underline"
                 >
-                  082 954 9241
+                  069 706 0387
                 </a>
                 <p className="text-sm text-muted-foreground mt-2">Instant messaging</p>
               </CardContent>
