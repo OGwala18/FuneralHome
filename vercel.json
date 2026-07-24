@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "npm --prefix induduzo-care-site-main ci",
+  "buildCommand": "npm --prefix induduzo-care-site-main run build",
+  "outputDirectory": "induduzo-care-site-main/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
