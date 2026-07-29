@@ -1,5 +1,5 @@
 import { Phone, MessageCircle, ArrowRight } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { NavLink } from "@/lib/navigation";
 import { useLanguage } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";

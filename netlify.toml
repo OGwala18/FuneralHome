@@ -1,26 +1,41 @@
 [build]
-  command = """
-  bash -lc '
-    echo "PWD=$(pwd)"
-    echo "=== searching for package.json (depth ≤ 3) ==="
-    APP_DIR=$(find . -maxdepth 3 -type f -name package.json -not -path "*/node_modules/*" -print | head -n1 | xargs dirname)
-    echo "APP_DIR=$APP_DIR"
-    if [ -z "$APP_DIR" ]; then
-      echo "No package.json found within depth 3." && exit 1
-    fi
-    echo "=== installing ==="
-    npm --prefix "$APP_DIR" ci || npm --prefix "$APP_DIR" install
-    echo "=== building ==="
-    npm --prefix "$APP_DIR" run build
-    echo "=== staging publish dir ==="
-    rm -rf web_dist && mkdir -p web_dist
-    cp -r "$APP_DIR/dist/." web_dist
-  '
-  """
-  publish = "web_dist"
+  base = "induduzo-care-site-main"
+  command = "npm ci && npm run build"
+  publish = "dist"
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "22"
+  NPM_FLAGS = "--no-audit --no-fund"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; media-src 'self'; upgrade-insecure-requests"
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Resource-Policy = "same-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+
+[[redirects]]
+  from = "/auth"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/auth/*"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/portal/*"
+  to = "/404.html"
+  status = 404
+  force = true
 
 [[redirects]]
   from = "/*"

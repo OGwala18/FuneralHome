@@ -1,226 +1,319 @@
-# FuneralHome deployment runbook
+# Induduzo deployment and security runbook
 
-This file is the source of truth for humans and AI agents diagnosing or deploying this repository.
+This is the source of truth for humans and AI agents deploying or diagnosing the
+Induduzo Funeral Home website.
 
-## Quick facts
+## Current production contract
 
-| Item | Correct value |
+| Item | Required value |
 | --- | --- |
+| Canonical website | `https://induduzo.co.za/` |
+| Current production host | Netlify |
 | Git repository | `OGwala18/FuneralHome` |
 | Production branch | `main` |
-| Application type | Vite + React + TypeScript single-page application |
+| Application type | Static Vite + React + TypeScript site |
 | Application directory | `induduzo-care-site-main` |
-| Package manager | npm, using `induduzo-care-site-main/package-lock.json` |
-| Supported deployment Node.js version | 22.x |
-| Install command from repository root | `npm --prefix induduzo-care-site-main ci` |
-| Build command from repository root | `npm --prefix induduzo-care-site-main run build` |
-| Build output from repository root | `induduzo-care-site-main/dist` |
-| Version-controlled Vercel config | `vercel.json` in the repository root |
+| Node.js | 22.12 or newer |
+| Package manager | npm with the committed `package-lock.json` |
+| Netlify base directory | `induduzo-care-site-main` |
+| Netlify install/build command | `npm ci && npm run build` |
+| Netlify publish directory | `dist` relative to the base directory |
+| Netlify configuration | Repository-root `netlify.toml` |
 
-Do not use `npm build`. npm treats `build` as an unknown npm command. The valid syntax for a package script is `npm run build`.
+The production site does not contain a customer portal or authentication page.
+Requests to `/auth`, `/auth/*`, and `/portal/*` must return an HTTP 404 before the
+single-page application fallback runs.
 
-## What failed in July 2026
+Do not use `npm build`. The correct npm script syntax is `npm run build`.
 
-The latest inspected production deployment was:
+## Why the earlier Vercel deployments failed
 
-- Vercel deployment ID: `8GvSN2j9Zs17dY22YU3k8eYyGLV2`
-- Git commit: `faaa85f08144ffa2509f226ced4da3a73c128cca`
-- Branch: `main`
-- Created: July 22, 2026
-- Result: failed after about two seconds
-- Final log line: `Error: Command "npm build " exited with 1`
-- Important preceding log line: `Unknown command: "build"`
+The failed Vercel deployments inspected in July 2026 did not reach application
+compilation. The Vercel project dashboard had three conflicting settings:
 
-The April 5, 2026 preview deployment `6icjVytPtrZxQs8BrRRJbAvn1FMi` failed for the same reason. This proves the problem was a persistent Vercel project configuration error, not the code change in either commit.
+1. Framework Preset was `Angular`, although this repository uses Vite.
+2. Build Command was `npm build`, which is not a valid npm script command.
+3. Root Directory was blank while the application package is in
+   `induduzo-care-site-main`.
 
-The Vercel project settings inspected on July 24, 2026 contained three mismatches:
+The decisive build-log message was:
 
-1. Framework Preset was `Angular`, but this application is Vite.
-2. Build Command override was `npm build `, but the valid command is `npm run build`.
-3. Root Directory was empty, but the application's `package.json` is in `induduzo-care-site-main`.
-
-Because the invalid Build Command was an override, Vercel stopped before installing dependencies or compiling application code.
-
-## Permanent fix in this repository
-
-The repository-root `vercel.json` now overrides the incorrect dashboard framework, install command, build command, and output directory. It also sends client-side routes to `index.html`, which prevents React Router pages from returning a Vercel 404 when opened directly or refreshed.
-
-The configuration intentionally works from the repository root:
-
-```json
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "vite",
-  "installCommand": "npm --prefix induduzo-care-site-main ci",
-  "buildCommand": "npm --prefix induduzo-care-site-main run build",
-  "outputDirectory": "induduzo-care-site-main/dist",
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ]
-}
+```text
+Unknown command: "build"
+Error: Command "npm build " exited with 1
 ```
 
-Keep this file at the repository root while the Vercel Root Directory setting is blank. If the Vercel Root Directory is later changed to `induduzo-care-site-main`, move and simplify the configuration deliberately; do not leave two conflicting deployment layouts.
+The correct repository-root Vercel build command is:
 
-## Clean deployment procedure
+```text
+npm --prefix induduzo-care-site-main run build
+```
 
-### 1. Check the repository state
+The repository still contains `vercel.json` as a tested rollback configuration,
+but Netlify is the intended production host for now. Do not use Vercel deployment
+URLs in client material, metadata, or links.
 
-From the repository root:
+## Security decisions that must remain true
+
+- Only the public routes `/`, `/about`, `/services`, `/contact`, `/join`,
+  `/gallery`, `/testimonials`, and `/founder` are shipped.
+- Portal components, fake authentication, mock customer data, mock policies,
+  claims, family records, and payments are not included in the source or bundle.
+- Netlify handles the portal/auth 404 rules before the public SPA fallback.
+- The site sends CSP, anti-framing, MIME-sniffing, referrer, browser-permission,
+  cross-origin, and HSTS headers from `netlify.toml`.
+- `public/_redirects` and `public/_headers` mirror those production rules into
+  `dist` so an authorized direct deploy receives the same protections.
+- The canonical URL and Open Graph URL use `https://induduzo.co.za/`.
+- No secrets belong in Vite `VITE_*` variables. Vite variables are compiled into
+  public browser JavaScript.
+- A future portal must use managed authentication, backend authorization on every
+  protected request, PostgreSQL/Supabase Row Level Security, least privilege,
+  encrypted secrets, and audit logs. Hiding a button or route is not security.
+- Real member, identity, policy, payment, claim, or bank data must not be added to
+  this marketing-site repository.
+
+## Clean pre-deployment procedure
+
+Run all commands from the repository root unless a step says otherwise.
+
+### 1. Confirm what will be deployed
 
 ```powershell
 git status --short
 git branch --show-current
 git log -1 --oneline
+git remote -v
 ```
 
-Production should normally deploy from `main`. Do not discard unrelated local changes.
+Do not discard unrelated local changes. Production normally deploys from `main`.
 
-### 2. Use a supported Node.js version
-
-Use Node.js 22.x to match Vercel:
+### 2. Confirm the supported runtime
 
 ```powershell
 node --version
 npm --version
 ```
 
-Do not continue with Node.js 16. This project has dependencies that require Node.js 18 or later, and the deployment standard is Node.js 22.
+Node must be 22.12 or newer. The application also includes `.nvmrc`, and
+`package.json` declares the minimum supported engine.
 
-### 3. Reproduce a clean install and build
-
-From the application directory:
+### 3. Reproduce Netlify's clean build
 
 ```powershell
 Set-Location .\induduzo-care-site-main
 npm ci
+npm run lint
 npm run build
-```
-
-Success means:
-
-- npm exits with code `0`.
-- Vite reports `built`.
-- `induduzo-care-site-main/dist/index.html` exists.
-- Bundled assets exist under `induduzo-care-site-main/dist/assets`.
-
-Return to the repository root before Git or Vercel commands:
-
-```powershell
+npm audit
 Set-Location ..
 ```
 
-### 4. Verify the committed Vercel contract
-
-Check `vercel.json` and confirm these exact values:
-
-```text
-framework       = vite
-installCommand  = npm --prefix induduzo-care-site-main ci
-buildCommand    = npm --prefix induduzo-care-site-main run build
-outputDirectory = induduzo-care-site-main/dist
-```
-
-Also keep the `/(.*)` rewrite to `/index.html` for React Router deep links.
-
-### 5. Commit and push only with authorization
-
-A Git-connected Vercel project creates a new deployment when a new commit is pushed. An AI agent must not commit or push unless the user has asked for it.
-
-Typical human workflow:
+All four commands must exit with code `0`. Confirm:
 
 ```powershell
-git add vercel.json DEPLOYMENT_TROUBLESHOOTING.md
-git commit -m "Fix Vercel deployment configuration"
-git push origin main
+Test-Path .\induduzo-care-site-main\dist\index.html
+Get-ChildItem .\induduzo-care-site-main\dist\assets
 ```
 
-Pushing a feature branch creates a Preview deployment. Pushing or merging into `main` creates a Production deployment.
+### 4. Check that the portal cannot re-enter the bundle
 
-### 6. Watch the new Vercel deployment
+```powershell
+rg -n "My Portal|/portal/customer|mockCustomer|mockPolicy|mockClaims|react-router-dom" `
+  .\induduzo-care-site-main\src `
+  .\induduzo-care-site-main\package.json
+```
 
-In Vercel:
+No match is expected. Then confirm both `netlify.toml` and `public/_redirects`
+still place the `/auth` and `/portal/*` 404 rules before the
+`/* -> /index.html` status-200 fallback.
 
-1. Open the `funeral-home` project.
-2. Open **Deployments**.
-3. Select the deployment for the commit just pushed.
-4. Confirm the commit SHA and branch match the intended source.
-5. Read the build log from the top until the first error, if any.
-6. Confirm the status becomes **Ready**.
+### 5. Check for accidentally committed secrets
 
-Do not use **Redeploy** on an old commit that does not contain the fixed `vercel.json` unless the dashboard settings have also been corrected. A new commit containing the configuration is safer and reproducible.
+```powershell
+rg -n "PRIVATE KEY|API_KEY|SECRET|PASSWORD|TOKEN|DATABASE_URL|SUPABASE" . `
+  --glob "!**/node_modules/**" `
+  --glob "!**/dist/**"
+```
 
-### 7. Perform post-deployment smoke tests
+Investigate every match. Never paste a secret into a deployment log or commit.
+If a secret was committed, removing it from the latest file is not enough:
+revoke/rotate it first, then clean history with an approved procedure.
 
-Open the deployment URL and check:
+## Deploying to Netlify
 
-1. The home page loads without a blank screen.
-2. Static images and CSS load.
-3. Navigate to at least one non-home route.
-4. Refresh that non-home route; it must not return 404.
-5. Check the browser console for uncaught errors.
-6. Test the main navigation and the phone/contact links affected by the deployed commit.
+### Git-connected production deployment
 
-## Vercel dashboard settings
+1. Commit only the intended reviewed changes.
+2. Push or merge the reviewed commit to `main`.
+3. In Netlify, open the production site's **Deploys** page.
+4. Match the Netlify deploy's Git commit SHA to the pushed commit.
+5. Read the build log from the top and stop at the first error.
+6. Wait for the deploy state to become **Published**.
+7. Keep the previous published deploy available for rollback.
 
-The committed `vercel.json` is authoritative for deployments. For clarity, the dashboard should still be corrected so it does not mislead future maintainers:
+An AI agent may commit, push, or change hosting settings only when the user has
+authorized those external actions.
 
-| Dashboard setting | Recommended value |
-| --- | --- |
-| Framework Preset | Vite |
-| Build Command | Disable the override, or use `npm --prefix induduzo-care-site-main run build` |
-| Install Command | Automatic, or `npm --prefix induduzo-care-site-main ci` |
-| Output Directory | `induduzo-care-site-main/dist` if overridden |
-| Root Directory | Leave blank when using the repository-root `vercel.json` |
-| Node.js Version | 22.x |
+### Netlify configuration values
 
-Saving dashboard settings is an external project change. An AI agent must obtain confirmation immediately before saving them.
+The repository `netlify.toml` is authoritative:
 
-## Troubleshooting decision table
+```text
+Base directory    = induduzo-care-site-main
+Build command     = npm ci && npm run build
+Publish directory = dist
+Node              = 22
+```
 
-| First useful error or symptom | Likely cause | Fix |
+If the Netlify dashboard has overrides, remove them or make them identical. A
+dashboard override can silently supersede a correct repository configuration.
+For an authorized direct deploy, upload the contents of `dist`, which includes
+`_headers` and `_redirects`; do not upload only `index.html`.
+
+## Post-deployment verification
+
+Verify the custom domain, not a generated deploy URL:
+
+```powershell
+$publicRoutes = @(
+  "/",
+  "/about",
+  "/services",
+  "/contact",
+  "/join",
+  "/gallery",
+  "/testimonials",
+  "/founder"
+)
+
+foreach ($route in $publicRoutes) {
+  $response = Invoke-WebRequest "https://induduzo.co.za$route"
+  "$route $($response.StatusCode)"
+}
+
+$blockedRoutes = @("/auth", "/auth/sign-in", "/portal/customer", "/portal/admin")
+foreach ($route in $blockedRoutes) {
+  try {
+    Invoke-WebRequest "https://induduzo.co.za$route" -ErrorAction Stop
+  } catch {
+    "$route $([int]$_.Exception.Response.StatusCode)"
+  }
+}
+```
+
+Expected:
+
+- Every public route returns `200`.
+- Every blocked route returns `404`.
+- Refreshing a public non-home route still works.
+- The header does not show **My Portal**.
+- Browser console has no uncaught errors.
+- Navigation, language buttons, phone links, WhatsApp links, and public forms
+  behave as expected.
+
+Check response headers:
+
+```powershell
+$headers = (Invoke-WebRequest "https://induduzo.co.za/").Headers
+$required = @(
+  "Content-Security-Policy",
+  "Cross-Origin-Opener-Policy",
+  "Cross-Origin-Resource-Policy",
+  "Permissions-Policy",
+  "Referrer-Policy",
+  "Strict-Transport-Security",
+  "X-Content-Type-Options",
+  "X-Frame-Options"
+)
+
+foreach ($name in $required) {
+  "$name = $($headers[$name])"
+}
+```
+
+Missing headers mean the correct `netlify.toml` was not used, a dashboard base
+directory is preventing Netlify from reading it, or the inspected deploy predates
+the security change.
+
+## Failure diagnosis: use the first real error
+
+Do not troubleshoot the final generic `build failed` line. Find the first useful
+error above it.
+
+| First error or symptom | Likely cause | Corrective action |
 | --- | --- | --- |
-| `Unknown command: "build"` | Command is `npm build` | Change it to `npm run build`, or use the repository-root command from this runbook |
-| `Could not read package.json` / `ENOENT package.json` | Vercel is building from the wrong directory | Keep the root `vercel.json`, or deliberately set Root Directory to `induduzo-care-site-main` and adjust config paths |
-| `Missing script: "build"` | Wrong `package.json` was found | Verify the working/root directory and inspect the scripts in the selected package |
-| Build succeeds but Vercel cannot find output | Wrong Output Directory | Use `induduzo-care-site-main/dist` from repository root |
-| Direct URL or refreshed route returns 404 | SPA fallback is missing | Keep the rewrite from `/(.*)` to `/index.html` |
-| `EBADENGINE`, esbuild install errors, or syntax errors during install | Unsupported local/deployment Node.js version | Use Node.js 22.x, reinstall with `npm ci`, and retry |
-| `npm ci` says lockfile and package file disagree | Stale lockfile | Update dependencies intentionally, regenerate `package-lock.json`, then run `npm ci` again |
-| Build reports a missing `VITE_*` variable | Missing build-time environment variable | Add the exact variable in Vercel for the correct environment, then redeploy; never commit secrets |
-| Deployment uses an unexpected commit | Wrong branch or stale redeploy | Compare the Vercel Source SHA with `git rev-parse HEAD`; deploy the intended branch/commit |
-| Site is blank but deployment is Ready | Runtime JavaScript error or bad asset path | Inspect browser console/network errors and verify Vite `base` settings and generated asset URLs |
+| `Unknown command: "build"` | Command is `npm build` | Use `npm run build` |
+| `ENOENT package.json` | Wrong base/root directory | Set Netlify base to `induduzo-care-site-main` |
+| `Missing script: "build"` | Wrong `package.json` selected | Inspect the working directory and selected package |
+| `npm ci` reports lock mismatch | `package.json` changed without lockfile | Regenerate the lockfile intentionally and rerun `npm ci` |
+| `EBADENGINE` | Old Node runtime | Use Node 22.12 or newer |
+| Vite cannot load a module | Import points to a removed/mis-cased file | Fix the first module path; remember Netlify uses case-sensitive Linux |
+| Build succeeds but no published files | Wrong publish directory | Use `dist` relative to the Netlify base directory |
+| Public deep link returns 404 | SPA fallback missing/ordered incorrectly | Keep the final `/* -> /index.html 200` Netlify rule |
+| Portal URL returns 200 | SPA fallback is winning | Put forced `/auth` and `/portal/*` 404 rules before the fallback |
+| CSP blocks a required resource | Resource origin is not allowed | Prefer self-hosting; otherwise add only the exact required origin |
+| Site is `Published` but blank | Runtime JS or asset-path error | Inspect browser console/network and generated asset URLs |
+| Custom domain shows an old site | DNS, wrong Netlify site, or cached deploy | Inspect DNS, domain assignment, deploy SHA, and CDN headers |
+| HTTPS/certificate warning | Domain/certificate provisioning problem | Check Netlify Domain Management and DNS before redeploying code |
+| Unexpected Vercel deployment | Vercel Git integration still enabled | Disable Vercel Git production deployments after explicit approval |
+
+## Rollback procedure
+
+If a production smoke test fails:
+
+1. Stop changing DNS.
+2. In Netlify **Deploys**, publish the last known-good deploy.
+3. Record the failed deploy ID, commit SHA, first error, and rollback deploy ID.
+4. Reproduce the failure locally from the failed commit.
+5. Fix the smallest root cause on a branch.
+6. Repeat the clean build and complete post-deployment verification.
+
+Rollback is faster and safer than making untested edits directly in hosting
+settings.
 
 ## AI diagnostic checklist
 
-When asked to fix a future deployment, an AI agent should follow this order:
+An AI agent handling a future deployment must follow this order:
 
-1. Read this file and `vercel.json`.
-2. Inspect `git status`, the current branch, and the latest commit without changing files.
-3. Open the newest failed Vercel deployment and record deployment ID, commit SHA, branch, environment, duration, and the first error.
-4. Compare the failure with the decision table above.
-5. Run a clean local install and build with Node.js 22.x.
-6. Fix the smallest root cause in version-controlled configuration or code.
-7. Run the clean build again and confirm `dist/index.html` exists.
-8. Report any npm audit findings separately; do not run a broad `npm audit fix` unless explicitly authorized because it can change dependency versions and application behavior.
-9. Ask before external side effects such as saving dashboard settings, pushing Git commits, or triggering a redeploy.
-10. After deployment, verify status **Ready** and run the smoke tests.
+1. Read this runbook, `netlify.toml`, `package.json`, and `.nvmrc`.
+2. Inspect Git status, branch, commit SHA, and remote without changing them.
+3. Identify the canonical host and latest production deploy.
+4. Record deploy ID, commit SHA, branch, status, duration, and the first error.
+5. Compare dashboard build settings with the repository contract.
+6. Run `npm ci`, lint, build, audit, and secret/portal searches locally.
+7. Fix only the smallest supported root cause.
+8. Repeat all checks after the fix.
+9. Deploy only with authorization.
+10. Verify public routes, blocked routes, console, headers, domain, and deploy SHA.
+11. Report what changed, evidence of success, remaining risk, and rollback point.
 
-## Files that do not configure Vercel
+## Planned backend and database boundary
 
-- `netlify.toml` is only for Netlify and does not fix Vercel settings.
-- `induduzo-care-site-main/public/_redirects` is useful on Netlify but is not the Vercel SPA routing configuration.
-- Vercel behavior for this repository is controlled by the root `vercel.json` plus the Vercel project settings.
+This marketing site should remain static. When backend features are required:
 
-## Last verified state
+- Run a FastAPI service on a managed backend host designed for persistent APIs
+  (for example Render, Railway, or Fly.io), not inside this public repository.
+- Use a separately managed PostgreSQL database such as Supabase Postgres.
+- Use managed authentication and enforce authorization in the API and database
+  RLS policies; never rely on frontend route guards.
+- Keep development, staging, and production isolated.
+- Store backend secrets only in backend environment variables or a secret manager.
+- Allow only the production frontend origin, validate every request, rate-limit
+  sensitive endpoints, and produce immutable audit events.
+- Complete POPIA controls and a threat model before using real member data.
 
-On July 24, 2026:
+## Last local verification
 
-- A clean `npm ci` succeeded with a modern Node.js runtime.
-- `npm run build` completed successfully with Vite 5.4.19.
-- Vite transformed 1,767 modules.
-- `dist/index.html` and the compiled assets were generated.
-- npm reported 16 dependency audit findings under Node.js 22 (3 moderate and 13 high). These findings did not block the build and were not automatically modified.
+On July 29, 2026:
+
+- Clean `npm ci` completed successfully.
+- ESLint completed with zero errors.
+- TypeScript completed with zero errors.
+- Vite 8.1.5 production build completed successfully.
+- npm audit reported zero known vulnerabilities.
+- Portal/auth source and mock customer records were removed.
+- Netlify security headers and forced 404 rules were added.
+
+Production verification must be repeated after the corresponding commit is
+published to Netlify.

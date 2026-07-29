@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-// @ts-ignore — Vite supports JSON imports
 import galleryData from '../data/gallery.json';
 
 type GalleryItem = {
