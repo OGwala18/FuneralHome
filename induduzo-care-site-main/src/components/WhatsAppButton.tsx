@@ -1,12 +1,13 @@
 import { MessageCircle } from "lucide-react";
+import { WHATSAPP_URL } from "@/lib/contact";
 
 export const WhatsAppButton = () => {
   return (
     <a
-      href="https://wa.me/27697060387"
+      href={WHATSAPP_URL}
       target="_blank"
       rel="noopener noreferrer"
-      className="fixed bottom-6 right-6 z-50 bg-[#25D366] text-white rounded-full p-4 shadow-elevated hover:scale-110 transition-transform"
+      className="safe-fixed-corner fixed z-50 rounded-full bg-[#25D366] p-3 text-white shadow-elevated transition-transform hover:scale-110 sm:p-4"
       aria-label="Contact us on WhatsApp"
     >
       <MessageCircle className="h-6 w-6" />

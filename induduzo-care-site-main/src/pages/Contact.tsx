@@ -6,6 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Phone, Mail, MapPin, MessageCircle } from "lucide-react";
+import {
+  CONTACT_PHONE_DISPLAY,
+  CONTACT_PHONE_LINK,
+  WHATSAPP_URL,
+} from "@/lib/contact";
 
 export default function Contact() {
   const { t } = useLanguage();
@@ -60,8 +65,8 @@ export default function Contact() {
                   <Phone className="h-8 w-8 text-primary" />
                 </div>
                 <h3 className="mb-3 text-xl">{t("contact_phone")}</h3>
-                <a href="tel:0697060387" className="text-lg font-semibold text-primary hover:underline">
-                  069 706 0387
+                <a href={CONTACT_PHONE_LINK} className="text-lg font-semibold text-primary hover:underline">
+                  {CONTACT_PHONE_DISPLAY}
                 </a>
                 <p className="text-sm text-muted-foreground mt-2">24/7 {t("cta_call")}</p>
               </CardContent>
@@ -74,12 +79,12 @@ export default function Contact() {
                 </div>
                 <h3 className="mb-3 text-xl">{t("contact_whatsapp")}</h3>
                 <a 
-                  href="https://wa.me/27697060387" 
+                  href={WHATSAPP_URL}
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-lg font-semibold text-[#25D366] hover:underline"
                 >
-                  069 706 0387
+                  {CONTACT_PHONE_DISPLAY}
                 </a>
                 <p className="text-sm text-muted-foreground mt-2">Instant messaging</p>
               </CardContent>

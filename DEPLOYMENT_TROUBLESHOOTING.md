@@ -21,7 +21,7 @@ Induduzo Funeral Home website.
 | Netlify configuration | Repository-root `netlify.toml` |
 
 The production site does not contain a customer portal or authentication page.
-Requests to `/auth`, `/auth/*`, and `/portal/*` must return an HTTP 404 before the
+Requests to `/auth`, `/auth/*`, `/portal`, and `/portal/*` must return an HTTP 404 before the
 single-page application fallback runs.
 
 Do not use `npm build`. The correct npm script syntax is `npm run build`.
@@ -125,7 +125,7 @@ rg -n "My Portal|/portal/customer|mockCustomer|mockPolicy|mockClaims|react-route
 ```
 
 No match is expected. Then confirm both `netlify.toml` and `public/_redirects`
-still place the `/auth` and `/portal/*` 404 rules before the
+still place the `/auth`, `/portal`, and `/portal/*` 404 rules before the
 `/* -> /index.html` status-200 fallback.
 
 ### 5. Check for accidentally committed secrets
@@ -210,7 +210,14 @@ Expected:
 - The header does not show **My Portal**.
 - Browser console has no uncaught errors.
 - Navigation, language buttons, phone links, WhatsApp links, and public forms
-  behave as expected.
+  behave as expected. The public phone number must display as
+  `+27 (79) 751-0648`, telephone links must use `tel:+27797510648`, and WhatsApp
+  links must use `https://wa.me/27797510648`.
+- Test every public route at phone (390px), tablet (768px), and desktop (1440px)
+  widths. Confirm there is no horizontal scrolling and the mobile/tablet menu
+  exposes every public route.
+- Run the public flows in Chromium/Chrome and WebKit/Safari-compatible testing.
+  Confirm there are no uncaught console errors in either engine.
 
 Check response headers:
 
@@ -251,7 +258,7 @@ error above it.
 | Vite cannot load a module | Import points to a removed/mis-cased file | Fix the first module path; remember Netlify uses case-sensitive Linux |
 | Build succeeds but no published files | Wrong publish directory | Use `dist` relative to the Netlify base directory |
 | Public deep link returns 404 | SPA fallback missing/ordered incorrectly | Keep the final `/* -> /index.html 200` Netlify rule |
-| Portal URL returns 200 | SPA fallback is winning | Put forced `/auth` and `/portal/*` 404 rules before the fallback |
+| Portal URL returns 200 | SPA fallback is winning | Put forced `/auth`, `/portal`, and `/portal/*` 404 rules before the fallback |
 | CSP blocks a required resource | Resource origin is not allowed | Prefer self-hosting; otherwise add only the exact required origin |
 | Site is `Published` but blank | Runtime JS or asset-path error | Inspect browser console/network and generated asset URLs |
 | Custom domain shows an old site | DNS, wrong Netlify site, or cached deploy | Inspect DNS, domain assignment, deploy SHA, and CDN headers |
