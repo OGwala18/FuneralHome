@@ -27,8 +27,18 @@ export default function Testimonials() {
       alert('Please provide relation, rating, and a message.');
       return;
     }
-    // For now, just log — no API/database
-    console.log('Testimonial submission:', form);
+    const subject = encodeURIComponent(`Testimonial submission from ${form.name || 'Anonymous'}`);
+    const body = encodeURIComponent(
+      [
+        `Name: ${form.name || 'Anonymous'}`,
+        `Relation: ${form.relation}`,
+        `Rating: ${form.rating}/5`,
+        '',
+        form.message,
+      ].join('\n'),
+    );
+
+    window.location.href = `mailto:info@induduzofuneralhome.co.za?subject=${subject}&body=${body}`;
     setSubmitted(true);
     setForm({ name: '', relation: '', rating: 5, message: '' });
   };
@@ -47,7 +57,7 @@ export default function Testimonials() {
         <section aria-label="Approved testimonials" style={{ display: 'grid', gap: '1rem' }}>
           {approved.map((t) => (
             <article key={t.id} style={{ border: '1px solid #eee', borderRadius: 8, padding: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.5rem', alignItems: 'center', justifyContent: 'space-between' }}>
                 <h3 style={{ margin: 0 }}>{t.name && t.name !== '—' ? t.name : 'Anonymous'}</h3>
                 <span aria-label={`${t.rating} out of 5 stars`} title={`${t.rating} out of 5`}>
                   {'★'.repeat(t.rating)}{'☆'.repeat(5 - t.rating)}
@@ -66,8 +76,8 @@ export default function Testimonials() {
         <section aria-label="Submit testimonial" style={{ border: '1px solid #eee', borderRadius: 8, padding: '1rem' }}>
           <h2 style={{ marginTop: 0 }}>Add your story</h2>
           <p style={{ marginTop: '.25rem', color: '#555' }}>
-            By submitting, you consent to us publishing your testimonial (name optional),
-            and storing it for moderation and display on this website.
+            Submitting opens your email app with a prepared message. This website does not
+            store your testimonial or personal details.
           </p>
 
           <form onSubmit={onSubmit} style={{ display: 'grid', gap: '0.75rem' }}>
@@ -124,7 +134,7 @@ export default function Testimonials() {
                 Submit
               </button>
               {submitted && (
-                <span style={{ marginLeft: '.75rem', color: 'green' }}>Thank you! Your message has been received.</span>
+                <span style={{ marginLeft: '.75rem', color: 'green' }}>Your email app has been opened. This website did not store your testimonial.</span>
               )}
             </div>
           </form>

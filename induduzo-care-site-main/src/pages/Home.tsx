@@ -4,6 +4,11 @@ import { useLanguage } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import heroImage from "@/assets/hero-sunrise.jpg";
+import {
+  CONTACT_PHONE_DISPLAY,
+  CONTACT_PHONE_LINK,
+  WHATSAPP_URL,
+} from "@/lib/contact";
 
 const services = [
   {
@@ -71,7 +76,7 @@ export default function Home() {
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
-      <section className="relative h-[600px] flex items-center justify-center overflow-hidden">
+      <section className="relative flex min-h-[560px] items-center justify-center overflow-hidden py-16 md:h-[600px] md:py-0">
         <div 
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url(${heroImage})` }}
@@ -86,7 +91,7 @@ export default function Home() {
             
             <div className="flex flex-wrap gap-4">
               <Button size="lg" asChild>
-                <a href="tel:0697060387">
+                <a href={CONTACT_PHONE_LINK}>
                   <Phone className="mr-2 h-5 w-5" />
                   {t("cta_call")}
                 </a>
@@ -186,15 +191,15 @@ export default function Home() {
               <h3 className="mb-2">Need immediate assistance?</h3>
               <p className="text-lg opacity-90">We're available 24 hours a day, 7 days a week</p>
             </div>
-            <div className="flex gap-4">
+            <div className="flex flex-wrap justify-center gap-4 md:justify-end">
               <Button size="lg" variant="secondary" asChild>
-                <a href="tel:0697060387">
+                <a href={CONTACT_PHONE_LINK}>
                   <Phone className="mr-2 h-5 w-5" />
-                  069 706 0387
+                  {CONTACT_PHONE_DISPLAY}
                 </a>
               </Button>
               <Button size="lg" variant="secondary" asChild>
-                <a href="https://wa.me/27697060387" target="_blank" rel="noopener noreferrer">
+                <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
                   <MessageCircle className="mr-2 h-5 w-5" />
                   WhatsApp
                 </a>

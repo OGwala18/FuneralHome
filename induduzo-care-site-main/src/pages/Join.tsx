@@ -3,6 +3,7 @@ import { useLanguage } from "@/lib/i18n";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { CONTACT_PHONE_LINK, WHATSAPP_URL } from "@/lib/contact";
 
 export default function Join() {
   const { language, t } = useLanguage();
@@ -47,8 +48,8 @@ export default function Join() {
 
           {/* Plan A - Urban */}
           <Card className="max-w-4xl mx-auto mb-8">
-            <CardContent className="p-8">
-              <div className="flex items-center justify-between mb-6">
+            <CardContent className="p-5 sm:p-8">
+              <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-3xl mb-2">{t("plan_a_title")}</h2>
                   <div className="flex items-baseline gap-2">
@@ -64,7 +65,7 @@ export default function Join() {
                 <Button 
                   variant="outline" 
                   onClick={() => togglePlan('plan-a')}
-                  className="ml-4"
+                  className="sm:ml-4"
                 >
                   {expandedPlan === 'plan-a' ? (
                     <><ChevronUp className="mr-2 h-4 w-4" /> {t("hide_inclusions")}</>
@@ -106,8 +107,8 @@ export default function Join() {
 
           {/* Plan B - Emakhaya */}
           <Card className="max-w-4xl mx-auto mb-8">
-            <CardContent className="p-8">
-              <div className="flex items-center justify-between mb-6">
+            <CardContent className="p-5 sm:p-8">
+              <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-3xl mb-2">{t("plan_b_title")}</h2>
                   <div className="flex items-baseline gap-2">
@@ -123,7 +124,7 @@ export default function Join() {
                 <Button 
                   variant="outline" 
                   onClick={() => togglePlan('plan-b')}
-                  className="ml-4"
+                  className="sm:ml-4"
                 >
                   {expandedPlan === 'plan-b' ? (
                     <><ChevronUp className="mr-2 h-4 w-4" /> {t("hide_inclusions")}</>
@@ -163,7 +164,7 @@ export default function Join() {
 
           {/* Plan C - Singles/Couples */}
           <Card className="max-w-4xl mx-auto mb-8">
-            <CardContent className="p-8">
+            <CardContent className="p-5 sm:p-8">
               <div className="mb-6">
                 <h2 className="text-3xl mb-2">{t("plan_c_title")}</h2>
                 <p className="text-muted-foreground">
@@ -281,7 +282,7 @@ export default function Join() {
 
           {/* Additional Plan - Ikhishi */}
           <Card className="max-w-4xl mx-auto mb-8 border-accent">
-            <CardContent className="p-8">
+            <CardContent className="p-5 sm:p-8">
               <div className="mb-6">
                 <h2 className="text-3xl mb-2">Ikhishi</h2>
                 <div className="flex items-baseline gap-2">
@@ -317,7 +318,7 @@ export default function Join() {
           {/* Call to Action */}
           <div className="max-w-4xl mx-auto text-center mt-12">
             <Card className="bg-primary text-primary-foreground">
-              <CardContent className="p-8">
+              <CardContent className="p-5 sm:p-8">
                 <h3 className="text-2xl mb-4">
                   {language === 'en' 
                     ? 'Ready to join a plan?' 
@@ -330,12 +331,12 @@ export default function Join() {
                 </p>
                 <div className="flex flex-wrap gap-4 justify-center">
                   <Button size="lg" variant="secondary" asChild>
-                    <a href="tel:0697060387">
+                    <a href={CONTACT_PHONE_LINK}>
                       {t("cta_call")}
                     </a>
                   </Button>
                   <Button size="lg" variant="secondary" asChild>
-                    <a href="https://wa.me/27697060387" target="_blank" rel="noopener noreferrer">
+                    <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
                       WhatsApp
                     </a>
                   </Button>

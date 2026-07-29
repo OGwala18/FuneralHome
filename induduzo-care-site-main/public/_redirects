@@ -1,4 +1,5 @@
 /auth       /404.html   404!
 /auth/*     /404.html   404!
+/portal     /404.html   404!
 /portal/*   /404.html   404!
 /*          /index.html 200
