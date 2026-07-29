@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Phone, Mail, MapPin, MessageCircle } from "lucide-react";
-import { toast } from "sonner";
 
 export default function Contact() {
   const { t } = useLanguage();
@@ -20,7 +19,23 @@ export default function Contact() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    toast.info(t("form_preview"));
+
+    if (!formData.consent) {
+      return;
+    }
+
+    const subject = encodeURIComponent(`Website enquiry from ${formData.name}`);
+    const body = encodeURIComponent(
+      [
+        `Name: ${formData.name}`,
+        `Phone: ${formData.phone}`,
+        `Email: ${formData.email}`,
+        "",
+        formData.message,
+      ].join("\n"),
+    );
+
+    window.location.href = `mailto:info@induduzofuneralhome.co.za?subject=${subject}&body=${body}`;
   };
 
   return (
@@ -171,12 +186,12 @@ export default function Contact() {
                     </label>
                   </div>
 
-                  <Button type="submit" size="lg" className="w-full" disabled>
+                  <Button type="submit" size="lg" className="w-full" disabled={!formData.consent}>
                     {t("form_submit")}
                   </Button>
                   
                   <p className="text-sm text-center text-muted-foreground">
-                    {t("form_preview")}
+                    This opens your email app. The website does not store your message.
                   </p>
                 </form>
               </CardContent>

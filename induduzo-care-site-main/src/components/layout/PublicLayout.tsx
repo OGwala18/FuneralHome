@@ -1,13 +1,17 @@
-import { Outlet } from 'react-router-dom';
+import React from "react";
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { WhatsAppButton } from '@/components/WhatsAppButton';
 
-export default function PublicLayout() {
+type PublicLayoutProps = {
+  children: React.ReactNode;
+};
+
+export default function PublicLayout({ children }: PublicLayoutProps) {
   return (
     <>
       <Header />
-      <Outlet />
+      {children}
       <Footer />
       <WhatsAppButton />
     </>

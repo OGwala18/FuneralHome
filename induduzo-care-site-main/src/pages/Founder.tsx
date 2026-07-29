@@ -1,5 +1,4 @@
 import React from 'react';
-// @ts-ignore — Vite supports JSON imports
 import founder from '../data/founder.json';
 
 export default function Founder() {

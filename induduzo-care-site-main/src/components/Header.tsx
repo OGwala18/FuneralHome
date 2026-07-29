@@ -1,5 +1,5 @@
-import { NavLink } from "react-router-dom";
-import { Phone, LogIn } from "lucide-react";
+import { NavLink } from "@/lib/navigation";
+import { Phone } from "lucide-react";
 import { useLanguage } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import React, { useState } from 'react';
@@ -183,12 +183,6 @@ export const Header = () => {
             </a>
           </Button>
 
-          <Button asChild variant="outline" size="sm" className="hidden md:flex">
-            <NavLink to="/auth">
-              <LogIn className="mr-2 h-4 w-4" />
-              My Portal
-            </NavLink>
-          </Button>
         </div>
       </div>
     </header>
