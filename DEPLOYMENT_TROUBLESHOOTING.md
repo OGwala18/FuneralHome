@@ -20,6 +20,46 @@ Induduzo Funeral Home website.
 | Netlify publish directory | `dist` relative to the base directory |
 | Netlify configuration | Repository-root `netlify.toml` |
 
+## Environment promotion workflow
+
+This repository uses three controlled stages:
+
+| Stage | Branch | Deployment | Purpose |
+| --- | --- | --- | --- |
+| Development | `Dev` | Local development | Shared starting point for developers |
+| Internal testing | `internal` | Unlisted Netlify branch deploy | Stable URL for non-developer testers |
+| Production | `main` | `https://induduzo.co.za/` | Public client-facing release |
+
+Developers must update their local `Dev` branch, create a short-lived feature
+branch, and merge reviewed work back into `Dev`. Do not treat `Dev` as a place
+for several developers to push unrelated changes directly.
+
+Promotion order is always:
+
+```text
+feature branch -> Dev -> internal -> main
+```
+
+Every promotion must pass lint, TypeScript, production build, dependency audit,
+and the applicable browser/security checks. The `internal` deployment is
+unlisted rather than authenticated while the Netlify Free plan is in use. An
+unlisted URL is not private and must never contain production secrets, real
+member data, or an administrative portal.
+
+The canonical Netlify project is the project that owns `induduzo.co.za`.
+Ordinary deploy entries are immutable rollback history and should not be
+deleted as duplicates. Delete a Netlify project only after verifying that it
+does not own the production domain, environment variables, forms, functions,
+or a required deploy.
+
+Before backend development begins:
+
+- change the GitHub repository to private;
+- verify that the Netlify GitHub App still has access to the repository;
+- run and verify a harmless deployment before adding backend secrets;
+- use separate development/internal and production database environments;
+- keep service-role keys and database credentials out of all browser bundles.
+
 The production site does not contain a customer portal or authentication page.
 Requests to `/auth`, `/auth/*`, `/portal`, and `/portal/*` must return an HTTP 404 before the
 single-page application fallback runs.
