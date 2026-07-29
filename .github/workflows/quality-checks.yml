@@ -1,0 +1,56 @@
+name: Quality checks
+
+on:
+  push:
+    branches:
+      - Dev
+      - internal
+      - main
+  pull_request:
+    branches:
+      - Dev
+      - internal
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: induduzo-care-site-main
+
+jobs:
+  validate:
+    name: Lint, typecheck, build, and audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Use supported Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: induduzo-care-site-main/.nvmrc
+          cache: npm
+          cache-dependency-path: induduzo-care-site-main/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Check for high-severity dependency vulnerabilities
+        run: npm audit --audit-level=high
