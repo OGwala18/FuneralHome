@@ -13,7 +13,7 @@ Induduzo Funeral Home website.
 | Production branch | `main` |
 | Application type | Static Vite + React + TypeScript site |
 | Application directory | `induduzo-care-site-main` |
-| Node.js | 22.12 or newer |
+| Node.js | 22.13 or newer |
 | Package manager | npm with the committed `package-lock.json` |
 | Netlify base directory | `induduzo-care-site-main` |
 | Netlify install/build command | `npm ci && npm run build` |
@@ -27,7 +27,7 @@ This repository uses three controlled stages:
 | Stage | Branch | Deployment | Purpose |
 | --- | --- | --- | --- |
 | Development | `Dev` | Local development | Shared starting point for developers |
-| Internal testing | `internal` | Unlisted Netlify branch deploy | Stable URL for non-developer testers |
+| Internal testing | `internal` | `https://internal--induduzo.netlify.app/` | Stable unlisted URL for non-developer testers |
 | Production | `main` | `https://induduzo.co.za/` | Public client-facing release |
 
 Developers must update their local `Dev` branch, create a short-lived feature
@@ -51,6 +51,12 @@ Ordinary deploy entries are immutable rollback history and should not be
 deleted as duplicates. Delete a Netlify project only after verifying that it
 does not own the production domain, environment variables, forms, functions,
 or a required deploy.
+
+As of July 30, 2026, the Netlify team contains one project:
+`induduzo` (Site ID `732df56c-6681-4a26-aac3-b5d0832eb08e`). It owns
+`induduzo.co.za`, deploys `main` to production, and deploys only `internal` as a
+branch deploy. Deploy Previews are disabled. The duplicate Netlify projects
+`induduzofuneral` and `induduzo-care-site-main` were deleted.
 
 Before backend development begins:
 
@@ -89,9 +95,10 @@ The correct repository-root Vercel build command is:
 npm --prefix induduzo-care-site-main run build
 ```
 
-The repository still contains `vercel.json` as a tested rollback configuration,
-but Netlify is the intended production host for now. Do not use Vercel deployment
-URLs in client material, metadata, or links.
+The Vercel project and repository `vercel.json` were removed on July 30, 2026.
+The values above are retained only to diagnose the historical failure. Do not
+recreate a Vercel project or use Vercel deployment URLs unless the hosting
+decision is explicitly changed.
 
 ## Security decisions that must remain true
 
@@ -135,7 +142,7 @@ node --version
 npm --version
 ```
 
-Node must be 22.12 or newer. The application also includes `.nvmrc`, and
+Node must be 22.13 or newer. The application also includes `.nvmrc`, and
 `package.json` declares the minimum supported engine.
 
 ### 3. Reproduce Netlify's clean build
@@ -144,12 +151,13 @@ Node must be 22.12 or newer. The application also includes `.nvmrc`, and
 Set-Location .\induduzo-care-site-main
 npm ci
 npm run lint
+npm run typecheck
 npm run build
-npm audit
+npm audit --omit=dev --audit-level=high
 Set-Location ..
 ```
 
-All four commands must exit with code `0`. Confirm:
+All five commands must exit with code `0`. Confirm:
 
 ```powershell
 Test-Path .\induduzo-care-site-main\dist\index.html
@@ -294,7 +302,7 @@ error above it.
 | `ENOENT package.json` | Wrong base/root directory | Set Netlify base to `induduzo-care-site-main` |
 | `Missing script: "build"` | Wrong `package.json` selected | Inspect the working directory and selected package |
 | `npm ci` reports lock mismatch | `package.json` changed without lockfile | Regenerate the lockfile intentionally and rerun `npm ci` |
-| `EBADENGINE` | Old Node runtime | Use Node 22.12 or newer |
+| `EBADENGINE` | Old Node runtime | Use Node 22.13 or newer |
 | Vite cannot load a module | Import points to a removed/mis-cased file | Fix the first module path; remember Netlify uses case-sensitive Linux |
 | Build succeeds but no published files | Wrong publish directory | Use `dist` relative to the Netlify base directory |
 | Public deep link returns 404 | SPA fallback missing/ordered incorrectly | Keep the final `/* -> /index.html 200` Netlify rule |
@@ -303,7 +311,7 @@ error above it.
 | Site is `Published` but blank | Runtime JS or asset-path error | Inspect browser console/network and generated asset URLs |
 | Custom domain shows an old site | DNS, wrong Netlify site, or cached deploy | Inspect DNS, domain assignment, deploy SHA, and CDN headers |
 | HTTPS/certificate warning | Domain/certificate provisioning problem | Check Netlify Domain Management and DNS before redeploying code |
-| Unexpected Vercel deployment | Vercel Git integration still enabled | Disable Vercel Git production deployments after explicit approval |
+| Unexpected Vercel deployment | A Vercel project or Git integration was recreated | Inspect the new project, then delete or disconnect it after explicit approval |
 
 ## Rollback procedure
 
