@@ -1,26 +1,35 @@
 [
   {
     "id": "g-001",
-    "title": "Community Memorial Service",
+    "title_en": "Community Memorial Service",
+    "title_zu": "Inkonzo Yesikhumbuzo Yomphakathi",
     "category": "Our Work",
     "image": "/src/assets/gallery/work-001.jpg",
-    "alt": "Community memorial service setup with floral arrangements",
-    "shortDescription": "Organised and supported a full memorial service with family coordination."
+    "alt_en": "Community memorial service setup with floral arrangements",
+    "alt_zu": "Ukuhlelwa kwenkonzo yesikhumbuzo yomphakathi ngezimbali",
+    "shortDescription_en": "Organised and supported a full memorial service with family coordination.",
+    "shortDescription_zu": "Sahlela futhi sasekela inkonzo yesikhumbuzo ephelele ngokubambisana nomndeni."
   },
   {
     "id": "g-002",
-    "title": "Family Transport & Coordination",
+    "title_en": "Family Transport & Coordination",
+    "title_zu": "Ukuthuthwa Nokuhlelelwa Komndeni",
     "category": "Services",
     "image": "/src/assets/gallery/services-001.jpg",
-    "alt": "Coordinated family transport vehicles",
-    "shortDescription": "Door-to-door logistics for families and elders."
+    "alt_en": "Coordinated family transport vehicles",
+    "alt_zu": "Izimoto zokuthutha umndeni ezihleliwe",
+    "shortDescription_en": "Door-to-door logistics for families and elders.",
+    "shortDescription_zu": "Ukuhlelelwa kokuthutha imindeni nabadala kusukela emnyango kuya emnyango."
   },
   {
     "id": "g-003",
-    "title": "Serving Local Communities",
+    "title_en": "Serving Local Communities",
+    "title_zu": "Ukusebenzela Imiphakathi Yendawo",
     "category": "Happy Families",
     "image": "/src/assets/gallery/clients-001.jpg",
-    "alt": "Smiling family after service",
-    "shortDescription": "Ongoing support for diverse families across our communities."
+    "alt_en": "Smiling family after service",
+    "alt_zu": "Umndeni omomothekayo ngemva kwenkonzo",
+    "shortDescription_en": "Ongoing support for diverse families across our communities.",
+    "shortDescription_zu": "Ukusekela okuqhubekayo kwemindeni eyahlukene emiphakathini yethu."
   }
 ]
