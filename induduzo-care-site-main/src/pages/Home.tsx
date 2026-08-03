@@ -54,19 +54,22 @@ const plans = [
     name_en: "Plan A (Urban)",
     name_zu: "Uhlelo A (Edolobheni)",
     price: "350",
-    coverage: "Up to 15 members",
+    coverage_en: "Up to 15 members",
+    coverage_zu: "Amalungu afinyelela ku-15",
   },
   {
     name_en: "Plan B (Emakhaya)",
     name_zu: "Uhlelo B (Emakhaya)",
     price: "250",
-    coverage: "Up to 15 members",
+    coverage_en: "Up to 15 members",
+    coverage_zu: "Amalungu afinyelela ku-15",
   },
   {
     name_en: "Plan C (Singles/Couples)",
     name_zu: "Uhlelo C (Abangashadile)",
     price: "50",
-    coverage: "Individual or couple coverage",
+    coverage_en: "Individual or couple coverage",
+    coverage_zu: "Ukumbozwa komuntu oyedwa noma izithandani",
   },
 ];
 
@@ -163,7 +166,9 @@ export default function Home() {
                     </div>
                     <span className="text-muted-foreground">{t("per_month")}</span>
                   </div>
-                  <p className="text-sm text-muted-foreground mb-6">{plan.coverage}</p>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    {language === "en" ? plan.coverage_en : plan.coverage_zu}
+                  </p>
                   <Button asChild variant={index === 1 ? "default" : "outline"} className="w-full">
                     <NavLink to="/join">{t("cta_join")}</NavLink>
                   </Button>
@@ -188,8 +193,8 @@ export default function Home() {
         <div className="container">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
-              <h3 className="mb-2">Need immediate assistance?</h3>
-              <p className="text-lg opacity-90">We're available 24 hours a day, 7 days a week</p>
+              <h3 className="mb-2">{t("immediate_help_title")}</h3>
+              <p className="text-lg opacity-90">{t("immediate_help_text")}</p>
             </div>
             <div className="flex flex-wrap justify-center gap-4 md:justify-end">
               <Button size="lg" variant="secondary" asChild>

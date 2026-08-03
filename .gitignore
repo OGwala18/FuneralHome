@@ -1,0 +1,41 @@
+# Secrets and local environment configuration
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Hosting-provider local state
+.netlify/
+.vercel/
+
+# Private keys and certificates
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Dependencies, builds, and test artifacts
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+output/
+**/output/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor and operating-system files
+.idea/
+.vscode/
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+*.suo
+*.sw?
