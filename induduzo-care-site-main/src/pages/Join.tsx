@@ -40,7 +40,7 @@ export default function Join() {
             <Card className="border-accent bg-accent/5">
               <CardContent className="p-6">
                 <p className="text-base font-medium">
-                  💰 {t("joining_fee")}: R50 for all plans
+                  💰 {t("joining_fee")}: R50 {language === "en" ? "for all plans" : "kuzo zonke izinhlelo"}
                 </p>
               </CardContent>
             </Card>
