@@ -69,12 +69,14 @@ export default function About() {
             
             <div className="space-y-8">
               <div>
-                <h2 className="mb-4 text-3xl">Our Story & Vision</h2>
-                <p className="text-xl leading-relaxed">
-                  Induduzo Care was founded to serve families with dignity, respect, and cultural understanding. Our vision lives in daily actions — from careful planning to the warmth we extend to every family we meet.
-                </p>
+                <h2 className="mb-4 text-3xl">{t("story_title")}</h2>
+                <p className="text-xl leading-relaxed">{t("story_text")}</p>
                 <p className="text-lg text-muted-foreground mt-4">
-                  Learn more about our founder's journey on the <a href="/founder" className="text-primary hover:underline">Founder</a> page.
+                  {t("founder_link_prefix")}{" "}
+                  <a href="/founder" className="text-primary hover:underline">
+                    {t("founder_link")}
+                  </a>
+                  .
                 </p>
               </div>
               

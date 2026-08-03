@@ -1,16 +1,38 @@
 {
   "name": "Founder Name",
   "photo": "/src/assets/founder/founder.jpg",
-  "tagline": "Serving families with dignity and care.",
-  "longFormStory": [
+  "tagline_en": "Serving families with dignity and care.",
+  "tagline_zu": "Sisebenzela imindeni ngesithunzi nangokunakekela.",
+  "longFormStory_en": [
     "I grew up in a community where neighbours became family in moments of need. Those experiences shaped my belief that care is more than a service — it's a responsibility.",
     "Induduzo Care was built to support families with compassion, respect, and cultural understanding. Our journey has always been about walking alongside people through difficult days, not merely providing logistics.",
     "Today, our team continues that mission: professional excellence anchored in humanity."
   ],
+  "longFormStory_zu": [
+    "Ngakhulela emphakathini lapho omakhelwane babeba umndeni ngezikhathi zosizi. Lokho kwangenza ngakholwa ukuthi ukunakekela akuyona insizakalo kuphela — kuwumthwalo wemfanelo.",
+    "I-Induduzo Care yakhelwa ukusekela imindeni ngozwelo, ngenhlonipho nangokuqonda amasiko. Uhambo lwethu belulokhu lumayelana nokuhamba nabantu ngezinsuku ezinzima, hhayi ukuhlela izinto kuphela.",
+    "Namuhla ithimba lethu liyaqhubeka nalowo msebenzi: ubungcweti obusekelwe ebuntwini."
+  ],
   "milestones": [
-    { "year": "2015", "text": "Began coordinating community memorials as a volunteer." },
-    { "year": "2019", "text": "Registered Induduzo Care and opened our first small office." },
-    { "year": "2022", "text": "Expanded services to include full family logistics and support." },
-    { "year": "2025", "text": "Launched outreach partnerships with local organisations." }
+    {
+      "year": "2015",
+      "text_en": "Began coordinating community memorials as a volunteer.",
+      "text_zu": "Kwaqalwa ukuhlela izinkonzo zesikhumbuzo zomphakathi njengomsebenzi wokuzithandela."
+    },
+    {
+      "year": "2019",
+      "text_en": "Registered Induduzo Care and opened our first small office.",
+      "text_zu": "Kwabhaliswa i-Induduzo Care kwavulwa nehhovisi lethu lokuqala elincane."
+    },
+    {
+      "year": "2022",
+      "text_en": "Expanded services to include full family logistics and support.",
+      "text_zu": "Izinsizakalo zanwetshwa ukuze zifake ukuhlelela nokusekela umndeni ngokuphelele."
+    },
+    {
+      "year": "2025",
+      "text_en": "Launched outreach partnerships with local organisations.",
+      "text_zu": "Kwaqalwa ubudlelwano bokufinyelela emphakathini nezinhlangano zendawo."
+    }
   ]
 }

@@ -1,3 +1,5 @@
+import * as React from "react";
+
 export const translations = {
   en: {
     // Navigation
@@ -6,6 +8,9 @@ export const translations = {
     nav_services: "Services",
     nav_contact: "Contact",
     nav_join: "Join a Plan",
+    nav_founder: "Founder Story",
+    nav_gallery: "Gallery",
+    nav_testimonials: "Testimonials",
     
     // Hero
     hero_title: "Dignified care when it matters most",
@@ -13,6 +18,8 @@ export const translations = {
     cta_call: "Call 24/7",
     cta_services: "View Services",
     cta_join: "Join a Plan",
+    immediate_help_title: "Need immediate assistance?",
+    immediate_help_text: "We're available 24 hours a day, 7 days a week",
     
     // Services
     services_title: "Our Services",
@@ -47,6 +54,10 @@ export const translations = {
     our_mission: "Our Mission",
     mission_text: "To be the most preferred funeral service provider",
     our_values: "Our Values",
+    story_title: "Our Story & Vision",
+    story_text: "Induduzo Care was founded to serve families with dignity, respect, and cultural understanding. Our vision lives in daily actions — from careful planning to the warmth we extend to every family we meet.",
+    founder_link_prefix: "Learn more about our founder's journey on the",
+    founder_link: "Founder page",
     value_customer: "Customer First",
     value_reliability: "Reliability",
     value_excellence: "Excellence",
@@ -66,6 +77,9 @@ export const translations = {
     form_consent: "I consent to POPIA terms and conditions",
     form_submit: "Send Message",
     form_preview: "Form preview only - submission not enabled",
+    contact_instant_messaging: "Instant messaging",
+    contact_form_title: "Send us a message",
+    contact_form_notice: "This opens your email app. The website does not store your message.",
     
     // Join
     join_title: "Join a Funeral Plan",
@@ -82,10 +96,38 @@ export const translations = {
     footer_tagline: "Serving Pietermaritzburg and surrounding areas",
     footer_quick_links: "Quick Links",
     footer_contact_info: "Contact Information",
+    footer_rights: "All rights reserved.",
+    footer_privacy: "POPIA compliant — Your privacy is important to us.",
     
     // Testimonials
     testimonials_title: "What Families Say",
     testimonials_subtitle: "Trust built through compassionate care",
+    average_rating: "Average rating",
+    anonymous: "Anonymous",
+    add_your_story: "Add your story",
+    testimonial_notice: "Submitting opens your email app with a prepared message. This website does not store your testimonial or personal details.",
+    relation_to_client: "Relation to client",
+    relation_placeholder: "Family member, friend, etc.",
+    star_rating: "Star rating (1–5)",
+    testimonial_message_placeholder: "Share your experience…",
+    testimonial_submit: "Submit",
+    testimonial_validation: "Please provide relation, rating, and a message.",
+    testimonial_email_opened: "Your email app has been opened. This website did not store your testimonial.",
+
+    // Founder and gallery
+    founder_story: "Founder story",
+    journey_milestones: "Journey Milestones",
+    gallery_title: "Gallery",
+    gallery_subtitle: "Explore our work, services, and the families we serve.",
+    gallery_filter_all: "All",
+    gallery_filter_work: "Our Work",
+    gallery_filter_services: "Services",
+    gallery_filter_families: "Happy Families",
+
+    // Accessibility and errors
+    whatsapp_aria: "Contact us on WhatsApp",
+    page_not_found: "Oops! Page not found",
+    return_home: "Return to Home",
   },
   zu: {
     // Navigation
@@ -94,6 +136,9 @@ export const translations = {
     nav_services: "Izinsizakalo",
     nav_contact: "Xhumana",
     nav_join: "Joyina Uhlelo",
+    nav_founder: "Indaba Yomsunguli",
+    nav_gallery: "Igalari",
+    nav_testimonials: "Ubufakazi",
     
     // Hero
     hero_title: "Ukunakekelwa ngenhlonipho lapho kudingeka khona kakhulu",
@@ -101,6 +146,8 @@ export const translations = {
     cta_call: "Shayela 24/7",
     cta_services: "Buka Izinsizakalo",
     cta_join: "Joyina Uhlelo",
+    immediate_help_title: "Udinga usizo ngokushesha?",
+    immediate_help_text: "Siyatholakala amahora angu-24 ngosuku, izinsuku ezingu-7 ngesonto",
     
     // Services
     services_title: "Izinsizakalo Zethu",
@@ -135,6 +182,10 @@ export const translations = {
     our_mission: "Umsebenzi Wethu",
     mission_text: "Ukuba ngumhlinzeki wezinsizakalo zomngcwabo othandwa kakhulu",
     our_values: "Izimiso Zethu",
+    story_title: "Indaba Nombono Wethu",
+    story_text: "I-Induduzo Care yasungulwa ukuze isize imindeni ngesithunzi, ngenhlonipho nangokuqonda amasiko. Umbono wethu ubonakala ezenzweni zansuku zonke — kusukela ekuhleleni ngokucophelela kuya emfudumalo esiyinikeza yonke imindeni esihlangana nayo.",
+    founder_link_prefix: "Funda kabanzi ngohambo lomsunguli wethu ekhasini elithi",
+    founder_link: "Umsunguli",
     value_customer: "Ikhasimende Lokuqala",
     value_reliability: "Ukwethembeka",
     value_excellence: "Ubuhle",
@@ -154,6 +205,9 @@ export const translations = {
     form_consent: "Ngiyavuma imigomo nemibandela ye-POPIA",
     form_submit: "Thumela Umlayezo",
     form_preview: "Ukubuka kuphela ifomu - ukuthumela akusebenzi",
+    contact_instant_messaging: "Ukuthumela imiyalezo ngokushesha",
+    contact_form_title: "Sithumele umlayezo",
+    contact_form_notice: "Lokhu kuvula uhlelo lwakho lwe-imeyili. Iwebhusayithi ayiwugcini umlayezo wakho.",
     
     // Join
     join_title: "Joyina Uhlelo Lomngcwabo",
@@ -170,10 +224,38 @@ export const translations = {
     footer_tagline: "Sikhonza ePietermaritzburg nasezindaweni eziseduze",
     footer_quick_links: "Izixhumanisi Ezisheshayo",
     footer_contact_info: "Ulwazi Lokuxhumana",
+    footer_rights: "Wonke amalungelo agodliwe.",
+    footer_privacy: "Sihambisana ne-POPIA — Ubumfihlo bakho bubalulekile kithi.",
     
     // Testimonials
     testimonials_title: "Okushiwo Yimindeni",
     testimonials_subtitle: "Ukwethembeka okwakhelwe ngokukunakekelwa ngomusa",
+    average_rating: "Isilinganiso esimaphakathi",
+    anonymous: "Akudalulwanga",
+    add_your_story: "Engeza indaba yakho",
+    testimonial_notice: "Ukuthumela kuvula uhlelo lwakho lwe-imeyili nomlayezo olungiselelwe. Le webhusayithi ayibugcini ubufakazi noma imininingwane yakho.",
+    relation_to_client: "Ubudlelwano nekhasimende",
+    relation_placeholder: "Ilungu lomndeni, umngani, njll.",
+    star_rating: "Isilinganiso sezinkanyezi (1–5)",
+    testimonial_message_placeholder: "Yabelana ngolwazi lwakho…",
+    testimonial_submit: "Thumela",
+    testimonial_validation: "Sicela ufake ubudlelwano, isilinganiso kanye nomlayezo.",
+    testimonial_email_opened: "Uhlelo lwakho lwe-imeyili luvuliwe. Le webhusayithi ayibugcini ubufakazi bakho.",
+
+    // Founder and gallery
+    founder_story: "Indaba yomsunguli",
+    journey_milestones: "Izigaba Zohambo",
+    gallery_title: "Igalari",
+    gallery_subtitle: "Buka umsebenzi wethu, izinsizakalo nemindeni esiyisizayo.",
+    gallery_filter_all: "Konke",
+    gallery_filter_work: "Umsebenzi Wethu",
+    gallery_filter_services: "Izinsizakalo",
+    gallery_filter_families: "Imindeni Ejabulile",
+
+    // Accessibility and errors
+    whatsapp_aria: "Xhumana nathi nge-WhatsApp",
+    page_not_found: "Uxolo! Ikhasi alitholakali",
+    return_home: "Buyela Ekhaya",
   }
 };
 
@@ -193,11 +275,14 @@ export const useLanguage = () => {
     setLanguage(newLang);
     localStorage.setItem('induduzo-language', newLang);
     document.documentElement.lang = newLang;
+    window.location.reload();
   };
+
+  React.useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
 
   const t = (key: string) => getTranslation(key, language);
 
   return { language, switchLanguage, t };
 };
-
-import * as React from "react";

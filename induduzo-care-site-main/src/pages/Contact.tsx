@@ -7,13 +7,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Phone, Mail, MapPin, MessageCircle } from "lucide-react";
 import {
+  CONTACT_EMAIL,
+  CONTACT_EMAIL_LINK,
   CONTACT_PHONE_DISPLAY,
   CONTACT_PHONE_LINK,
   WHATSAPP_URL,
 } from "@/lib/contact";
 
 export default function Contact() {
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -29,18 +31,22 @@ export default function Contact() {
       return;
     }
 
-    const subject = encodeURIComponent(`Website enquiry from ${formData.name}`);
+    const subject = encodeURIComponent(
+      language === "en"
+        ? `Website enquiry from ${formData.name}`
+        : `Umbuzo ovela ku-${formData.name}`,
+    );
     const body = encodeURIComponent(
       [
-        `Name: ${formData.name}`,
-        `Phone: ${formData.phone}`,
-        `Email: ${formData.email}`,
+        `${language === "en" ? "Name" : "Igama"}: ${formData.name}`,
+        `${language === "en" ? "Phone" : "Ucingo"}: ${formData.phone}`,
+        `${language === "en" ? "Email" : "I-imeyili"}: ${formData.email}`,
         "",
         formData.message,
       ].join("\n"),
     );
 
-    window.location.href = `mailto:info@induduzofuneralhome.co.za?subject=${subject}&body=${body}`;
+    window.location.href = `${CONTACT_EMAIL_LINK}?subject=${subject}&body=${body}`;
   };
 
   return (
@@ -86,7 +92,7 @@ export default function Contact() {
                 >
                   {CONTACT_PHONE_DISPLAY}
                 </a>
-                <p className="text-sm text-muted-foreground mt-2">Instant messaging</p>
+                <p className="text-sm text-muted-foreground mt-2">{t("contact_instant_messaging")}</p>
               </CardContent>
             </Card>
 
@@ -97,10 +103,10 @@ export default function Contact() {
                 </div>
                 <h3 className="mb-3 text-xl">{t("contact_email")}</h3>
                 <a 
-                  href="mailto:info@induduzofuneralhome.co.za" 
+                  href={CONTACT_EMAIL_LINK}
                   className="text-base font-semibold text-primary hover:underline break-all"
                 >
-                  info@induduzofuneralhome.co.za
+                  {CONTACT_EMAIL}
                 </a>
               </CardContent>
             </Card>
@@ -122,7 +128,7 @@ export default function Contact() {
           <div className="max-w-2xl mx-auto">
             <Card>
               <CardContent className="p-8">
-                <h2 className="mb-6 text-2xl">Send us a message</h2>
+                <h2 className="mb-6 text-2xl">{t("contact_form_title")}</h2>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div>
                     <label htmlFor="name" className="block mb-2 font-medium">
@@ -196,7 +202,7 @@ export default function Contact() {
                   </Button>
                   
                   <p className="text-sm text-center text-muted-foreground">
-                    This opens your email app. The website does not store your message.
+                    {t("contact_form_notice")}
                   </p>
                 </form>
               </CardContent>

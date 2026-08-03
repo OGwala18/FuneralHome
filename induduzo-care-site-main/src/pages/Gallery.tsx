@@ -1,18 +1,23 @@
 import React, { useMemo, useState } from 'react';
 import galleryData from '../data/gallery.json';
+import { useLanguage } from '@/lib/i18n';
 
 type GalleryItem = {
   id: string;
-  title: string;
+  title_en: string;
+  title_zu: string;
   category: 'Our Work' | 'Services' | 'Happy Families' | string;
   image: string;
-  alt: string;
-  shortDescription?: string;
+  alt_en: string;
+  alt_zu: string;
+  shortDescription_en?: string;
+  shortDescription_zu?: string;
 };
 
 const CATEGORIES = ['All', 'Our Work', 'Services', 'Happy Families'] as const;
 
 export default function Gallery() {
+  const { language, t } = useLanguage();
   const items = galleryData as GalleryItem[];
   const [active, setActive] = useState<(typeof CATEGORIES)[number]>('All');
 
@@ -24,13 +29,13 @@ export default function Gallery() {
   return (
     <main style={{ padding: '2rem 1rem', maxWidth: 1200, margin: '0 auto' }}>
       <header style={{ marginBottom: '1rem' }}>
-        <h1 style={{ margin: 0 }}>Gallery</h1>
+        <h1 style={{ margin: 0 }}>{t('gallery_title')}</h1>
         <p style={{ marginTop: '.5rem', color: '#555' }}>
-          Explore our work, services, and the families we serve.
+          {t('gallery_subtitle')}
         </p>
       </header>
 
-      <nav aria-label="Gallery filters" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+      <nav aria-label={t('gallery_title')} style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
         {CATEGORIES.map((cat) => (
           <button
             key={cat}
@@ -45,7 +50,13 @@ export default function Gallery() {
               cursor: 'pointer'
             }}
           >
-            {cat}
+            {cat === 'All'
+              ? t('gallery_filter_all')
+              : cat === 'Our Work'
+                ? t('gallery_filter_work')
+                : cat === 'Services'
+                  ? t('gallery_filter_services')
+                  : t('gallery_filter_families')}
           </button>
         ))}
       </nav>
@@ -62,16 +73,26 @@ export default function Gallery() {
           <article key={card.id} style={{ border: '1px solid #eee', borderRadius: 8, overflow: 'hidden' }}>
             <img
               src={card.image} // TODO: replace with real path under src/assets/
-              alt={card.alt}
+              alt={language === 'en' ? card.alt_en : card.alt_zu}
               loading="lazy"
               style={{ width: '100%', height: 180, objectFit: 'cover' }}
             />
             <div style={{ padding: '0.75rem 0.75rem 1rem' }}>
-              <h3 style={{ margin: '0 0 .25rem' }}>{card.title}</h3>
-              {card.shortDescription && (
-                <p style={{ margin: 0, color: '#555', fontSize: 14 }}>{card.shortDescription}</p>
+              <h3 style={{ margin: '0 0 .25rem' }}>
+                {language === 'en' ? card.title_en : card.title_zu}
+              </h3>
+              {(language === 'en' ? card.shortDescription_en : card.shortDescription_zu) && (
+                <p style={{ margin: 0, color: '#555', fontSize: 14 }}>
+                  {language === 'en' ? card.shortDescription_en : card.shortDescription_zu}
+                </p>
               )}
-              <p style={{ margin: '.5rem 0 0', fontSize: 12, color: '#777' }}>{card.category}</p>
+              <p style={{ margin: '.5rem 0 0', fontSize: 12, color: '#777' }}>
+                {card.category === 'Our Work'
+                  ? t('gallery_filter_work')
+                  : card.category === 'Services'
+                    ? t('gallery_filter_services')
+                    : t('gallery_filter_families')}
+              </p>
             </div>
           </article>
         ))}
