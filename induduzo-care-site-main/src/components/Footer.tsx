@@ -1,7 +1,12 @@
 import { NavLink } from "@/lib/navigation";
 import { Mail, Phone, MapPin } from "lucide-react";
 import { useLanguage } from "@/lib/i18n";
-import { CONTACT_PHONE_DISPLAY, CONTACT_PHONE_LINK } from "@/lib/contact";
+import {
+  CONTACT_EMAIL,
+  CONTACT_EMAIL_LINK,
+  CONTACT_PHONE_DISPLAY,
+  CONTACT_PHONE_LINK,
+} from "@/lib/contact";
 
 export const Footer = () => {
   const { t } = useLanguage();
@@ -45,9 +50,9 @@ export const Footer = () => {
                 <Phone className="h-5 w-5 mr-2" />
                 {CONTACT_PHONE_DISPLAY}
               </a>
-              <a href="mailto:info@induduzofuneralhome.co.za" className="flex items-center break-all hover:text-primary transition-colors">
+              <a href={CONTACT_EMAIL_LINK} className="flex items-center break-all hover:text-primary transition-colors">
                 <Mail className="h-5 w-5 mr-2" />
-                info@induduzofuneralhome.co.za
+                {CONTACT_EMAIL}
               </a>
               <div className="flex items-start">
                 <MapPin className="h-5 w-5 mr-2 mt-1 flex-shrink-0" />
@@ -58,8 +63,8 @@ export const Footer = () => {
         </div>
 
         <div className="border-t mt-8 pt-6 text-center text-sm text-muted-foreground">
-          <p>© {new Date().getFullYear()} Induduzo Funeral Home. All rights reserved.</p>
-          <p className="mt-2">POPIA compliant - Your privacy is important to us.</p>
+          <p>© {new Date().getFullYear()} Induduzo Funeral Home. {t("footer_rights")}</p>
+          <p className="mt-2">{t("footer_privacy")}</p>
         </div>
       </div>
     </footer>

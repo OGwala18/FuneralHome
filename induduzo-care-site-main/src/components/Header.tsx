@@ -105,7 +105,7 @@ export const Header = () => {
             label={t("nav_about")}
             items={[
               { label: t("nav_about"), to: "/about" },
-              { label: "Founder Story", to: "/founder" },
+              { label: t("nav_founder"), to: "/founder" },
             ]}
           />
           <DesktopDropdown
@@ -113,8 +113,8 @@ export const Header = () => {
             label={t("nav_services")}
             items={[
               { label: t("nav_services"), to: "/services" },
-              { label: "Gallery", to: "/gallery" },
-              { label: "Testimonials", to: "/testimonials" },
+              { label: t("nav_gallery"), to: "/gallery" },
+              { label: t("nav_testimonials"), to: "/testimonials" },
             ]}
           />
           <NavLink to="/contact" className={navLinkClass}>
@@ -138,7 +138,8 @@ export const Header = () => {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              EN
+              <span className="sm:hidden">EN</span>
+              <span className="hidden sm:inline">English</span>
             </button>
             <span className="text-muted-foreground" aria-hidden="true">
               |
@@ -154,7 +155,8 @@ export const Header = () => {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              ZU
+              <span className="sm:hidden">ZU</span>
+              <span className="hidden sm:inline">Zulu</span>
             </button>
           </div>
 
@@ -184,10 +186,10 @@ export const Header = () => {
             {[
               { label: t("nav_home"), to: "/" },
               { label: t("nav_about"), to: "/about" },
-              { label: "Founder Story", to: "/founder" },
+              { label: t("nav_founder"), to: "/founder" },
               { label: t("nav_services"), to: "/services" },
-              { label: "Gallery", to: "/gallery" },
-              { label: "Testimonials", to: "/testimonials" },
+              { label: t("nav_gallery"), to: "/gallery" },
+              { label: t("nav_testimonials"), to: "/testimonials" },
               { label: t("nav_contact"), to: "/contact" },
               { label: t("nav_join"), to: "/join" },
             ].map((item) => (

@@ -2,25 +2,31 @@
   {
     "id": "t-001",
     "name": "Nomsa M.",
-    "relation": "Family Member",
+    "relation_en": "Family Member",
+    "relation_zu": "Ilungu Lomndeni",
     "rating": 5,
-    "message": "Compassionate and professional from start to finish. We felt truly supported.",
+    "message_en": "Compassionate and professional from start to finish. We felt truly supported.",
+    "message_zu": "Babenozwelo futhi benobungcweti kusukela ekuqaleni kuze kube sekugcineni. Sazizwa sisekelwe ngempela.",
     "dateISO": "2025-10-10"
   },
   {
     "id": "t-002",
     "name": "—",
-    "relation": "Friend of the Deceased",
+    "relation_en": "Friend of the Deceased",
+    "relation_zu": "Umngani Kamufi",
     "rating": 4,
-    "message": "They handled details we didn't even think about. Thank you for the dignity and care.",
+    "message_en": "They handled details we didn't even think about. Thank you for the dignity and care.",
+    "message_zu": "Banakekela nemininingwane esasingayicabanganga. Siyabonga ngesithunzi nangokunakekela.",
     "dateISO": "2025-10-12"
   },
   {
     "id": "t-003",
     "name": "The Dlamini Family",
-    "relation": "Family",
+    "relation_en": "Family",
+    "relation_zu": "Umndeni",
     "rating": 5,
-    "message": "Professional service and warm guidance through a difficult week.",
+    "message_en": "Professional service and warm guidance through a difficult week.",
+    "message_zu": "Insizakalo yobungcweti nesiqondiso esifudumele phakathi nesonto elinzima.",
     "dateISO": "2025-10-14"
   }
 ]
