@@ -259,8 +259,9 @@ Expected:
 - Browser console has no uncaught errors.
 - Navigation, language buttons, phone links, WhatsApp links, and public forms
   behave as expected. The public phone number must display as
-  `+27 (79) 751-0648`, telephone links must use `tel:+27797510648`, and WhatsApp
-  links must use `https://wa.me/27797510648`.
+  `0697060387`, telephone links must use `tel:+27697060387`, WhatsApp links must
+  use `https://wa.me/27697060387`, and the public email must display and link to
+  `Info@induduzo.co.za`.
 - Test every public route at phone (390px), tablet (768px), and desktop (1440px)
   widths. Confirm there is no horizontal scrolling and the mobile/tablet menu
   exposes every public route.
