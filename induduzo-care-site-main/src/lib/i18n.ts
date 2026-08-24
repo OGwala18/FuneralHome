@@ -14,7 +14,7 @@ export const translations = {
     
     // Hero
     hero_title: "Dignified care when it matters most",
-    hero_subtitle: "Serving Pietermaritzburg and surrounding areas with compassion since 1998",
+    hero_subtitle: "Serving Pietermaritzburg and the KZN Midlands with compassion since the 1980s",
     cta_call: "Call 24/7",
     cta_services: "View Services",
     cta_join: "Join a Plan",
@@ -40,7 +40,7 @@ export const translations = {
     
     // Plans
     plans_title: "Choose A Funeral Plan",
-    plans_subtitle: "A funeral plan to suit your needs",
+    plans_subtitle: "Transparent, all-inclusive cover from R250 a month — no hidden costs",
     compare_plans: "Compare Plans",
     from: "From",
     per_month: "p/m",
@@ -48,7 +48,7 @@ export const translations = {
     // About
     about_title: "About Induduzo Funeral Home",
     about_intro: "Induduzo Funeral Home is an established and reliable South African funeral services provider that offers affordable, client-centric policies and dignified burial solutions.",
-    about_since: "Partnering with families at their time of need since 1998",
+    about_since: "Partnering with families at their time of need since the 1980s",
     our_vision: "Our Vision",
     vision_text: "We give you a dignified last journey",
     our_mission: "Our Mission",
@@ -83,14 +83,27 @@ export const translations = {
     
     // Join
     join_title: "Join a Funeral Plan",
-    join_subtitle: "Choose the right plan for you and your family",
+    join_subtitle: "Transparent, all-inclusive funeral cover from R250 a month — no hidden costs, no surname restrictions.",
     plan_a_title: "Plan A (Urban)",
     plan_b_title: "Plan B (Emakhaya)",
     plan_c_title: "Plan C (Singles/Couples)",
+    plan_dome_title: "Dome Plan",
     view_inclusions: "View full inclusions",
     hide_inclusions: "Hide inclusions",
     waiting_period: "3 months waiting period for all plans",
     joining_fee: "Joining fee applies",
+    plan_inclusions: "Plan inclusions",
+    payouts_title: "Guaranteed payouts on every plan",
+    plan_terms_title: "What applies to every plan",
+    compare_title: "Compare all plans at a glance",
+    compare_note: "Select a plan name to jump to its full breakdown below.",
+    th_plan: "Plan",
+    th_coverage: "Coverage",
+    th_price: "Price",
+    th_included: "What's included",
+    ready_title: "Would you like to start your family's cover today?",
+    ready_text: "Call or WhatsApp us for a same-day quote — we will walk you through every option.",
+    all_names_welcome: "Zonke izibongo siyazithatha — all family names are welcome",
     
     // Footer
     footer_tagline: "Serving Pietermaritzburg and surrounding areas",
@@ -142,7 +155,7 @@ export const translations = {
     
     // Hero
     hero_title: "Ukunakekelwa ngenhlonipho lapho kudingeka khona kakhulu",
-    hero_subtitle: "Sikhonza ePietermaritzburg nasezindaweni eziseduze ngomusa kusukela ngo-1998",
+    hero_subtitle: "Sikhonza ePietermaritzburg nase-KZN Midlands ngomusa kusukela eminyakeni yawo-1980",
     cta_call: "Shayela 24/7",
     cta_services: "Buka Izinsizakalo",
     cta_join: "Joyina Uhlelo",
@@ -168,7 +181,7 @@ export const translations = {
     
     // Plans
     plans_title: "Khetha Uhlelo Lomngcwabo",
-    plans_subtitle: "Uhlelo lomngcwabo olufanele izidingo zakho",
+    plans_subtitle: "Ukumbozwa okucacile, okufaka konke, kusukela ku-R250 ngenyanga — azikho izindleko ezifihliwe",
     compare_plans: "Qhathanisa Izinhlelo",
     from: "Kusukela",
     per_month: "ngenyanga",
@@ -176,7 +189,7 @@ export const translations = {
     // About
     about_title: "Mayelana Ne-Induduzo Funeral Home",
     about_intro: "I-Induduzo Funeral Home ingumhlinzeki wezinsizakalo zomngcwabo waseNingizimu Afrika osethembekile futhi onikeza izinqubomgomo ezingabizi futhi ezibhekiswe kumakhasimende kanye nezixazululo zokungcwaba ezinesihlonipho.",
-    about_since: "Sibambisene nemindeni ngesikhathi yedinga kusukela ngo-1998",
+    about_since: "Sibambisene nemindeni ngesikhathi yedinga kusukela eminyakeni yawo-1980",
     our_vision: "Umbono Wethu",
     vision_text: "Sininika uhambo lokugcina olunesihlonipho",
     our_mission: "Umsebenzi Wethu",
@@ -211,14 +224,27 @@ export const translations = {
     
     // Join
     join_title: "Joyina Uhlelo Lomngcwabo",
-    join_subtitle: "Khetha uhlelo olulungele wena nomndeni wakho",
+    join_subtitle: "Umshwalense womngcwabo ocacile, ofaka konke, kusukela ku-R250 ngenyanga — azikho izindleko ezifihliwe, ayikho imikhawulo yezibongo.",
     plan_a_title: "Uhlelo A (Edolobheni)",
     plan_b_title: "Uhlelo B (Emakhaya)",
     plan_c_title: "Uhlelo C (Abangashadile/Izingane)",
+    plan_dome_title: "Uhlelo lwe-Dome",
     view_inclusions: "Buka okufakiwe okugcwele",
     hide_inclusions: "Fihla okufakiwe",
     waiting_period: "Isikhathi sokulinda izinyanga ezi-3 kuzo zonke izinhlelo",
     joining_fee: "Imali yokujoyina iyasebenza",
+    plan_inclusions: "Okufakiwe ohlelweni",
+    payouts_title: "Imali eqinisekisiwe kuzo zonke izinhlelo",
+    plan_terms_title: "Okusebenza kuzo zonke izinhlelo",
+    compare_title: "Qhathanisa zonke izinhlelo ngokushesha",
+    compare_note: "Chofoza igama lohlelo ukuze weqele kokugcwele ngezansi.",
+    th_plan: "Uhlelo",
+    th_coverage: "Ukumbozwa",
+    th_price: "Inani",
+    th_included: "Okufakiwe",
+    ready_title: "Ungathanda ukuqala ukumbozwa komndeni wakho namuhla?",
+    ready_text: "Sishayele noma usithumele nge-WhatsApp uthole isilinganiso ngosuku olufanayo — sizokuhambisa kuzo zonke izinketho.",
+    all_names_welcome: "Zonke izibongo siyazithatha — ayikho imikhawulo yezibongo",
     
     // Footer
     footer_tagline: "Sikhonza ePietermaritzburg nasezindaweni eziseduze",

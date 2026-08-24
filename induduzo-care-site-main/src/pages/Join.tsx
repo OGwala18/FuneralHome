@@ -1,351 +1,275 @@
-import { useState } from "react";
 import { useLanguage } from "@/lib/i18n";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { Check, Clock, Heart, MessageCircle, Phone, Users, Wallet } from "lucide-react";
 import { CONTACT_PHONE_LINK, WHATSAPP_URL } from "@/lib/contact";
+import { GUARANTEED_PAYOUTS, PLANS, PLAN_TERMS, type Plan } from "@/data/plans";
+
+const TERM_ICONS = {
+  clock: Clock,
+  wallet: Wallet,
+  users: Users,
+  heart: Heart,
+} as const;
 
 export default function Join() {
   const { language, t } = useLanguage();
-  const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
-
-  const togglePlan = (planId: string) => {
-    setExpandedPlan(expandedPlan === planId ? null : planId);
-  };
 
   return (
     <div className="flex flex-col">
-      <section className="bg-secondary/30 py-20">
+      {/* Hero */}
+      <section className="bg-navy py-16 text-white md:py-20">
         <div className="container">
-          <div className="max-w-3xl mx-auto text-center">
-            <h1 className="mb-6">{t("join_title")}</h1>
-            <p className="text-xl leading-relaxed">
+          <div className="mx-auto max-w-3xl text-center">
+            <h1 className="mb-6 text-white">{t("join_title")}</h1>
+            <p className="text-lg leading-relaxed text-white/85 md:text-xl">
               {t("join_subtitle")}
             </p>
           </div>
         </div>
       </section>
 
-      <section className="py-20">
+      {/* Flyer banner */}
+      <div className="bg-accent py-3">
         <div className="container">
-          {/* Important Notices */}
-          <div className="max-w-4xl mx-auto mb-12 space-y-4">
-            <Card className="border-accent bg-accent/5">
-              <CardContent className="p-6">
-                <p className="text-base font-medium">
-                  ⏱ {t("waiting_period")}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="border-accent bg-accent/5">
-              <CardContent className="p-6">
-                <p className="text-base font-medium">
-                  💰 {t("joining_fee")}: R50 {language === "en" ? "for all plans" : "kuzo zonke izinhlelo"}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          <p className="text-center text-sm font-bold uppercase tracking-[0.12em] text-navy sm:text-base">
+            {language === "en"
+              ? "Dignified funeral cover, built for Midlands families"
+              : "Ukumbozwa komngcwabo okunesithunzi, kwakhelwe imindeni yase-Midlands"}
+          </p>
+        </div>
+      </div>
 
-          {/* Plan A - Urban */}
-          <Card className="max-w-4xl mx-auto mb-8">
-            <CardContent className="p-5 sm:p-8">
-              <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-3xl mb-2">{t("plan_a_title")}</h2>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-bold text-primary">R350</span>
-                    <span className="text-lg text-muted-foreground">{t("per_month")}</span>
-                  </div>
-                  <p className="text-muted-foreground mt-2">
-                    {language === 'en' 
-                      ? 'Up to 15 family members • No age limits' 
-                      : 'Kuya ku-15 amalungu omndeni • Ayikho imikhawulo yeminyaka'}
-                  </p>
-                </div>
-                <Button 
-                  variant="outline" 
-                  onClick={() => togglePlan('plan-a')}
-                  className="sm:ml-4"
-                >
-                  {expandedPlan === 'plan-a' ? (
-                    <><ChevronUp className="mr-2 h-4 w-4" /> {t("hide_inclusions")}</>
-                  ) : (
-                    <><ChevronDown className="mr-2 h-4 w-4" /> {t("view_inclusions")}</>
-                  )}
-                </Button>
+      {/* Guaranteed payouts */}
+      <section className="py-14">
+        <div className="container">
+          <h2 className="mb-8 text-center text-2xl md:text-3xl">{t("payouts_title")}</h2>
+          <div className="mx-auto grid max-w-3xl grid-cols-1 gap-5 sm:grid-cols-2">
+            {GUARANTEED_PAYOUTS.map((payout) => (
+              <div
+                key={payout.amount}
+                className="rounded-lg border-2 border-accent bg-accent/5 px-6 py-7 text-center"
+              >
+                <div className="text-4xl font-bold text-primary md:text-5xl">{payout.amount}</div>
+                <p className="mt-2 text-sm text-muted-foreground">{payout.label[language]}</p>
               </div>
-
-              {expandedPlan === 'plan-a' && (
-                <div className="border-t pt-6">
-                  <h4 className="font-semibold mb-4 text-lg">
-                    {language === 'en' ? 'Plan Inclusions:' : 'Okufakiwe Kohlelweni:'}
-                  </h4>
-                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {[
-                      language === 'en' ? 'Casket' : 'Ibhokisi',
-                      language === 'en' ? 'Isiphambano (Cross)' : 'Isiphambano',
-                      language === 'en' ? 'Amakhaza (Funeral equipment)' : 'Amakhaza',
-                      language === 'en' ? 'Tent & Chairs (Home & Cemetery)' : 'Itende Nezitulo (Ekhaya Nasemathuneni)',
-                      language === 'en' ? 'Photo Frame' : 'Isikhungo Sesithombe',
-                      language === 'en' ? 'Programme' : 'Uhlelo',
-                      language === 'en' ? 'Gown' : 'Ingubo',
-                      language === 'en' ? 'Hearse and family car' : 'I-hearse nemoto yomndeni',
-                      language === 'en' ? 'Udokotela (Doctor fees)' : 'Udokotela',
-                      language === 'en' ? 'Grave at Ethembeni Cemetery' : 'Umgodi e-Ethembeni',
-                      language === 'en' ? 'Cemetery Equipment' : 'Izinto Zemathuna',
-                    ].map((item, i) => (
-                      <li key={i} className="flex items-start">
-                        <span className="inline-block w-2 h-2 bg-primary rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                        <span className="text-base">{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Plan B - Emakhaya */}
-          <Card className="max-w-4xl mx-auto mb-8">
-            <CardContent className="p-5 sm:p-8">
-              <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-3xl mb-2">{t("plan_b_title")}</h2>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-bold text-primary">R250</span>
-                    <span className="text-lg text-muted-foreground">{t("per_month")}</span>
-                  </div>
-                  <p className="text-muted-foreground mt-2">
-                    {language === 'en' 
-                      ? 'Up to 15 family members • No age limits' 
-                      : 'Kuya ku-15 amalungu omndeni • Ayikho imikhawulo yeminyaka'}
-                  </p>
-                </div>
-                <Button 
-                  variant="outline" 
-                  onClick={() => togglePlan('plan-b')}
-                  className="sm:ml-4"
-                >
-                  {expandedPlan === 'plan-b' ? (
-                    <><ChevronUp className="mr-2 h-4 w-4" /> {t("hide_inclusions")}</>
-                  ) : (
-                    <><ChevronDown className="mr-2 h-4 w-4" /> {t("view_inclusions")}</>
-                  )}
-                </Button>
-              </div>
-
-              {expandedPlan === 'plan-b' && (
-                <div className="border-t pt-6">
-                  <h4 className="font-semibold mb-4 text-lg">
-                    {language === 'en' ? 'Plan Inclusions:' : 'Okufakiwe Kohlelweni:'}
-                  </h4>
-                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {[
-                      language === 'en' ? 'Removal' : 'Ukususwa',
-                      language === 'en' ? 'Amakhaza/Storage' : 'Amakhaza/Ukugcinwa',
-                      language === 'en' ? 'Udokotela' : 'Udokotela',
-                      language === 'en' ? 'Casket' : 'Ibhokisi',
-                      language === 'en' ? 'Isiphambano' : 'Isiphambano',
-                      language === 'en' ? 'Gown' : 'Ingubo',
-                      language === 'en' ? 'Hearse and family car' : 'I-hearse nemoto yomndeni',
-                      language === 'en' ? 'Tent (2 poles) & Chairs (50)' : 'Itende (Izinsika ezi-2) Nezitulo (50)',
-                      language === 'en' ? 'Photo Frame (A3)' : 'Isikhungo Sesithombe (A3)',
-                    ].map((item, i) => (
-                      <li key={i} className="flex items-start">
-                        <span className="inline-block w-2 h-2 bg-primary rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                        <span className="text-base">{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Plan C - Singles/Couples */}
-          <Card className="max-w-4xl mx-auto mb-8">
-            <CardContent className="p-5 sm:p-8">
-              <div className="mb-6">
-                <h2 className="text-3xl mb-2">{t("plan_c_title")}</h2>
-                <p className="text-muted-foreground">
-                  {language === 'en' 
-                    ? 'Individual or couple coverage with flexible options' 
-                    : 'Ukumbozwa komuntu oyedwa noma izithandani ngezinketho eziguquguqukayo'}
-                </p>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                  <h3 className="font-semibold text-xl mb-4">
-                    {language === 'en' ? 'Single Member' : 'Ilungu Elilodwa'}
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border">
-                      <thead className="bg-secondary">
-                        <tr>
-                          <th className="p-3 text-left">{language === 'en' ? 'Age Group' : 'Iqembu Leminyaka'}</th>
-                          <th className="p-3 text-left">{language === 'en' ? 'Flat Lid' : 'I-Flat Lid'}</th>
-                          <th className="p-3 text-left">{language === 'en' ? 'Casket' : 'Ibhokisi'}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="border-t">
-                          <td className="p-3">21-45</td>
-                          <td className="p-3 font-semibold">R50</td>
-                          <td className="p-3 font-semibold">R150</td>
-                        </tr>
-                        <tr className="border-t">
-                          <td className="p-3">46-59</td>
-                          <td className="p-3 font-semibold">R60</td>
-                          <td className="p-3 font-semibold">R180</td>
-                        </tr>
-                        <tr className="border-t">
-                          <td className="p-3">60-75</td>
-                          <td className="p-3 font-semibold">R80</td>
-                          <td className="p-3 font-semibold">R200</td>
-                        </tr>
-                        <tr className="border-t">
-                          <td className="p-3">76-85</td>
-                          <td className="p-3 font-semibold">R120</td>
-                          <td className="p-3 font-semibold">R250</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="font-semibold text-xl mb-4">
-                    {language === 'en' ? 'Couple (with children under 21)' : 'Izithandani (nezingane ezingaphansi kweminyaka engu-21)'}
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border">
-                      <thead className="bg-secondary">
-                        <tr>
-                          <th className="p-3 text-left">{language === 'en' ? 'Age Group' : 'Iqembu Leminyaka'}</th>
-                          <th className="p-3 text-left">{language === 'en' ? 'Flat Lid Package' : 'Iphakethe Le-Flat Lid'}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="border-t">
-                          <td className="p-3">21-45</td>
-                          <td className="p-3 font-semibold">R100</td>
-                        </tr>
-                        <tr className="border-t">
-                          <td className="p-3">46-59</td>
-                          <td className="p-3 font-semibold">R200</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <Button 
-                  variant="outline" 
-                  onClick={() => togglePlan('plan-c')}
-                  className="w-full"
-                >
-                  {expandedPlan === 'plan-c' ? (
-                    <><ChevronUp className="mr-2 h-4 w-4" /> {t("hide_inclusions")}</>
-                  ) : (
-                    <><ChevronDown className="mr-2 h-4 w-4" /> {t("view_inclusions")}</>
-                  )}
-                </Button>
-
-                {expandedPlan === 'plan-c' && (
-                  <div className="border-t pt-6">
-                    <h4 className="font-semibold mb-4 text-lg">
-                      {language === 'en' ? 'Plan Inclusions (Emakhaya):' : 'Okufakiwe Kohlelweni (Emakhaya):'}
-                    </h4>
-                    <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {[
-                        language === 'en' ? 'Removal' : 'Ukususwa',
-                        language === 'en' ? 'Amakhaza/Storage' : 'Amakhaza/Ukugcinwa',
-                        language === 'en' ? 'Udokotela' : 'Udokotela',
-                        language === 'en' ? 'Flat lid or Casket (based on selection)' : 'I-Flat lid noma Ibhokisi (ngokuya ngokukhethwayo)',
-                        language === 'en' ? 'Isiphambano' : 'Isiphambano',
-                        language === 'en' ? 'Gown' : 'Ingubo',
-                        language === 'en' ? 'Hearse' : 'I-hearse',
-                        language === 'en' ? 'Tent (2 poles) & Chairs (50)' : 'Itende (Izinsika ezi-2) Nezitulo (50)',
-                      ].map((item, i) => (
-                        <li key={i} className="flex items-start">
-                          <span className="inline-block w-2 h-2 bg-primary rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                          <span className="text-base">{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Additional Plan - Ikhishi */}
-          <Card className="max-w-4xl mx-auto mb-8 border-accent">
-            <CardContent className="p-5 sm:p-8">
-              <div className="mb-6">
-                <h2 className="text-3xl mb-2">Ikhishi</h2>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-bold text-primary">R50</span>
-                  <span className="text-lg text-muted-foreground">{t("per_month")}</span>
-                </div>
-              </div>
-
-              <div className="space-y-4 text-base">
-                <p>
-                  <strong>{language === 'en' ? 'Once-off fee:' : 'Imali Kanye Kuphela:'}</strong>
-                </p>
-                <ul className="ml-6 space-y-2">
-                  <li>• R400 – {language === 'en' ? 'Casket plans' : 'Izinhlelo zebhokisi'}</li>
-                  <li>• R300 – {language === 'en' ? 'Flat lid plans' : 'Izinhlelo ze-flat lid'}</li>
-                </ul>
-
-                <p>
-                  <strong>{language === 'en' ? 'Coverage:' : 'Ukumbozwa:'}</strong>
-                </p>
-                <ul className="ml-6 space-y-2">
-                  <li>• R1,000 {language === 'en' ? 'for person under 21 years' : 'kumuntu ongaphansi kweminyaka engu-21'}</li>
-                  <li>• R2,000 {language === 'en' ? 'for person above 21 years' : 'kumuntu ongaphezu kweminyaka engu-21'}</li>
-                </ul>
-
-                <p className="text-muted-foreground">
-                  {t("waiting_period")}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Call to Action */}
-          <div className="max-w-4xl mx-auto text-center mt-12">
-            <Card className="bg-primary text-primary-foreground">
-              <CardContent className="p-5 sm:p-8">
-                <h3 className="text-2xl mb-4">
-                  {language === 'en' 
-                    ? 'Ready to join a plan?' 
-                    : 'Ulungele ukujoyina uhlelo?'}
-                </h3>
-                <p className="text-lg mb-6 opacity-90">
-                  {language === 'en' 
-                    ? 'Contact us today to get started or for more information' 
-                    : 'Xhumana nathi namuhla ukuze uqale noma ukuze uthole ulwazi olwengeziwe'}
-                </p>
-                <div className="flex flex-wrap gap-4 justify-center">
-                  <Button size="lg" variant="secondary" asChild>
-                    <a href={CONTACT_PHONE_LINK}>
-                      {t("cta_call")}
-                    </a>
-                  </Button>
-                  <Button size="lg" variant="secondary" asChild>
-                    <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
-                      WhatsApp
-                    </a>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            ))}
           </div>
         </div>
       </section>
+
+      {/* Comparison table — flyer layout, desktop only (cards below carry the same detail) */}
+      <section className="hidden pb-14 lg:block">
+        <div className="container">
+          <div className="mx-auto max-w-5xl">
+            <h2 className="mb-2 text-center text-2xl md:text-3xl">{t("compare_title")}</h2>
+            <p className="mb-8 text-center text-muted-foreground">{t("compare_note")}</p>
+
+            <div className="overflow-hidden rounded-lg border">
+              <table className="w-full text-left">
+                <thead className="bg-navy text-white">
+                  <tr>
+                    <th className="p-4 font-semibold">{t("th_plan")}</th>
+                    <th className="p-4 font-semibold">{t("th_coverage")}</th>
+                    <th className="p-4 font-semibold">{t("th_price")}</th>
+                    <th className="p-4 font-semibold">{t("th_included")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {PLANS.map((plan, index) => (
+                    <tr
+                      key={plan.id}
+                      className={index % 2 === 0 ? "bg-secondary/40" : "bg-background"}
+                    >
+                      <td className="p-4 align-top">
+                        <a href={`#${plan.id}`} className="font-semibold text-primary hover:underline">
+                          {plan.name[language]}
+                        </a>
+                      </td>
+                      <td className="p-4 align-top text-base">{plan.coverage[language]}</td>
+                      <td className="p-4 align-top">
+                        <span className="font-semibold">
+                          {plan.priceFrom ? `${t("from")} ` : ""}
+                          {plan.price}
+                        </span>{" "}
+                        <span className="text-muted-foreground">{plan.period[language]}</span>
+                        {plan.priceAlt && (
+                          <div className="text-sm text-muted-foreground">
+                            {plan.priceAlt[language]}
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-4 align-top text-base leading-relaxed">
+                        {plan.summary[language]}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Plan detail cards */}
+      <section className="pb-14">
+        <div className="container space-y-8">
+          {PLANS.map((plan) => (
+            <PlanCard key={plan.id} plan={plan} language={language} t={t} />
+          ))}
+        </div>
+      </section>
+
+      {/* Terms that apply to every plan */}
+      <section className="bg-navy py-14 text-white">
+        <div className="container">
+          <div className="mx-auto max-w-4xl">
+            <h2 className="mb-8 text-center text-2xl text-white md:text-3xl">
+              {t("plan_terms_title")}
+            </h2>
+            <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              {PLAN_TERMS.map((term) => {
+                const Icon = TERM_ICONS[term.icon];
+                return (
+                  <li key={term.icon} className="flex items-start gap-4">
+                    <span className="mt-0.5 inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-accent/15">
+                      <Icon className="h-5 w-5 text-accent" />
+                    </span>
+                    <span className="text-base leading-relaxed text-white/90">
+                      {term.text[language]}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* Call to action */}
+      <section className="py-14">
+        <div className="container">
+          <Card className="mx-auto max-w-4xl bg-primary text-primary-foreground">
+            <CardContent className="p-6 text-center sm:p-10">
+              <h3 className="mb-4 text-2xl md:text-3xl">{t("ready_title")}</h3>
+              <p className="mb-8 text-lg opacity-90">{t("ready_text")}</p>
+              <div className="flex flex-wrap justify-center gap-4">
+                <Button size="lg" variant="secondary" asChild>
+                  <a href={CONTACT_PHONE_LINK}>
+                    <Phone className="mr-2 h-5 w-5" />
+                    {t("cta_call")}
+                  </a>
+                </Button>
+                <Button size="lg" variant="secondary" asChild>
+                  <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
+                    <MessageCircle className="mr-2 h-5 w-5" />
+                    WhatsApp
+                  </a>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
     </div>
+  );
+}
+
+interface PlanCardProps {
+  plan: Plan;
+  language: "en" | "zu";
+  t: (key: string) => string;
+}
+
+function PlanCard({ plan, language, t }: PlanCardProps) {
+  return (
+    <Card
+      id={plan.id}
+      className={`mx-auto max-w-4xl scroll-mt-24 overflow-hidden ${
+        plan.featured ? "border-2 border-primary" : ""
+      }`}
+    >
+      {/* Plan header — navy band with gold plan name, as on the flyer */}
+      <div className="bg-navy px-5 py-6 text-white sm:px-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">
+              {plan.coverage[language]}
+            </span>
+            <h2 className="mt-1 text-3xl text-white">{plan.name[language]}</h2>
+            <p className="mt-2 text-sm text-white/75">{plan.members[language]}</p>
+          </div>
+
+          <div className="sm:text-right">
+            <div className="flex items-baseline gap-2 sm:justify-end">
+              {plan.priceFrom && (
+                <span className="text-sm uppercase tracking-wide text-white/70">{t("from")}</span>
+              )}
+              <span className="text-4xl font-bold text-accent">{plan.price}</span>
+              <span className="text-lg text-white/75">{plan.period[language]}</span>
+            </div>
+            {plan.priceAlt && (
+              <p className="mt-1 text-sm text-white/75">{plan.priceAlt[language]}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <CardContent className="p-5 sm:p-8">
+        <p className="mb-6 text-base leading-relaxed text-muted-foreground">
+          {plan.summary[language]}
+        </p>
+
+        {plan.tables?.map((table) => (
+          <div key={table.title.en} className="mb-8">
+            <h3 className="mb-1 text-xl font-semibold">{table.title[language]}</h3>
+            {table.note && (
+              <p className="mb-3 text-sm text-muted-foreground">{table.note[language]}</p>
+            )}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[320px] border text-left">
+                <thead className="bg-secondary">
+                  <tr>
+                    {table.columns.map((column) => (
+                      <th key={column.en} className="p-3 font-semibold">
+                        {column[language]}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {table.rows.map((row) => (
+                    <tr key={row[0]} className="border-t">
+                      {row.map((cell, cellIndex) => (
+                        <td
+                          key={cell}
+                          className={cellIndex === 0 ? "p-3" : "p-3 font-semibold text-primary"}
+                        >
+                          {cell}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+
+        <div className="border-t pt-6">
+          <h3 className="mb-4 text-lg font-semibold">{t("plan_inclusions")}</h3>
+          <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {plan.inclusions.map((item) => (
+              <li key={item.en} className="flex items-start gap-3">
+                <span className="mt-1 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
+                  <Check className="h-3 w-3 text-primary" />
+                </span>
+                <span className="text-base">{item[language]}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

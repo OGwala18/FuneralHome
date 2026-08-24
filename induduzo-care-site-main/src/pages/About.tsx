@@ -87,7 +87,7 @@ export default function About() {
               
               <div className="grid grid-cols-2 gap-6 pt-8">
                 <div className="text-center">
-                  <div className="text-4xl font-bold text-primary mb-2">1998</div>
+                  <div className="text-4xl font-bold text-primary mb-2">1980s</div>
                   <div className="text-muted-foreground">
                     {language === 'en' ? 'Since' : 'Kusukela'}
                   </div>

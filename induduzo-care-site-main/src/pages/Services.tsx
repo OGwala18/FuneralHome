@@ -36,19 +36,21 @@ const services = [
     title_en: "Funeral Insurance",
     title_zu: "Umshwalense Womngcwabo",
     items_en: [
-      "Affordable monthly premiums",
+      "Affordable premiums from R250 a month",
       "Coverage for up to 15 family members",
       "Multiple plan options",
       "Urban and rural coverage",
       "No age limits on certain plans",
+      "All surnames welcome — zonke izibongo siyazithatha",
       "Transparent terms and conditions"
     ],
     items_zu: [
-      "Ama-premium angabizi ngenyanga",
+      "Ama-premium angabizi kusukela ku-R250 ngenyanga",
       "Ukumbozwa kwamalungu omndeni ayizi-15",
       "Izinketho eziningi zezinhlelo",
       "Ukumbozwa kwedolobha nasemakhaya",
       "Ayikho imikhawulo yeminyaka ezinhlelweni ezithile",
+      "Zonke izibongo siyazithatha — ayikho imikhawulo yezibongo",
       "Imigomo nemibandela ecacile"
     ]
   },

@@ -9,6 +9,7 @@ import {
   CONTACT_PHONE_LINK,
   WHATSAPP_URL,
 } from "@/lib/contact";
+import { GUARANTEED_PAYOUTS, PLANS } from "@/data/plans";
 
 const services = [
   {
@@ -46,30 +47,6 @@ const services = [
     title_zu: "Amabhokisi Abafileyo",
     desc_en: "Quality caskets and funeral products",
     desc_zu: "Amabhokisi abafileyo nezikhungo zomngcwabo ezisezingeni eliphezulu",
-  },
-];
-
-const plans = [
-  {
-    name_en: "Plan A (Urban)",
-    name_zu: "Uhlelo A (Edolobheni)",
-    price: "350",
-    coverage_en: "Up to 15 members",
-    coverage_zu: "Amalungu afinyelela ku-15",
-  },
-  {
-    name_en: "Plan B (Emakhaya)",
-    name_zu: "Uhlelo B (Emakhaya)",
-    price: "250",
-    coverage_en: "Up to 15 members",
-    coverage_zu: "Amalungu afinyelela ku-15",
-  },
-  {
-    name_en: "Plan C (Singles/Couples)",
-    name_zu: "Uhlelo C (Abangashadile)",
-    price: "50",
-    coverage_en: "Individual or couple coverage",
-    coverage_zu: "Ukumbozwa komuntu oyedwa noma izithandani",
   },
 ];
 
@@ -152,32 +129,61 @@ export default function Home() {
             <p className="text-xl text-muted-foreground">{t("plans_subtitle")}</p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {plans.map((plan, index) => (
-              <Card key={index} className={index === 1 ? "border-primary border-2" : ""}>
-                <CardContent className="p-8 text-center">
-                  <h3 className="mb-4 text-xl">
-                    {language === 'en' ? plan.name_en : plan.name_zu}
-                  </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+            {PLANS.map((plan) => (
+              <Card
+                key={plan.id}
+                className={`flex flex-col ${plan.featured ? "border-primary border-2" : ""}`}
+              >
+                <CardContent className="flex flex-1 flex-col p-6 text-center">
+                  <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    {plan.coverage[language]}
+                  </span>
+                  <h3 className="mb-4 mt-1 text-xl">{plan.name[language]}</h3>
                   <div className="mb-4">
-                    <span className="text-sm text-muted-foreground uppercase">{t("from")}</span>
-                    <div className="text-5xl font-bold text-primary">
-                      R{plan.price}
-                    </div>
-                    <span className="text-muted-foreground">{t("per_month")}</span>
+                    {plan.priceFrom && (
+                      <span className="text-sm text-muted-foreground uppercase">{t("from")}</span>
+                    )}
+                    <div className="text-4xl font-bold text-primary">{plan.price}</div>
+                    <span className="text-muted-foreground">{plan.period[language]}</span>
+                    {plan.priceAlt && (
+                      <p className="mt-1 text-xs text-muted-foreground">{plan.priceAlt[language]}</p>
+                    )}
                   </div>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    {language === "en" ? plan.coverage_en : plan.coverage_zu}
+                  <p className="mb-6 flex-1 text-sm text-muted-foreground">
+                    {plan.summary[language]}
                   </p>
-                  <Button asChild variant={index === 1 ? "default" : "outline"} className="w-full">
+                  <Button asChild variant={plan.featured ? "default" : "outline"} className="w-full">
                     <NavLink to="/join">{t("cta_join")}</NavLink>
                   </Button>
                 </CardContent>
               </Card>
             ))}
           </div>
-          
-          <div className="text-center mt-8">
+
+          {/* Guaranteed payouts — apply to every plan */}
+          <div className="mx-auto mt-10 max-w-3xl">
+            <p className="mb-4 text-center text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              {t("payouts_title")}
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {GUARANTEED_PAYOUTS.map((payout) => (
+                <div
+                  key={payout.amount}
+                  className="rounded-lg border-2 border-accent bg-accent/5 px-5 py-5 text-center"
+                >
+                  <div className="text-3xl font-bold text-primary">{payout.amount}</div>
+                  <p className="mt-1 text-sm text-muted-foreground">{payout.label[language]}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <p className="mt-8 text-center text-base font-medium">
+            {t("all_names_welcome")}
+          </p>
+
+          <div className="text-center mt-6">
             <Button asChild size="lg" variant="outline">
               <NavLink to="/join">
                 {t("compare_plans")}
