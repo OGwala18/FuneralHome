@@ -17,6 +17,8 @@ All colors MUST be HSL.
     --ink-700: 210 5% 30%; /* #4A4D50 */
     --paper-0: 0 0% 100%; /* #FFFFFF */
     --paper-50: 210 11% 97%; /* #F7F7F8 */
+    --navy-900: 210 45% 12%; /* Deep ink navy, matches the printed flyer */
+    --navy-800: 210 40% 18%;
 
     /* Semantic tokens */
     --background: 0 0% 100%;
