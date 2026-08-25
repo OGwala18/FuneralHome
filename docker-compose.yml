@@ -1,0 +1,48 @@
+# Local development database.
+#
+# The database is a SEPARATE service from the app, joined only by a connection
+# string (AIA foundation 03 §0). Nothing in the repo embeds it.
+#
+#   docker compose up -d db      # start
+#   docker compose down          # stop, keep data
+#   docker compose down -v       # stop and DESTROY the local data volume
+#
+# Migrations in ./db/migrations are applied automatically on FIRST run of an
+# empty volume, in filename order. To re-apply from scratch: down -v, then up.
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: induduzo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: induduzo
+      POSTGRES_PASSWORD: induduzo_local_dev   # local only; never used off this machine
+      POSTGRES_DB: induduzo
+    ports:
+      # 5433 on the host: the machine already runs an aistack Postgres on 5432.
+      # Inside the compose network the port is still 5432.
+      - "5433:5432"
+    volumes:
+      - induduzo_pgdata:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U induduzo -d induduzo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Browse the tables the way SSMS lets you browse SQL Server (AIA 03 §8).
+  # Reachable at http://localhost:8081
+  adminer:
+    image: adminer:5
+    container_name: induduzo-adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  induduzo_pgdata:
