@@ -1,7 +1,8 @@
 import { useLanguage } from "@/lib/i18n";
+import { NavLink } from "@/lib/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, Clock, Heart, MessageCircle, Phone, Users, Wallet } from "lucide-react";
+import { Check, Clock, Heart, MessageCircle, Phone, UserPlus, Users, Wallet } from "lucide-react";
 import { CONTACT_PHONE_LINK, WHATSAPP_URL } from "@/lib/contact";
 import { GUARANTEED_PAYOUTS, PLANS, PLAN_TERMS, type Plan } from "@/data/plans";
 
@@ -22,9 +23,32 @@ export default function Join() {
         <div className="container">
           <div className="mx-auto max-w-3xl text-center">
             <h1 className="mb-6 text-white">{t("join_title")}</h1>
-            <p className="text-lg leading-relaxed text-white/85 md:text-xl">
+            <p className="mb-8 text-lg leading-relaxed text-white/85 md:text-xl">
               {t("join_subtitle")}
             </p>
+
+            {/* Primary action. Sits above the plan detail so someone who already
+                knows what they want never has to scroll past four plans to act. */}
+            <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Button size="lg" asChild>
+                <NavLink to="/register">
+                  <UserPlus className="mr-2 h-5 w-5" aria-hidden="true" />
+                  {t("cta_register")}
+                </NavLink>
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-white bg-white/10 text-white hover:bg-white hover:text-navy"
+                asChild
+              >
+                <a href={CONTACT_PHONE_LINK}>
+                  <Phone className="mr-2 h-5 w-5" aria-hidden="true" />
+                  {t("cta_call")}
+                </a>
+              </Button>
+            </div>
+            <p className="mt-4 text-sm text-white/70">{t("register_reassurance")}</p>
           </div>
         </div>
       </section>
@@ -155,14 +179,20 @@ export default function Join() {
               <p className="mb-8 text-lg opacity-90">{t("ready_text")}</p>
               <div className="flex flex-wrap justify-center gap-4">
                 <Button size="lg" variant="secondary" asChild>
+                  <NavLink to="/register">
+                    <UserPlus className="mr-2 h-5 w-5" aria-hidden="true" />
+                    {t("cta_register")}
+                  </NavLink>
+                </Button>
+                <Button size="lg" variant="secondary" asChild>
                   <a href={CONTACT_PHONE_LINK}>
-                    <Phone className="mr-2 h-5 w-5" />
+                    <Phone className="mr-2 h-5 w-5" aria-hidden="true" />
                     {t("cta_call")}
                   </a>
                 </Button>
                 <Button size="lg" variant="secondary" asChild>
                   <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
-                    <MessageCircle className="mr-2 h-5 w-5" />
+                    <MessageCircle className="mr-2 h-5 w-5" aria-hidden="true" />
                     WhatsApp
                   </a>
                 </Button>

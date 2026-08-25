@@ -104,6 +104,8 @@ export const translations = {
     ready_title: "Would you like to start your family's cover today?",
     ready_text: "Call or WhatsApp us for a same-day quote — we will walk you through every option.",
     all_names_welcome: "Zonke izibongo siyazithatha — all family names are welcome",
+    cta_register: "Register",
+    register_reassurance: "Takes about a minute. No payment details needed.",
     
     // Footer
     footer_tagline: "Serving Pietermaritzburg and surrounding areas",
@@ -245,6 +247,8 @@ export const translations = {
     ready_title: "Ungathanda ukuqala ukumbozwa komndeni wakho namuhla?",
     ready_text: "Sishayele noma usithumele nge-WhatsApp uthole isilinganiso ngosuku olufanayo — sizokuhambisa kuzo zonke izinketho.",
     all_names_welcome: "Zonke izibongo siyazithatha — ayikho imikhawulo yezibongo",
+    cta_register: "Bhalisa",
+    register_reassurance: "Kuthatha umzuzu. Ayidingeki imininingwane yenkokhelo.",
     
     // Footer
     footer_tagline: "Sikhonza ePietermaritzburg nasezindaweni eziseduze",

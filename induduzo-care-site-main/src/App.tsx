@@ -11,6 +11,8 @@ import About from "./pages/About";
 import Services from "./pages/Services";
 import Contact from "./pages/Contact";
 import Join from "./pages/Join";
+import Register from "./pages/Register";
+import RegisterDetails from "./pages/RegisterDetails";
 import Gallery from "./pages/Gallery";
 import Testimonials from "./pages/Testimonials";
 import Founder from "./pages/Founder";
@@ -33,6 +35,10 @@ const PublicRouter = () => {
         return <Contact />;
       case "/join":
         return <Join />;
+      case "/register":
+        return <Register />;
+      case "/register/details":
+        return <RegisterDetails />;
       case "/gallery":
         return <Gallery />;
       case "/testimonials":
