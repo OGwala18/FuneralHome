@@ -121,7 +121,7 @@ export default function About() {
         className="py-20 bg-cover bg-center relative"
         style={{ backgroundImage: `url(${valuesImage})` }}
       >
-        <div className="absolute inset-0 bg-black/60"></div>
+        <div className="absolute inset-0 bg-black/[0.48]"></div>
         <div className="container relative z-10">
           <div className="text-center mb-12">
             <h2 className="mb-4 text-white">{t("our_values")}</h2>
@@ -130,8 +130,10 @@ export default function About() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {values.map((value, index) => {
               const Icon = value.icon;
+              // bg-card rather than a hard-coded white: a white card keeps its
+              // theme-aware text colour, which turns invisible in dark mode.
               return (
-                <Card key={index} className="bg-white/95 hover:bg-white transition-colors">
+                <Card key={index} className="bg-card/95 hover:bg-card transition-colors">
                   <CardContent className="p-8 text-center">
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
                       <Icon className="h-8 w-8 text-primary" />

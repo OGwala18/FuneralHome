@@ -72,10 +72,10 @@ export default function Join() {
             {GUARANTEED_PAYOUTS.map((payout) => (
               <div
                 key={payout.amount}
-                className="rounded-lg border-2 border-accent bg-accent/5 px-6 py-7 text-center"
+                className="rounded-lg border border-payout-foreground/25 bg-payout px-6 py-7 text-center text-payout-foreground"
               >
-                <div className="text-4xl font-bold text-primary md:text-5xl">{payout.amount}</div>
-                <p className="mt-2 text-sm text-muted-foreground">{payout.label[language]}</p>
+                <div className="text-4xl font-bold md:text-5xl">{payout.amount}</div>
+                <p className="mt-2 text-sm">{payout.label[language]}</p>
               </div>
             ))}
           </div>
@@ -173,7 +173,7 @@ export default function Join() {
       {/* Call to action */}
       <section className="py-14">
         <div className="container">
-          <Card className="mx-auto max-w-4xl bg-primary text-primary-foreground">
+          <Card className="mx-auto max-w-4xl border-transparent bg-band text-band-foreground">
             <CardContent className="p-6 text-center sm:p-10">
               <h3 className="mb-4 text-2xl md:text-3xl">{t("ready_title")}</h3>
               <p className="mb-8 text-lg opacity-90">{t("ready_text")}</p>
@@ -219,27 +219,31 @@ function PlanCard({ plan, language, t }: PlanCardProps) {
         plan.featured ? "border-2 border-primary" : ""
       }`}
     >
-      {/* Plan header — navy band with gold plan name, as on the flyer */}
-      <div className="bg-navy px-5 py-6 text-white sm:px-8">
+      {/* Plan header — the flyer's cream body, with gold kept as a rule rather
+          than as text. Gold on cream is a print luxury that does not survive a
+          contrast check on screen, so the price carries the brand colour. */}
+      <div className="border-b-2 border-accent bg-parchment px-5 py-6 sm:px-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">
+            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               {plan.coverage[language]}
             </span>
-            <h2 className="mt-1 text-3xl text-white">{plan.name[language]}</h2>
-            <p className="mt-2 text-sm text-white/75">{plan.members[language]}</p>
+            <h2 className="mt-1 text-3xl">{plan.name[language]}</h2>
+            <p className="mt-2 text-sm text-muted-foreground">{plan.members[language]}</p>
           </div>
 
           <div className="sm:text-right">
             <div className="flex items-baseline gap-2 sm:justify-end">
               {plan.priceFrom && (
-                <span className="text-sm uppercase tracking-wide text-white/70">{t("from")}</span>
+                <span className="text-sm uppercase tracking-wide text-muted-foreground">
+                  {t("from")}
+                </span>
               )}
-              <span className="text-4xl font-bold text-accent">{plan.price}</span>
-              <span className="text-lg text-white/75">{plan.period[language]}</span>
+              <span className="text-4xl font-bold text-primary">{plan.price}</span>
+              <span className="text-lg text-muted-foreground">{plan.period[language]}</span>
             </div>
             {plan.priceAlt && (
-              <p className="mt-1 text-sm text-white/75">{plan.priceAlt[language]}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{plan.priceAlt[language]}</p>
             )}
           </div>
         </div>

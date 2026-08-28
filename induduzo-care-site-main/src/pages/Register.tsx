@@ -191,11 +191,11 @@ export default function Register() {
 
   return (
     <div className="flex flex-col">
-      <section className="bg-navy py-12 text-white md:py-16">
+      <section className="border-b-2 border-accent bg-parchment py-12 md:py-16">
         <div className="container">
           <div className="mx-auto max-w-2xl">
-            <h1 className="mb-4 text-white">{en ? "Register your interest" : "Bhalisa isifiso sakho"}</h1>
-            <p className="text-lg text-white/85">
+            <h1 className="mb-4">{en ? "Register your interest" : "Bhalisa isifiso sakho"}</h1>
+            <p className="text-lg text-muted-foreground">
               {en
                 ? "Step one takes about a minute. Give us your name and number and we will call you back with a quote — you are not signing up to anything yet."
                 : "Isinyathelo sokuqala sithatha umzuzu. Sinike igama nenombolo yakho sizokushayela — awukabhalisi lutho okwamanje."}

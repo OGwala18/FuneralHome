@@ -61,10 +61,12 @@ export default function Home() {
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url(${heroImage})` }}
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-transparent"></div>
+          {/* Flat 48% rather than a gradient, so the photo is exposed the same
+              way in both themes and the hero text contrast never shifts. */}
+          <div className="absolute inset-0 bg-black/[0.48]"></div>
         </div>
         
-        <div className="relative container z-10 text-white">
+        <div className="relative container z-10 text-white hero-text">
           <div className="max-w-2xl">
             <h1 className="mb-6">{t("hero_title")}</h1>
             <p className="text-xl mb-8 leading-relaxed">{t("hero_subtitle")}</p>
@@ -84,7 +86,7 @@ export default function Home() {
                 </NavLink>
               </Button>
               
-              <Button size="lg" variant="outline" className="bg-white/10 text-white border-white hover:bg-white hover:text-foreground" asChild>
+              <Button size="lg" variant="outline" className="bg-white/10 text-white border-white hover:bg-white hover:text-navy" asChild>
                 <NavLink to="/join">{t("cta_join")}</NavLink>
               </Button>
             </div>
@@ -170,10 +172,10 @@ export default function Home() {
               {GUARANTEED_PAYOUTS.map((payout) => (
                 <div
                   key={payout.amount}
-                  className="rounded-lg border-2 border-accent bg-accent/5 px-5 py-5 text-center"
+                  className="rounded-lg border border-payout-foreground/25 bg-payout px-5 py-5 text-center text-payout-foreground"
                 >
-                  <div className="text-3xl font-bold text-primary">{payout.amount}</div>
-                  <p className="mt-1 text-sm text-muted-foreground">{payout.label[language]}</p>
+                  <div className="text-3xl font-bold">{payout.amount}</div>
+                  <p className="mt-1 text-sm">{payout.label[language]}</p>
                 </div>
               ))}
             </div>
@@ -195,7 +197,7 @@ export default function Home() {
       </section>
 
       {/* Immediate Help CTA */}
-      <section className="bg-primary text-primary-foreground py-12">
+      <section className="bg-band text-band-foreground py-12">
         <div className="container">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div>

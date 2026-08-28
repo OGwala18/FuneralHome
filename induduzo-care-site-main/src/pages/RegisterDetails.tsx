@@ -294,11 +294,11 @@ export default function RegisterDetails() {
   // ----------------------------------------------------------------- form
   return (
     <div className="flex flex-col">
-      <section className="bg-navy py-12 text-white md:py-16">
+      <section className="border-b-2 border-accent bg-parchment py-12 md:py-16">
         <div className="container">
           <div className="mx-auto max-w-2xl">
-            <h1 className="mb-4 text-white">{en ? "Complete your application" : "Qedela isicelo sakho"}</h1>
-            <p className="text-lg text-white/85">
+            <h1 className="mb-4">{en ? "Complete your application" : "Qedela isicelo sakho"}</h1>
+            <p className="text-lg text-muted-foreground">
               {en
                 ? "Almost there. These are the details we need to open your policy."
                 : "Sesizofika. Nansi imininingwane esiyidingayo ukuze sivule inqubomgomo yakho."}
