@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Menu, MessageCircle, Phone, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { CONTACT_PHONE_LINK, WHATSAPP_URL } from "@/lib/contact";
 import { useLanguage } from "@/lib/i18n";
 import { NavLink } from "@/lib/navigation";
@@ -134,7 +135,7 @@ export const Header = () => {
               onClick={() => switchLanguage("en")}
               className={`min-h-10 rounded px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 language === "en"
-                  ? "bg-primary font-semibold text-primary-foreground"
+                  ? "bg-action font-semibold text-action-foreground"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -151,7 +152,7 @@ export const Header = () => {
               onClick={() => switchLanguage("zu")}
               className={`min-h-10 rounded px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 language === "zu"
-                  ? "bg-primary font-semibold text-primary-foreground"
+                  ? "bg-action font-semibold text-action-foreground"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -159,6 +160,8 @@ export const Header = () => {
               <span className="hidden sm:inline">Zulu</span>
             </button>
           </div>
+
+          <ThemeToggle />
 
           <Button asChild size="sm" className="hidden xl:inline-flex">
             <a href={CONTACT_PHONE_LINK}>
@@ -206,7 +209,7 @@ export const Header = () => {
             <div className="mt-2 grid grid-cols-2 gap-2 border-t pt-3">
               <a
                 href={CONTACT_PHONE_LINK}
-                className="inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground"
+                className="inline-flex min-h-11 items-center justify-center rounded-md bg-action px-3 text-sm font-semibold text-action-foreground"
               >
                 <Phone className="mr-2 h-4 w-4" />
                 {t("cta_call")}

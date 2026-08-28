@@ -6,13 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Phone, Mail, MapPin, MessageCircle } from "lucide-react";
-import {
-  CONTACT_EMAIL,
-  CONTACT_EMAIL_LINK,
-  CONTACT_PHONE_DISPLAY,
-  CONTACT_PHONE_LINK,
-  WHATSAPP_URL,
-} from "@/lib/contact";
+import { CONTACT_EMAIL, CONTACT_EMAIL_LINK, CONTACT_PHONES } from "@/lib/contact";
 
 export default function Contact() {
   const { language, t } = useLanguage();
@@ -71,9 +65,17 @@ export default function Contact() {
                   <Phone className="h-8 w-8 text-primary" />
                 </div>
                 <h3 className="mb-3 text-xl">{t("contact_phone")}</h3>
-                <a href={CONTACT_PHONE_LINK} className="text-lg font-semibold text-primary hover:underline">
-                  {CONTACT_PHONE_DISPLAY}
-                </a>
+                <div className="space-y-1">
+                  {CONTACT_PHONES.map((p) => (
+                    <a
+                      key={p.e164}
+                      href={p.link}
+                      className="block text-lg font-semibold text-primary hover:underline"
+                    >
+                      {p.display}
+                    </a>
+                  ))}
+                </div>
                 <p className="text-sm text-muted-foreground mt-2">24/7 {t("cta_call")}</p>
               </CardContent>
             </Card>
@@ -84,14 +86,19 @@ export default function Contact() {
                   <MessageCircle className="h-8 w-8 text-[#25D366]" />
                 </div>
                 <h3 className="mb-3 text-xl">{t("contact_whatsapp")}</h3>
-                <a 
-                  href={WHATSAPP_URL}
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-lg font-semibold text-[#25D366] hover:underline"
-                >
-                  {CONTACT_PHONE_DISPLAY}
-                </a>
+                <div className="space-y-1">
+                  {CONTACT_PHONES.map((p) => (
+                    <a
+                      key={p.e164}
+                      href={p.whatsapp}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-lg font-semibold text-[#25D366] hover:underline"
+                    >
+                      {p.display}
+                    </a>
+                  ))}
+                </div>
                 <p className="text-sm text-muted-foreground mt-2">{t("contact_instant_messaging")}</p>
               </CardContent>
             </Card>

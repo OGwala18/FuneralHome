@@ -1,18 +1,13 @@
 import { NavLink } from "@/lib/navigation";
 import { Mail, Phone, MapPin } from "lucide-react";
 import { useLanguage } from "@/lib/i18n";
-import {
-  CONTACT_EMAIL,
-  CONTACT_EMAIL_LINK,
-  CONTACT_PHONE_DISPLAY,
-  CONTACT_PHONE_LINK,
-} from "@/lib/contact";
+import { CONTACT_EMAIL, CONTACT_EMAIL_LINK, CONTACT_PHONES } from "@/lib/contact";
 
 export const Footer = () => {
   const { t } = useLanguage();
 
   return (
-    <footer className="bg-secondary border-t mt-16">
+    <footer className="bg-footer border-t mt-16">
       <div className="container py-12">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
@@ -46,10 +41,16 @@ export const Footer = () => {
           <div>
             <h4 className="font-semibold mb-4">{t("footer_contact_info")}</h4>
             <div className="space-y-3 text-base">
-              <a href={CONTACT_PHONE_LINK} className="flex items-center hover:text-primary transition-colors">
-                <Phone className="h-5 w-5 mr-2" />
-                {CONTACT_PHONE_DISPLAY}
-              </a>
+              {CONTACT_PHONES.map((p) => (
+                <a
+                  key={p.e164}
+                  href={p.link}
+                  className="flex items-center hover:text-primary transition-colors"
+                >
+                  <Phone className="h-5 w-5 mr-2" />
+                  {p.display}
+                </a>
+              ))}
               <a href={CONTACT_EMAIL_LINK} className="flex items-center break-all hover:text-primary transition-colors">
                 <Mail className="h-5 w-5 mr-2" />
                 {CONTACT_EMAIL}
