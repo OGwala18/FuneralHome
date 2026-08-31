@@ -16,24 +16,11 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Induduzo Funeral Home" />
 
-    <!-- Sets the theme before first paint. Without this the page renders light
-         for a frame and then flips, which is a visible white flash for anyone
-         on dark mode. Kept inline and dependency-free so it runs immediately. -->
-    <script>
-      (function () {
-        try {
-          var stored = localStorage.getItem("induduzo-theme");
-          var dark =
-            stored === "dark" ||
-            (stored !== "light" &&
-              window.matchMedia("(prefers-color-scheme: dark)").matches);
-          document.documentElement.classList.toggle("dark", dark);
-          document.documentElement.style.colorScheme = dark ? "dark" : "light";
-        } catch (e) {
-          /* storage blocked: fall through to the light default */
-        }
-      })();
-    </script>
+    <!-- The site is light-only. Declaring the scheme stops the browser from
+         rendering native controls (scrollbars, date pickers, autofill) in dark
+         on a dark-mode machine, which would otherwise be the one part of the
+         page that still switched. -->
+    <meta name="color-scheme" content="light" />
   </head>
 
   <body>

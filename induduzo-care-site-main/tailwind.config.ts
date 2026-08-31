@@ -1,6 +1,13 @@
 import type { Config } from "tailwindcss";
 import tailwindcssAnimate from "tailwindcss-animate";
 
+// The site is light-only: there is no theme switching and no .dark stylesheet.
+//
+// darkMode stays set to "class" deliberately. Removing the key would NOT
+// disable dark variants — Tailwind's default is the "media" strategy, so any
+// stray `dark:` utility in a vendored component would start following the
+// visitor's OS preference. Pinned to "class", those variants can never fire,
+// because nothing in the app ever adds the class.
 export default {
   darkMode: ["class"],
   content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
