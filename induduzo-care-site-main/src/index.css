@@ -15,14 +15,16 @@ All colors MUST be HSL.
     --parchment: 250 248 244;  /* warm cream echoing the printed flyer */
 
     /* ---------------------------------------------------------------------
-       LIGHT — the agreed UI-role palette.
+       The UI-role palette. This is the ONLY theme — the site is light-only
+       and there is no theme switching.
 
        Stored as "R G B" channels rather than HSL so each value round-trips to
        its exact hex; HSL rounding was drifting these by 1-2 per channel.
        Tailwind consumes them as rgb(var(--x) / <alpha-value>), so opacity
        modifiers like bg-secondary/30 still work.
 
-       Red carries THREE roles that share one hex here but diverge in dark:
+       Red is split across three role tokens so each can be tuned for its own
+       job without disturbing the others:
          --primary  link / coloured text
          --action   solid button background
          --band     full-width assistance band
@@ -94,82 +96,6 @@ All colors MUST be HSL.
     --shadow-elevated: 0 8px 24px rgba(183, 49, 46, 0.15);
   }
 
-  /* ---------------------------------------------------------------------
-     DARK — the counterpart of the light palette above.
-
-     This is where red splits. In light all three red roles are #B7352F; here
-     they part company, because a red that reads as TEXT on a dark ground is
-     far too light to sit under white button text:
-
-       --primary  #FF8A80  light coral, for links and coloured text
-       --action   #8E2522  deep red, solid button under white text
-       --band     #641B19  deeper still, so a full-width band is not glaring
-     --------------------------------------------------------------------- */
-  .dark {
-    --background: 14 18 22;            /* #0E1216 */
-    --foreground: 246 244 241;         /* #F6F4F1 — 17.13:1 */
-
-    --card: 23 28 33;                  /* #171C21 */
-    --card-foreground: 246 244 241;
-
-    --popover: 23 28 33;
-    --popover-foreground: 246 244 241;
-
-    --primary: 255 138 128;            /* #FF8A80 — 8.24:1 */
-    --primary-foreground: 14 18 22;
-
-    --secondary: 18 24 30;             /* #12181E — section surface */
-    --secondary-foreground: 246 244 241;
-
-    --muted: 18 24 30;                 /* #12181E */
-    --muted-foreground: 142 154 165;   /* #8E9AA5 — 6.55:1 */
-
-    --accent: 243 212 122;             /* #F3D47A — gold banner */
-    --accent-foreground: 14 18 22;
-
-    --destructive: 255 138 128;        /* #FF8A80 */
-    --destructive-foreground: 14 18 22;
-
-    --border: 48 56 65;                /* #303841 */
-    --input: 60 70 80;                 /* #3C4650 */
-    --ring: 255 138 128;
-
-    /* Role tokens beyond the shadcn defaults ------------------------------ */
-    --action: 142 37 34;               /* #8E2522 — 8.61:1 under white */
-    --action-foreground: 255 255 255;
-
-    --band: 100 27 25;                 /* #641B19 — 12.26:1 under white */
-    --band-foreground: 255 255 255;
-
-    --surface-alt: 27 36 44;           /* #1B242C — 14.33:1 */
-    --surface-alt-foreground: 246 244 241;
-
-    --payout: 58 45 16;                /* #3A2D10 — gold payout band */
-    --payout-foreground: 243 212 122;  /* #F3D47A — 9.28:1 */
-
-    --footer: 34 42 50;                /* #222A32 */
-
-    /* Brand surfaces. Navy stays for the three flyer bands — the masthead,
-       the comparison table header and the terms band — so the print identity
-       survives. Lifted above the page so those bands still read as bands. */
-    --navy-900: 27 42 58;              /* #1B2A3A */
-    --navy-800: 38 55 74;              /* #26374A */
-    --gold-500: 243 212 122;           /* #F3D47A */
-    --parchment: 27 32 39;             /* #1B2027 */
-
-    --sidebar-background: 23 28 33;
-    --sidebar-foreground: 246 244 241;
-    --sidebar-primary: 255 138 128;
-    --sidebar-primary-foreground: 14 18 22;
-    --sidebar-accent: 18 24 30;
-    --sidebar-accent-foreground: 246 244 241;
-    --sidebar-border: 48 56 65;
-    --sidebar-ring: 255 138 128;
-
-    --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.5);
-    --shadow-medium: 0 4px 16px rgba(0, 0, 0, 0.6);
-    --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.7);
-  }
 }
 
 @layer base {

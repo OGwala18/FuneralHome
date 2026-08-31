@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { Menu, MessageCircle, Phone, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { CONTACT_PHONE_LINK, WHATSAPP_URL } from "@/lib/contact";
 import { useLanguage } from "@/lib/i18n";
 import { NavLink } from "@/lib/navigation";
@@ -160,8 +159,6 @@ export const Header = () => {
               <span className="hidden sm:inline">Zulu</span>
             </button>
           </div>
-
-          <ThemeToggle />
 
           <Button asChild size="sm" className="hidden xl:inline-flex">
             <a href={CONTACT_PHONE_LINK}>
