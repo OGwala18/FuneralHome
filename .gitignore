@@ -1,4 +1,12 @@
-# Secrets and local environment configuration
+# =============================================================================
+# Induduzo Funeral Home — what must never reach the repository
+#
+# Rule of thumb: if a file is produced by a machine, holds a credential, or is
+# specific to one developer's laptop, it does not belong in git. Only source
+# that is needed to build and run the system is tracked.
+# =============================================================================
+
+# --- Secrets and local environment ------------------------------------------
 .env
 .env.*
 !.env.example
@@ -6,36 +14,108 @@
 **/.env.*
 !**/.env.example
 
-# Hosting-provider local state
-.netlify/
-.vercel/
+# Password file used by the local pgAdmin container. Generated from
+# docker-compose values by db/pgadmin/make-pgpass.ps1 — never committed, even
+# though the local dev password is not sensitive, so the habit stays correct.
+db/pgadmin/pgpass
 
 # Private keys and certificates
 *.key
 *.pem
 *.p12
 *.pfx
+*.crt
+*.cer
 
-# Dependencies, builds, and test artifacts
+# Hosting-provider local state
+.netlify/
+.vercel/
+
+# --- Dependencies and build output ------------------------------------------
 node_modules/
 **/node_modules/
 dist/
 **/dist/
+build/
 output/
 **/output/
 
-# Logs
+# Python virtual environments. These are thousands of files, are specific to one
+# machine and one OS, and are rebuilt from requirements.txt in seconds.
+.venv/
+**/.venv/
+venv/
+**/venv/
+env/
+ENV/
+
+# --- Python build / cache artefacts -----------------------------------------
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# --- Logs and runtime state -------------------------------------------------
 *.log
+logs/
+**/logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+pids/
+*.pid
 
-# Editor and operating-system files
+# --- Editor, OS and Office scratch files ------------------------------------
 .idea/
 .vscode/
 !.vscode/extensions.json
 .DS_Store
 Thumbs.db
+desktop.ini
 *.suo
 *.sw?
+*~
+
+# Word/Excel lock files, e.g. "~$report.docx" — created whenever a doc is open.
+~$*
+
+# --- Local tooling ----------------------------------------------------------
+# Claude Code writes machine-specific launch config here.
+.claude/settings.local.json
+
+# --- Client data --------------------------------------------------------------
+# Everything the import pipeline in db/seed/ reads or writes carries real names,
+# ID numbers and phone numbers. None of it belongs in version control: this is
+# POPIA-protected personal information and a git history cannot be un-leaked.
+#
+# Deny everything, then allow the tooling back by name. The previous version of
+# this block listed data extensions (*.csv, *.xlsx, ...) and would have missed
+# the first .ods, .txt or oddly-named .sql the office exported.
+db/seed/*
+!db/seed/*.py
+!db/seed/export_phone_capture_sheet.sql
+
+# --- Office documents ---------------------------------------------------------
+# A .docx is a zip, so its contents are invisible to a text search: the repo's
+# own secret scan reads straight past one. `Induduzo Email Setup Guide.docx`
+# held the live password for all five business mailboxes in plain text and was
+# one `git add -A` away from a public repository.
+#
+# Business documents do not belong in a source tree. Keep them in OneDrive.
+# (`docs/Induduzo - Taking Payments Online.docx` predates this rule and stays
+# tracked; it was checked and contains no credentials.)
+docs/*.docx
+!docs/Induduzo - Taking Payments Online.docx
+
+# --- Build artefacts ----------------------------------------------------------
+# TypeScript incremental build caches. Machine-specific and regenerated.
+*.tsbuildinfo
