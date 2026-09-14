@@ -1,7 +1,25 @@
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-pydantic==2.10.4
-psycopg[binary]==3.2.3
-psycopg-pool==3.2.4
-python-dotenv==1.0.1
-twilio==9.4.1
+# Pinned so CI, local dev and production install byte-identical trees.
+#
+# Upgraded 2026-08-31 to clear 10 known vulnerabilities that pip-audit found in
+# starlette (a FastAPI dependency) and python-dotenv. Run the scan before
+# changing any pin:
+#
+#   pip-audit --requirement requirements.txt --strict
+#
+# Python 3.12 — pydantic-core has no wheel for 3.14.
+
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+pydantic==2.13.5
+psycopg[binary]==3.3.4
+psycopg-pool==3.3.1
+python-dotenv==1.2.3
+twilio==9.11.0
+
+# Verifies Supabase-issued staff tokens (ES256). Public-key only: the API
+# never holds a signing secret.
+pyjwt[crypto]==2.13.0
+
+# Error tracking. See app/observability.py for the PII scrubbing that must
+# stay in place before any event leaves the process.
+sentry-sdk[fastapi]==2.68.1
