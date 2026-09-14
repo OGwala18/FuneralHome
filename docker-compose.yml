@@ -1,14 +1,18 @@
-# Local development database.
+# Local development infrastructure: Postgres plus two ways to look at it.
 #
 # The database is a SEPARATE service from the app, joined only by a connection
-# string (AIA foundation 03 §0). Nothing in the repo embeds it.
+# string. Nothing in the repo embeds it.
 #
-#   docker compose up -d db      # start
-#   docker compose down          # stop, keep data
-#   docker compose down -v       # stop and DESTROY the local data volume
+#   docker compose up -d          # start
+#   docker compose down           # stop, keep data
+#   docker compose down -v        # stop and DESTROY the local data volume
 #
 # Migrations in ./db/migrations are applied automatically on FIRST run of an
 # empty volume, in filename order. To re-apply from scratch: down -v, then up.
+#
+# Credentials come from the repo-root .env (copy .env.example). The defaults
+# below only ever apply to a throwaway local database; nothing here is a
+# production secret, and production must supply real values via the environment.
 
 services:
   db:
@@ -16,18 +20,21 @@ services:
     container_name: induduzo-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: induduzo
-      POSTGRES_PASSWORD: induduzo_local_dev   # local only; never used off this machine
-      POSTGRES_DB: induduzo
+      POSTGRES_USER: ${POSTGRES_USER:-induduzo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-induduzo_local_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-induduzo}
+      # Consumed by db/migrations/0005_api_role.sh to create the restricted
+      # role the API connects as. Without it that migration is skipped.
+      API_DB_PASSWORD: ${API_DB_PASSWORD:-induduzo_api_local_dev}
     ports:
-      # 5433 on the host: the machine already runs an aistack Postgres on 5432.
+      # 5433 on the host: this machine already runs another Postgres on 5432.
       # Inside the compose network the port is still 5432.
-      - "5433:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - induduzo_pgdata:/var/lib/postgresql/data
       - ./db/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U induduzo -d induduzo"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-induduzo} -d ${POSTGRES_DB:-induduzo}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -53,27 +60,35 @@ services:
     environment:
       # Must be a routable-looking domain: pgAdmin rejects reserved TLDs
       # such as .local. Nothing is ever sent to it.
-      PGADMIN_DEFAULT_EMAIL: admin@induduzo.co.za
-      PGADMIN_DEFAULT_PASSWORD: induduzo_local_dev
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@induduzo.co.za}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-induduzo_local_dev}
       # Local-only convenience: skip the login screen entirely.
       PGADMIN_CONFIG_SERVER_MODE: "False"
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
       PGADMIN_DISABLE_POSTFIX: "True"
+      # Consumed by the entrypoint below to build the passfile.
+      DB_USER: ${POSTGRES_USER:-induduzo}
+      DB_NAME: ${POSTGRES_DB:-induduzo}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-induduzo_local_dev}
     ports:
       - "8082:80"
     volumes:
       - ./db/pgadmin/servers.json:/pgadmin4/servers.json:ro
-      - ./db/pgadmin/pgpass:/pgpass.src:ro
       - induduzo_pgadmin:/var/lib/pgadmin
-    # libpq silently IGNORES a password file that is not mode 0600 and owned by
-    # the connecting user — it reports "no password supplied" rather than a
-    # permissions error. A Windows bind mount is always 0777/root, so the file
-    # cannot be fixed in place; copy it into the volume (owned by uid 5050) and
-    # tighten it there before pgAdmin starts.
+    # The passfile is GENERATED here rather than committed, so no credential
+    # file lives in the repo.
+    #
+    # It must also be written inside the container: libpq silently IGNORES a
+    # password file that is not mode 0600 owned by the connecting user, and
+    # reports "no password supplied" rather than a permissions error. A Windows
+    # bind mount is always 0777/root and cannot be fixed in place.
     entrypoint:
       - /bin/sh
       - -c
-      - cp /pgpass.src /var/lib/pgadmin/pgpass && chmod 600 /var/lib/pgadmin/pgpass && exec /entrypoint.sh
+      - >
+        printf '%s\n' "db:5432:$$DB_NAME:$$DB_USER:$$DB_PASSWORD" > /var/lib/pgadmin/pgpass &&
+        chmod 600 /var/lib/pgadmin/pgpass &&
+        exec /entrypoint.sh
     depends_on:
       db:
         condition: service_healthy
