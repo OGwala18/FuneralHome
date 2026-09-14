@@ -4,17 +4,21 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 from psycopg import errors as pg_errors
 
 from ..db import connection, log_event
+from ..ratelimit import application_limiter, enforce, lead_limiter
 from ..schemas import ApplicationIn, EnquiryOut, LeadIn
+from ..services.email import send_completed_application, send_new_lead
 from ..services.whatsapp import send_registration_confirmation
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/enquiries", tags=["enquiries"])
 
-_RETURNING = "id, reference, first_name, surname, mobile_number, plan_interest"
+# The whole row: the API response uses a narrow subset (EnquiryOut), but the
+# admin notification email needs every captured field.
+_RETURNING = "*"
 
 
 def _to_out(row: dict) -> EnquiryOut:
@@ -29,12 +33,16 @@ def _to_out(row: dict) -> EnquiryOut:
 
 
 @router.post("", response_model=EnquiryOut, status_code=status.HTTP_201_CREATED)
-def create_lead(payload: LeadIn) -> EnquiryOut:
-    """Stage 1. Commits the lead immediately.
+def create_lead(payload: LeadIn, background: BackgroundTasks, request: Request) -> EnquiryOut:
+    """Stage 1. Commits the lead immediately, then emails the office.
 
     This is the point of the two-step split: the moment somebody gives us a name
     and a number, that lead is ours, whether or not they ever reach stage 2.
+    The notification goes out on THIS step for the same reason — the office
+    should be able to phone someone who abandoned the second page.
     """
+    enforce(lead_limiter, request)
+
     with connection() as conn:
         row = conn.execute(
             f"""
@@ -65,15 +73,41 @@ def create_lead(payload: LeadIn) -> EnquiryOut:
             },
         )
 
+    # After commit, never before: the office must only be told about a record
+    # that actually exists.
+    background.add_task(_notify_new_lead, dict(row))
+
     logger.info("Lead captured: %s", row["reference"])
     return _to_out(row)
 
 
+def _notify_new_lead(row: dict) -> None:
+    """Email the office about a stage-1 enquiry, and record the outcome."""
+    result = send_new_lead(row)
+    _record_email_outcome(row["id"], "lead_email", result)
+
+
+def _record_email_outcome(enquiry_id: str, kind: str, result) -> None:
+    try:
+        with connection() as conn:
+            log_event(
+                conn,
+                str(enquiry_id),
+                "%s_sent" % kind if result.sent else "%s_failed" % kind,
+                {"error": result.error},
+                actor="system",
+            )
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not record %s outcome", kind)
+
+
 @router.patch("/{enquiry_id}/application", response_model=EnquiryOut)
 def submit_application(
-    enquiry_id: str, payload: ApplicationIn, background: BackgroundTasks
+    enquiry_id: str, payload: ApplicationIn, background: BackgroundTasks, request: Request
 ) -> EnquiryOut:
     """Stage 2. Promotes an existing lead to a full application."""
+    enforce(application_limiter, request)
+
     data = payload.model_dump()
     data["enquiry_id"] = enquiry_id
 
@@ -153,9 +187,17 @@ def submit_application(
     background.add_task(
         _send_confirmation, str(row["id"]), row["mobile_number"], row["first_name"], row["reference"]
     )
+    background.add_task(_notify_completed_application, dict(row))
 
     logger.info("Application submitted: %s", row["reference"])
     return _to_out(row)
+
+
+def _notify_completed_application(row: dict) -> None:
+    """Email the office the full application. Separate from the stage-1 mail so
+    the office sees both the early lead and the finished form."""
+    result = send_completed_application(row)
+    _record_email_outcome(row["id"], "application_email", result)
 
 
 def _send_confirmation(enquiry_id: str, mobile: str, first_name: str, reference: str) -> None:

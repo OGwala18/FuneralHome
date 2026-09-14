@@ -77,6 +77,22 @@ class LeadIn(BaseModel):
     contact_consent: bool
     marketing_consent: bool = False
 
+    # Honeypot. The form renders this hidden and off-screen, so a person never
+    # sees it and never fills it. Automated form-fillers populate every input
+    # they find, which is exactly what gives them away.
+    #
+    # Named to look attractive to a bot rather than like a trap.
+    website: str = ""
+
+    @field_validator("website")
+    @classmethod
+    def _honeypot(cls, value: str) -> str:
+        if value.strip():
+            # Deliberately the same generic message a real validation failure
+            # gives, so a bot author learns nothing about why it was rejected.
+            raise ValueError("Enter a valid value")
+        return ""
+
     @field_validator("mobile_number")
     @classmethod
     def _mobile(cls, value: str) -> str:
