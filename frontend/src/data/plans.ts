@@ -39,15 +39,15 @@ export const GUARANTEED_PAYOUTS: { amount: string; label: Bilingual }[] = [
   {
     amount: "R1,000",
     label: {
-      en: "Guaranteed payout — under 21 years",
-      zu: "Imali eqinisekisiwe — abangaphansi kweminyaka engu-21",
+      en: "Guaranteed payout for under 21 years",
+      zu: "Imali eqinisekisiwe kwabangaphansi kweminyaka engu-21",
     },
   },
   {
     amount: "R2,000",
     label: {
-      en: "Guaranteed payout — 21 years and over",
-      zu: "Imali eqinisekisiwe — abaneminyaka engu-21 nangaphezulu",
+      en: "Guaranteed payout for 21 years and over",
+      zu: "Imali eqinisekisiwe kwabaneminyaka engu-21 nangaphezulu",
     },
   },
 ];
@@ -78,8 +78,8 @@ export const PLAN_TERMS: { icon: "clock" | "wallet" | "users" | "heart"; text: B
   {
     icon: "heart",
     text: {
-      en: "Zonke izibongo siyazithatha — all family names are welcome",
-      zu: "Zonke izibongo siyazithatha — ayikho imikhawulo yezibongo",
+      en: "Zonke izibongo siyazithatha. All family names are welcome",
+      zu: "Zonke izibongo siyazithatha. Ayikho imikhawulo yezibongo",
     },
   },
 ];
@@ -206,8 +206,8 @@ export const PLANS: Plan[] = [
     name: { en: "Dome Plan", zu: "Uhlelo lwe-Dome" },
     coverage: { en: "Main member + 14", zu: "Ilungu eliyinhloko + 14" },
     members: {
-      en: "Main member plus 14 members — 15 people in total",
-      zu: "Ilungu eliyinhloko namalungu angu-14 — abantu abangu-15 sebebonke",
+      en: "Main member plus 14 members, 15 people in total",
+      zu: "Ilungu eliyinhloko namalungu angu-14, abantu abangu-15 sebebonke",
     },
     price: "R400",
     period: { en: "once-off", zu: "kanye kuphela" },
@@ -216,8 +216,8 @@ export const PLANS: Plan[] = [
       zu: "noma R300 kanye kuphela + R50 ngenyanga",
     },
     summary: {
-      en: "Our most complete package — 15 members, two family cars and 100 programmes.",
-      zu: "Iphakethe lethu eliphelele kakhulu — amalungu angu-15, izimoto zomndeni ezimbili nezinhlelo ezingu-100.",
+      en: "Our most complete package with 15 members, two family cars and 100 programmes.",
+      zu: "Iphakethe lethu eliphelele kakhulu elinamalungu angu-15, izimoto zomndeni ezimbili nezinhlelo ezingu-100.",
     },
     inclusions: [
       { en: "2 x family cars", zu: "Izimoto zomndeni ezi-2" },

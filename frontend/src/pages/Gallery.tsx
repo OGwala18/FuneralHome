@@ -40,7 +40,7 @@ export default function Gallery() {
           <button
             key={cat}
             onClick={() => setActive(cat)}
-            aria-pressed={(active === cat).toString()}
+            aria-pressed={active === cat}
             style={{
               padding: '.5rem .75rem',
               borderRadius: '999px',

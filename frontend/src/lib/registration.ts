@@ -43,6 +43,12 @@ export interface LeadPayload {
   how_heard?: string;
   contact_consent: boolean;
   marketing_consent: boolean;
+  /**
+   * Honeypot. Always sent empty. The field is rendered hidden and off-screen,
+   * so a person never sees it — an automated form-filler populates every input
+   * it finds, and the API rejects any request where this arrives non-empty.
+   */
+  website?: string;
 }
 
 /** Stage 2 — everything someone who actually wants cover must provide. */

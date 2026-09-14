@@ -12,10 +12,10 @@ Induduzo Funeral Home website.
 | Git repository | `OGwala18/FuneralHome` |
 | Production branch | `main` |
 | Application type | Static Vite + React + TypeScript site |
-| Application directory | `induduzo-care-site-main` |
+| Application directory | `frontend` |
 | Node.js | 22.13 or newer |
 | Package manager | npm with the committed `package-lock.json` |
-| Netlify base directory | `induduzo-care-site-main` |
+| Netlify base directory | `frontend` |
 | Netlify install/build command | `npm ci && npm run build` |
 | Netlify publish directory | `dist` relative to the base directory |
 | Netlify configuration | Repository-root `netlify.toml` |
@@ -56,7 +56,7 @@ As of July 30, 2026, the Netlify team contains one project:
 `induduzo` (Site ID `732df56c-6681-4a26-aac3-b5d0832eb08e`). It owns
 `induduzo.co.za`, deploys `main` to production, and deploys only `internal` as a
 branch deploy. Deploy Previews are disabled. The duplicate Netlify projects
-`induduzofuneral` and `induduzo-care-site-main` were deleted.
+`induduzofuneral` and `frontend` were deleted.
 
 Before backend development begins:
 
@@ -80,7 +80,7 @@ compilation. The Vercel project dashboard had three conflicting settings:
 1. Framework Preset was `Angular`, although this repository uses Vite.
 2. Build Command was `npm build`, which is not a valid npm script command.
 3. Root Directory was blank while the application package is in
-   `induduzo-care-site-main`.
+   `frontend`.
 
 The decisive build-log message was:
 
@@ -92,7 +92,7 @@ Error: Command "npm build " exited with 1
 The correct repository-root Vercel build command is:
 
 ```text
-npm --prefix induduzo-care-site-main run build
+npm --prefix frontend run build
 ```
 
 The Vercel project and repository `vercel.json` were removed on July 30, 2026.
@@ -148,7 +148,7 @@ Node must be 22.13 or newer. The application also includes `.nvmrc`, and
 ### 3. Reproduce Netlify's clean build
 
 ```powershell
-Set-Location .\induduzo-care-site-main
+Set-Location .\frontend
 npm ci
 npm run lint
 npm run typecheck
@@ -160,16 +160,16 @@ Set-Location ..
 All five commands must exit with code `0`. Confirm:
 
 ```powershell
-Test-Path .\induduzo-care-site-main\dist\index.html
-Get-ChildItem .\induduzo-care-site-main\dist\assets
+Test-Path .\frontend\dist\index.html
+Get-ChildItem .\frontend\dist\assets
 ```
 
 ### 4. Check that the portal cannot re-enter the bundle
 
 ```powershell
 rg -n "My Portal|/portal/customer|mockCustomer|mockPolicy|mockClaims|react-router-dom" `
-  .\induduzo-care-site-main\src `
-  .\induduzo-care-site-main\package.json
+  .\frontend\src `
+  .\frontend\package.json
 ```
 
 No match is expected. Then confirm both `netlify.toml` and `public/_redirects`
@@ -208,7 +208,7 @@ authorized those external actions.
 The repository `netlify.toml` is authoritative:
 
 ```text
-Base directory    = induduzo-care-site-main
+Base directory    = frontend
 Build command     = npm ci && npm run build
 Publish directory = dist
 Node              = 22
@@ -258,10 +258,12 @@ Expected:
 - The header does not show **My Portal**.
 - Browser console has no uncaught errors.
 - Navigation, language buttons, phone links, WhatsApp links, and public forms
-  behave as expected. The public phone number must display as
-  `0697060387`, telephone links must use `tel:+27697060387`, WhatsApp links must
-  use `https://wa.me/27697060387`, and the public email must display and link to
-  `Info@induduzo.co.za`.
+  behave as expected. Two public phone numbers must display: `079 751 0648`
+  (primary) and `082 954 9241`. Telephone links must use `tel:+27797510648` and
+  `tel:+27829549241`; WhatsApp links must use `https://wa.me/27797510648` and
+  `https://wa.me/27829549241`. Single-number surfaces (header call button, the
+  floating WhatsApp button) use the primary number only. The public email must
+  display and link to `Info@induduzo.co.za`.
 - Test every public route at phone (390px), tablet (768px), and desktop (1440px)
   widths. Confirm there is no horizontal scrolling and the mobile/tablet menu
   exposes every public route.
@@ -300,7 +302,7 @@ error above it.
 | First error or symptom | Likely cause | Corrective action |
 | --- | --- | --- |
 | `Unknown command: "build"` | Command is `npm build` | Use `npm run build` |
-| `ENOENT package.json` | Wrong base/root directory | Set Netlify base to `induduzo-care-site-main` |
+| `ENOENT package.json` | Wrong base/root directory | Set Netlify base to `frontend` |
 | `Missing script: "build"` | Wrong `package.json` selected | Inspect the working directory and selected package |
 | `npm ci` reports lock mismatch | `package.json` changed without lockfile | Regenerate the lockfile intentionally and rerun `npm ci` |
 | `EBADENGINE` | Old Node runtime | Use Node 22.13 or newer |
