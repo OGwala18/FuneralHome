@@ -4,8 +4,16 @@
     {
       "name": "induduzo-site",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "induduzo-care-site-main"],
-      "port": 8080
+      "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
+      "port": 8080,
+      "autoPort": false
+    },
+    {
+      "name": "induduzo-portal",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "portal"],
+      "port": 8090,
+      "autoPort": false
     }
   ]
 }

@@ -82,36 +82,39 @@ export default function RegisterDetails() {
   const { language } = useLanguage();
   const en = language === "en";
 
-  const [handle, setHandle] = useState<EnquiryHandle | null>(null);
-  const [form, setForm] = useState<FormState>(INITIAL);
+  // Stage 1 already ran and left a server-side row behind. Both of these read
+  // sessionStorage during the FIRST render rather than in an effect: doing it
+  // in an effect renders an empty form for one frame and then fills it in,
+  // which flickers. Lazy initialisers also satisfy react-hooks/set-state-in-effect.
+  const [handle] = useState<EnquiryHandle | null>(() => loadEnquiry());
+  const [form, setForm] = useState<FormState>(() => {
+    const stored = loadEnquiry();
+    if (!stored || stored.plan_interest === "unsure") return INITIAL;
+    return {
+      ...INITIAL,
+      plan_selected: stored.plan_interest,
+      // Plan A is a city burial, Plan B a rural one, so the cover area is
+      // already known and should not be asked for twice.
+      cover_area:
+        stored.plan_interest === "plan_a"
+          ? "edolobheni"
+          : stored.plan_interest === "plan_b"
+            ? "emakhaya"
+            : "",
+    };
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<EnquiryHandle | null>(null);
 
-  // Step 1 already ran and gave us a server-side row. Carry it forward, and
-  // pre-select the plan they said they were interested in.
+  // Landing here without completing stage 1 is a dead end — send them back.
   useEffect(() => {
-    const stored = loadEnquiry();
-    if (!stored) {
+    if (!handle) {
       window.history.replaceState({}, "", "/register");
       window.dispatchEvent(new PopStateEvent("popstate"));
-      return;
     }
-    setHandle(stored);
-    if (stored.plan_interest && stored.plan_interest !== "unsure") {
-      setForm((prev) => ({
-        ...prev,
-        plan_selected: stored.plan_interest,
-        cover_area:
-          stored.plan_interest === "plan_a"
-            ? "edolobheni"
-            : stored.plan_interest === "plan_b"
-              ? "emakhaya"
-              : "",
-      }));
-    }
-  }, []);
+  }, [handle]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -504,7 +507,7 @@ export default function RegisterDetails() {
                           <option value="">{en ? "Please choose a plan" : "Sicela ukhethe uhlelo"}</option>
                           {PLANS.map((plan) => (
                             <option key={plan.id} value={plan.id.replace("-", "_")}>
-                              {plan.name[language]} — {plan.price} {plan.period[language]}
+                              {plan.name[language]} ({plan.price} {plan.period[language]})
                             </option>
                           ))}
                         </select>
@@ -563,8 +566,8 @@ export default function RegisterDetails() {
                       label={en ? "How would you like to pay?" : "Ungathanda ukukhokha kanjani?"}
                       hint={
                         en
-                          ? "A preference only — we confirm this with you on the call."
-                          : "Okuthandwayo kuphela — sizoqinisekisa lokhu nawe ocingweni."
+                          ? "A preference only. We confirm this with you on the call."
+                          : "Okuthandwayo kuphela. Sizoqinisekisa lokhu nawe ocingweni."
                       }
                     >
                       {(props) => (

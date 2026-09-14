@@ -41,7 +41,7 @@ const services = [
       "Multiple plan options",
       "Urban and rural coverage",
       "No age limits on certain plans",
-      "All surnames welcome — zonke izibongo siyazithatha",
+      "All surnames welcome, zonke izibongo siyazithatha",
       "Transparent terms and conditions"
     ],
     items_zu: [
@@ -50,7 +50,7 @@ const services = [
       "Izinketho eziningi zezinhlelo",
       "Ukumbozwa kwedolobha nasemakhaya",
       "Ayikho imikhawulo yeminyaka ezinhlelweni ezithile",
-      "Zonke izibongo siyazithatha — ayikho imikhawulo yezibongo",
+      "Zonke izibongo siyazithatha, ayikho imikhawulo yezibongo",
       "Imigomo nemibandela ecacile"
     ]
   },

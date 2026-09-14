@@ -40,7 +40,7 @@ export const translations = {
     
     // Plans
     plans_title: "Choose A Funeral Plan",
-    plans_subtitle: "Transparent, all-inclusive cover from R250 a month — no hidden costs",
+    plans_subtitle: "Transparent, all-inclusive cover from R250 a month with no hidden costs",
     compare_plans: "Compare Plans",
     from: "From",
     per_month: "p/m",
@@ -55,7 +55,7 @@ export const translations = {
     mission_text: "To be the most preferred funeral service provider",
     our_values: "Our Values",
     story_title: "Our Story & Vision",
-    story_text: "Induduzo Care was founded to serve families with dignity, respect, and cultural understanding. Our vision lives in daily actions — from careful planning to the warmth we extend to every family we meet.",
+    story_text: "Induduzo Care was founded to serve families with dignity, respect, and cultural understanding. Our vision lives in daily actions, from careful planning to the warmth we extend to every family we meet.",
     founder_link_prefix: "Learn more about our founder's journey on the",
     founder_link: "Founder page",
     value_customer: "Customer First",
@@ -83,7 +83,7 @@ export const translations = {
     
     // Join
     join_title: "Join a Funeral Plan",
-    join_subtitle: "Transparent, all-inclusive funeral cover from R250 a month — no hidden costs, no surname restrictions.",
+    join_subtitle: "Transparent, all-inclusive funeral cover from R250 a month, with no hidden costs and no surname restrictions.",
     plan_a_title: "Plan A (Urban)",
     plan_b_title: "Plan B (Emakhaya)",
     plan_c_title: "Plan C (Singles/Couples)",
@@ -102,8 +102,8 @@ export const translations = {
     th_price: "Price",
     th_included: "What's included",
     ready_title: "Would you like to start your family's cover today?",
-    ready_text: "Call or WhatsApp us for a same-day quote — we will walk you through every option.",
-    all_names_welcome: "Zonke izibongo siyazithatha — all family names are welcome",
+    ready_text: "Call or WhatsApp us for a same-day quote and we will walk you through every option.",
+    all_names_welcome: "Zonke izibongo siyazithatha. All family names are welcome",
     cta_register: "Register",
     register_reassurance: "Takes about a minute. No payment details needed.",
     
@@ -112,7 +112,7 @@ export const translations = {
     footer_quick_links: "Quick Links",
     footer_contact_info: "Contact Information",
     footer_rights: "All rights reserved.",
-    footer_privacy: "POPIA compliant — Your privacy is important to us.",
+    footer_privacy: "POPIA compliant. Your privacy is important to us.",
     
     // Testimonials
     testimonials_title: "What Families Say",
@@ -183,7 +183,7 @@ export const translations = {
     
     // Plans
     plans_title: "Khetha Uhlelo Lomngcwabo",
-    plans_subtitle: "Ukumbozwa okucacile, okufaka konke, kusukela ku-R250 ngenyanga — azikho izindleko ezifihliwe",
+    plans_subtitle: "Ukumbozwa okucacile, okufaka konke, kusukela ku-R250 ngenyanga, azikho izindleko ezifihliwe",
     compare_plans: "Qhathanisa Izinhlelo",
     from: "Kusukela",
     per_month: "ngenyanga",
@@ -198,7 +198,7 @@ export const translations = {
     mission_text: "Ukuba ngumhlinzeki wezinsizakalo zomngcwabo othandwa kakhulu",
     our_values: "Izimiso Zethu",
     story_title: "Indaba Nombono Wethu",
-    story_text: "I-Induduzo Care yasungulwa ukuze isize imindeni ngesithunzi, ngenhlonipho nangokuqonda amasiko. Umbono wethu ubonakala ezenzweni zansuku zonke — kusukela ekuhleleni ngokucophelela kuya emfudumalo esiyinikeza yonke imindeni esihlangana nayo.",
+    story_text: "I-Induduzo Care yasungulwa ukuze isize imindeni ngesithunzi, ngenhlonipho nangokuqonda amasiko. Umbono wethu ubonakala ezenzweni zansuku zonke, kusukela ekuhleleni ngokucophelela kuya emfudumalo esiyinikeza yonke imindeni esihlangana nayo.",
     founder_link_prefix: "Funda kabanzi ngohambo lomsunguli wethu ekhasini elithi",
     founder_link: "Umsunguli",
     value_customer: "Ikhasimende Lokuqala",
@@ -226,7 +226,7 @@ export const translations = {
     
     // Join
     join_title: "Joyina Uhlelo Lomngcwabo",
-    join_subtitle: "Umshwalense womngcwabo ocacile, ofaka konke, kusukela ku-R250 ngenyanga — azikho izindleko ezifihliwe, ayikho imikhawulo yezibongo.",
+    join_subtitle: "Umshwalense womngcwabo ocacile, ofaka konke, kusukela ku-R250 ngenyanga, azikho izindleko ezifihliwe futhi ayikho imikhawulo yezibongo.",
     plan_a_title: "Uhlelo A (Edolobheni)",
     plan_b_title: "Uhlelo B (Emakhaya)",
     plan_c_title: "Uhlelo C (Abangashadile/Izingane)",
@@ -245,8 +245,8 @@ export const translations = {
     th_price: "Inani",
     th_included: "Okufakiwe",
     ready_title: "Ungathanda ukuqala ukumbozwa komndeni wakho namuhla?",
-    ready_text: "Sishayele noma usithumele nge-WhatsApp uthole isilinganiso ngosuku olufanayo — sizokuhambisa kuzo zonke izinketho.",
-    all_names_welcome: "Zonke izibongo siyazithatha — ayikho imikhawulo yezibongo",
+    ready_text: "Sishayele noma usithumele nge-WhatsApp uthole isilinganiso ngosuku olufanayo, sizokuhambisa kuzo zonke izinketho.",
+    all_names_welcome: "Zonke izibongo siyazithatha. Ayikho imikhawulo yezibongo",
     cta_register: "Bhalisa",
     register_reassurance: "Kuthatha umzuzu. Ayidingeki imininingwane yenkokhelo.",
     
@@ -255,7 +255,7 @@ export const translations = {
     footer_quick_links: "Izixhumanisi Ezisheshayo",
     footer_contact_info: "Ulwazi Lokuxhumana",
     footer_rights: "Wonke amalungelo agodliwe.",
-    footer_privacy: "Sihambisana ne-POPIA — Ubumfihlo bakho bubalulekile kithi.",
+    footer_privacy: "Sihambisana ne-POPIA. Ubumfihlo bakho bubalulekile kithi.",
     
     // Testimonials
     testimonials_title: "Okushiwo Yimindeni",

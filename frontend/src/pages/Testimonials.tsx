@@ -70,7 +70,7 @@ export default function Testimonials() {
             <article key={testimonial.id} style={{ border: '1px solid #eee', borderRadius: 8, padding: '1rem' }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.5rem', alignItems: 'center', justifyContent: 'space-between' }}>
                 <h3 style={{ margin: 0 }}>
-                  {testimonial.name && testimonial.name !== '—' ? testimonial.name : t('anonymous')}
+                  {testimonial.name ? testimonial.name : t('anonymous')}
                 </h3>
                 <span aria-label={`${testimonial.rating} out of 5 stars`} title={`${testimonial.rating} out of 5`}>
                   {'★'.repeat(testimonial.rating)}{'☆'.repeat(5 - testimonial.rating)}

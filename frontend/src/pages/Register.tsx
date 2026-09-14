@@ -74,6 +74,7 @@ type FormState = {
   how_heard: string;
   contact_consent: boolean;
   marketing_consent: boolean;
+  website: string;
 };
 
 const INITIAL: FormState = {
@@ -90,6 +91,7 @@ const INITIAL: FormState = {
   how_heard: "",
   contact_consent: false,
   marketing_consent: false,
+  website: "",
 };
 
 export default function Register() {
@@ -166,6 +168,7 @@ export default function Register() {
       how_heard: form.how_heard || undefined,
       contact_consent: form.contact_consent,
       marketing_consent: form.marketing_consent,
+      website: form.website,
     };
 
     try {
@@ -197,8 +200,8 @@ export default function Register() {
             <h1 className="mb-4">{en ? "Register your interest" : "Bhalisa isifiso sakho"}</h1>
             <p className="text-lg text-muted-foreground">
               {en
-                ? "Step one takes about a minute. Give us your name and number and we will call you back with a quote — you are not signing up to anything yet."
-                : "Isinyathelo sokuqala sithatha umzuzu. Sinike igama nenombolo yakho sizokushayela — awukabhalisi lutho okwamanje."}
+                ? "Please fill in your details to get great funeral cover."
+                : "Sicela ugcwalise imininingwane yakho ukuze uthole ukumbozwa komngcwabo okuhle."}
             </p>
           </div>
         </div>
@@ -244,6 +247,23 @@ export default function Register() {
                 {/* A real form element with autoComplete on: this is what lets the
                     browser and Google offer saved name/phone/address values. */}
                 <form onSubmit={handleSubmit} noValidate autoComplete="on">
+                  {/* Honeypot. Hidden from people and from assistive technology,
+                      but present in the DOM for an automated filler to find.
+                      Positioned off-screen rather than display:none, because
+                      some bots skip fields that are display:none. */}
+                  <div aria-hidden="true" className="absolute left-[-9999px] top-auto h-px w-px overflow-hidden">
+                    <label htmlFor="website">Do not fill this in</label>
+                    <input
+                      id="website"
+                      name="website"
+                      type="text"
+                      tabIndex={-1}
+                      autoComplete="off"
+                      value={form.website}
+                      onChange={(e) => set("website", e.target.value)}
+                    />
+                  </div>
+
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                     <Field
                       label={en ? "Name" : "Igama"}
@@ -360,7 +380,6 @@ export default function Register() {
 
                     <Field
                       label={en ? "Preferred language" : "Ulimi olukhethayo"}
-                      hint={en ? "So we speak to you in your own language." : "Ukuze sikhulume nawe ngolimi lwakho."}
                     >
                       {(props) => (
                         <select
@@ -380,7 +399,7 @@ export default function Register() {
                     </Field>
 
                     <Field
-                      label={en ? "Which plan interests you?" : "Yiluphi uhlelo olukuthandayo?"}
+                      label={en ? "Choose the plan best suited for you" : "Khetha uhlelo olukufanele kakhulu"}
                       className="sm:col-span-2"
                     >
                       {(props) => (
@@ -392,11 +411,11 @@ export default function Register() {
                           onChange={(e) => set("plan_interest", e.target.value as PlanCode)}
                         >
                           <option value="unsure">
-                            {en ? "I am not sure yet — please advise me" : "Angikaqiniseki — ngicela ningeluleke"}
+                            {en ? "I am not sure yet, please advise me" : "Angikaqiniseki, ngicela ningeluleke"}
                           </option>
                           {PLANS.map((plan) => (
                             <option key={plan.id} value={plan.id.replace("-", "_")}>
-                              {plan.name[language]} — {plan.price} {plan.period[language]}
+                              {plan.name[language]} ({plan.price} {plan.period[language]})
                             </option>
                           ))}
                         </select>
