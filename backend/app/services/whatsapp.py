@@ -47,10 +47,10 @@ def send_registration_confirmation(
 
     if not settings.whatsapp_enabled:
         # Dev default: log what would have gone out so the flow is still
-        # observable end to end without Twilio credentials.
-        logger.info(
-            "WhatsApp not configured; would send to %s: reference %s", to_mobile, reference
-        )
+        # observable end to end without Twilio credentials. The reference is
+        # enough to find the row; the mobile number is personal information and
+        # must not reach a log file (ARCHITECTURE.md rule 9).
+        logger.info("WhatsApp not configured; would send confirmation for %s", reference)
         return WhatsAppResult(sent=False, error="whatsapp_not_configured")
 
     try:
