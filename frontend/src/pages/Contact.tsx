@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Phone, Mail, MapPin, MessageCircle } from "lucide-react";
-import { CONTACT_EMAIL, CONTACT_EMAIL_LINK, CONTACT_PHONES } from "@/lib/contact";
+import { CONTACT_ADDRESS, CONTACT_EMAIL, CONTACT_EMAIL_LINK, CONTACT_MAPS_URL, CONTACT_PHONES, CONTACT_REVIEW_URL } from "@/lib/contact";
 
 export default function Contact() {
   const { language, t } = useLanguage();
@@ -124,10 +124,23 @@ export default function Contact() {
                   <MapPin className="h-8 w-8 text-primary" />
                 </div>
                 <h3 className="mb-3 text-xl">{t("contact_address")}</h3>
-                <p className="text-base">
-                  Edendale Main Road Kwadaya,<br />
-                  Pietermaritzburg 3201
-                </p>
+                <p className="text-base">{CONTACT_ADDRESS}</p>
+                <a
+                  href={CONTACT_MAPS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-block font-semibold text-primary hover:underline"
+                >
+                  {language === "en" ? "View on Google Maps" : "Buka ku-Google Maps"}
+                </a>
+                <a
+                  href={CONTACT_REVIEW_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 block font-semibold text-primary hover:underline"
+                >
+                  {language === "en" ? "Share your experience on Google" : "Yabelana ngolwazi lwakho ku-Google"}
+                </a>
               </CardContent>
             </Card>
           </div>
