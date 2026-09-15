@@ -39,3 +39,9 @@ export const WHATSAPP_URL = PRIMARY_PHONE.whatsapp;
 
 export const CONTACT_EMAIL = "Info@induduzo.co.za";
 export const CONTACT_EMAIL_LINK = `mailto:${CONTACT_EMAIL}`;
+
+export const CONTACT_ADDRESS = "Edendale Main Road, Kwadaya, Pietermaritzburg, KwaZulu-Natal 3201";
+export const CONTACT_MAPS_URL =
+  "https://www.google.com/maps/place/Induduzo+Funeral+Home/@-29.6482444,30.3186257,17z/data=!3m1!4b1!4m6!3m5!1s0x1ef6a2e73a0f7019:0x2cad98db42535559!8m2!3d-29.6482444!4d30.3186257!16s%2Fg%2F11jwswk2nl";
+export const CONTACT_REVIEW_URL =
+  "https://search.google.com/local/writereview?placeid=ChIJGXAPOuei9h4RWVVTQtuYrSw";
