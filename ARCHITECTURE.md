@@ -83,8 +83,9 @@ frontend/
     │   └── NotFound.tsx       fallback
     │
     ├── components/
-    │   ├── Header.tsx         Nav, language switch, call button
-    │   ├── Footer.tsx         Contact details, quick links
+    │   ├── Header.tsx         Nav, language switch, call + social icons
+    │   ├── Footer.tsx         Contact details, quick links, map
+    │   ├── OfficeMap.tsx      Address link + embedded Google map
     │   ├── WhatsAppButton.tsx Floating action button
     │   ├── form/Field.tsx     Accessible field wrapper + step indicator
     │   ├── layout/            Page shell
@@ -97,8 +98,9 @@ frontend/
     │   └── testimonials.json  Testimonials
     │
     └── lib/
-        ├── contact.ts         ★ Phone numbers and email. Change them ONLY here.
+        ├── contact.ts         ★ Phone numbers, email, socials. Change them ONLY here.
         ├── i18n.ts            English / isiZulu strings
+        ├── location.ts        ★ Office address, map link and embed URL
         ├── navigation.ts      Tiny custom router (NavLink, usePathname)
         └── registration.ts    API client + SA ID / mobile validation
 ```
@@ -108,7 +110,8 @@ frontend/
 | I want to change | Edit this |
 |---|---|
 | A plan's price, name, or inclusions | `src/data/plans.ts` — nothing else |
-| A phone number or the public email | `src/lib/contact.ts` — nothing else |
+| A phone number, the public email, or a social link | `src/lib/contact.ts` — nothing else |
+| The office address or where the map points | `src/lib/location.ts` — nothing else |
 | Any colour | `src/index.css` tokens — never hard-code a hex in a component |
 | Page text / translations | `src/lib/i18n.ts` |
 | Add a page | Create in `src/pages/`, then register the route in `src/App.tsx` |
