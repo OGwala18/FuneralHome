@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { Menu, MessageCircle, Phone, X } from "lucide-react";
+import { Facebook, Instagram, Menu, MessageCircle, Phone, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { CONTACT_PHONE_LINK, WHATSAPP_URL } from "@/lib/contact";
+import { CONTACT_PHONE_LINK, FACEBOOK_URL, INSTAGRAM_URL, WHATSAPP_URL } from "@/lib/contact";
 import { useLanguage } from "@/lib/i18n";
 import { NavLink } from "@/lib/navigation";
 
@@ -76,6 +76,36 @@ function DesktopDropdown({ id, items, label }: DesktopDropdownProps) {
         </div>
       )}
     </div>
+  );
+}
+
+const socialIconClass =
+  "inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/**
+ * Instagram and Facebook, beside the call button.
+ *
+ * Facebook has no page yet, so its icon is shown but inert — a link to nowhere
+ * is worse than no link.
+ */
+function SocialLinks() {
+  return (
+    <>
+      <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className={socialIconClass}>
+        <Instagram className="h-5 w-5" aria-hidden="true" />
+        <span className="sr-only">Instagram</span>
+      </a>
+      {FACEBOOK_URL ? (
+        <a href={FACEBOOK_URL} target="_blank" rel="noopener noreferrer" className={socialIconClass}>
+          <Facebook className="h-5 w-5" aria-hidden="true" />
+          <span className="sr-only">Facebook</span>
+        </a>
+      ) : (
+        <span className={`${socialIconClass} pointer-events-none opacity-50`} aria-hidden="true">
+          <Facebook className="h-5 w-5" />
+        </span>
+      )}
+    </>
   );
 }
 
@@ -160,12 +190,17 @@ export const Header = () => {
             </button>
           </div>
 
-          <Button asChild size="sm" className="hidden xl:inline-flex">
-            <a href={CONTACT_PHONE_LINK}>
-              <Phone className="mr-2 h-4 w-4" />
-              {t("cta_call")}
-            </a>
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button asChild size="icon" className="h-10 w-10" title={t("cta_call")}>
+              <a href={CONTACT_PHONE_LINK}>
+                <Phone className="h-5 w-5" aria-hidden="true" />
+                <span className="sr-only">{t("cta_call")}</span>
+              </a>
+            </Button>
+            <span className="hidden items-center gap-1 sm:inline-flex">
+              <SocialLinks />
+            </span>
+          </div>
 
           <button
             type="button"
@@ -220,6 +255,10 @@ export const Header = () => {
                 <MessageCircle className="mr-2 h-4 w-4" />
                 WhatsApp
               </a>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1 sm:hidden">
+              <SocialLinks />
             </div>
           </div>
         </nav>

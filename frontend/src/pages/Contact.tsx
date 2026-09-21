@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Phone, Mail, MapPin, MessageCircle } from "lucide-react";
+import { OfficeMap } from "@/components/OfficeMap";
+import { OFFICE_ADDRESS_LINES, OFFICE_MAP_LINK } from "@/lib/location";
 import { CONTACT_EMAIL, CONTACT_EMAIL_LINK, CONTACT_PHONES } from "@/lib/contact";
 
 export default function Contact() {
@@ -76,7 +78,7 @@ export default function Contact() {
                     </a>
                   ))}
                 </div>
-                <p className="text-sm text-muted-foreground mt-2">24/7 {t("cta_call")}</p>
+                <p className="text-sm text-muted-foreground mt-2">{t("cta_call")}</p>
               </CardContent>
             </Card>
 
@@ -124,12 +126,27 @@ export default function Contact() {
                   <MapPin className="h-8 w-8 text-primary" />
                 </div>
                 <h3 className="mb-3 text-xl">{t("contact_address")}</h3>
-                <p className="text-base">
-                  Edendale Main Road Kwadaya,<br />
-                  Pietermaritzburg 3201
-                </p>
+                <a
+                  href={OFFICE_MAP_LINK}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-base text-primary hover:underline"
+                >
+                  {OFFICE_ADDRESS_LINES.map((line) => (
+                    <span key={line} className="block">
+                      {line}
+                    </span>
+                  ))}
+                  <span className="mt-2 block text-sm font-semibold underline">
+                    {t("contact_directions")}
+                  </span>
+                </a>
               </CardContent>
             </Card>
+          </div>
+
+          <div className="mb-16">
+            <OfficeMap className="mx-auto max-w-4xl" height="h-80 sm:h-96" showAddress={false} />
           </div>
 
           <div className="max-w-2xl mx-auto">
