@@ -94,8 +94,10 @@ gitignored, and must stay that way.
 cd frontend && npm run lint && npm run typecheck && npm run build
 ```
 
-CI runs those plus `npm audit --audit-level=high`, `pip-audit --requirement
-requirements.txt --strict` in `backend/`, the API behaviour checks in
+CI runs those plus `npm audit --omit=dev --audit-level=high` (blocking; the full
+audit also runs but only reports, because Tailwind 3's build tooling carries an
+unpatched `braces` advisory until a Tailwind 4 migration), `pip-audit
+--requirement requirements.txt --strict` in `backend/`, the API behaviour checks in
 `backend/tests/`, and a build of `Dockerfile.backend`. All must pass.
 
 The behaviour checks need a **throwaway** Postgres, connected as `induduzo_api`
