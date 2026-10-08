@@ -45,10 +45,12 @@ FuneralHome/
 ├── docs/                      Business and operational documents
 │
 ├── docker-compose.yml         Local Postgres + Adminer + pgAdmin
+├── Dockerfile.backend         The API image Railway deploys
+├── .dockerignore              Deny-by-default: what may reach that image
 ├── start.ps1 / induduzo.cmd   One-command start/stop for the whole stack
 ├── netlify.toml               Production hosting config + security headers
 ├── .env.example               Infrastructure settings template
-└── .github/workflows/         CI: lint, typecheck, build, audit
+└── .github/workflows/         CI: lint, typecheck, build, audit, API checks
 ```
 
 **Rule:** the repo root holds only entry points and configuration. Business
@@ -124,7 +126,9 @@ frontend/
 ```
 backend/
 ├── requirements.txt           Pinned dependencies
+├── requirements-dev.txt       Test-only dependencies (pytest, httpx)
 ├── .env.example               Settings template (copy to .env)
+├── tests/                     Behaviour checks, run against a real Postgres
 └── app/
     ├── main.py                App setup, CORS, /health, error shaping
     ├── config.py              ★ ALL settings read from environment. No secrets in code.
@@ -141,7 +145,7 @@ backend/
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/health` | Liveness + a real database round-trip |
+| `GET` | `/health` | Liveness + a real database round-trip. **503** when the database is down |
 | `POST` | `/api/enquiries` | **Stage 1.** Creates the lead, emails the office |
 | `PATCH` | `/api/enquiries/{id}/application` | **Stage 2.** Promotes to full application |
 
@@ -277,6 +281,9 @@ key we never hold; we verify with the public key from its JWKS endpoint.
 
 ```
 db/
+├── migrate.py                 Applies pending migrations to any Postgres
+├── provision_api_role.py      Production: migrate, then let induduzo_api log in
+├── keepalive.py               Stops the free Supabase project pausing
 ├── migrations/                ★ THE SCHEMA SOURCE OF TRUTH. Applied in filename order.
 │   ├── 0001_extensions_and_roles.sql
 │   ├── 0002_enums.sql
@@ -451,7 +458,19 @@ npm run build
 ```
 
 All three must exit `0`. CI (`.github/workflows/quality-checks.yml`) runs the
-same, plus `npm audit`.
+same, plus `npm audit`, `pip-audit`, the backend behaviour checks and an image
+build.
+
+If you touched `backend/` or `db/`, run the behaviour checks against a
+throwaway database, connected as `induduzo_api` the way production connects:
+
+```powershell
+cd backend
+$env:DATABASE_URL = "postgresql://induduzo_api:<password>@localhost:<port>/<db>"
+.venv\Scripts\python.exe -m pytest
+```
+
+Never point them at Supabase or Railway: they write test enquiries.
 
 If you touched the schema, also confirm a clean rebuild works:
 
