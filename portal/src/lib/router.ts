@@ -16,6 +16,9 @@ export type Route =
   | { name: "today" }
   | { name: "people" }
   | { name: "person"; id: string }
+  | { name: "members" }
+  | { name: "member"; id: string }
+  | { name: "policies" }
   | { name: "applications" }
   | { name: "growth" }
   | { name: "settings" };
@@ -27,6 +30,10 @@ const parse = (pathname: string): Route => {
   switch (parts[0]) {
     case "people":
       return parts[1] ? { name: "person", id: decodeURIComponent(parts[1]) } : { name: "people" };
+    case "members":
+      return parts[1] ? { name: "member", id: decodeURIComponent(parts[1]) } : { name: "members" };
+    case "policies":
+      return { name: "policies" };
     case "applications":
       return { name: "applications" };
     case "growth":
@@ -45,6 +52,9 @@ export const hrefFor = (route: Route): string => {
     case "today": return "/";
     case "people": return "/people";
     case "person": return `/people/${encodeURIComponent(route.id)}`;
+    case "members": return "/members";
+    case "member": return `/members/${encodeURIComponent(route.id)}`;
+    case "policies": return "/policies";
     case "applications": return "/applications";
     case "growth": return "/growth";
     case "settings": return "/settings";
@@ -69,7 +79,7 @@ export const useRoute = (): Route => {
   // Every route change starts a new task, so start it at the top.
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [route.name, route.name === "person" ? route.id : ""]);
+  }, [route.name, route.name === "person" || route.name === "member" ? route.id : ""]);
 
   return route;
 };
