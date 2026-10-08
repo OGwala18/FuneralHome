@@ -52,7 +52,16 @@ jobs:
       - name: Build production bundle
         run: npm run build
 
-      - name: Check for high-severity dependency vulnerabilities
+      # Blocking: everything that ships in the bundle visitors download.
+      - name: Check shipped dependencies for high-severity vulnerabilities
+        run: npm audit --omit=dev --audit-level=high
+
+      # Reported, not blocking. Build tooling runs only on the build machine,
+      # against our own source. As of 8 Oct 2026 Tailwind 3's file watcher pulls
+      # in `braces` (GHSA-vfj7-8cjw-p6xm), which has no patched release; only a
+      # Tailwind 4 migration removes it. Make this blocking again once it does.
+      - name: Check build tooling for high-severity vulnerabilities
+        continue-on-error: true
         run: npm audit --audit-level=high
 
   # The frontend was scanned but the API was not, so a known CVE in FastAPI,
