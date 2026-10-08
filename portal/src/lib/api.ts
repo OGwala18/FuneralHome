@@ -120,6 +120,74 @@ export const fetchEnquiries = (query: EnquiryQuery = {}) => {
   return request<EnquiryPage>("/api/admin/enquiries", params);
 };
 
+export interface MemberRow {
+  id: string;
+  surname: string;
+  first_names: string;
+  email: string | null;
+  id_number_status: string;
+  created_at: string;
+}
+
+export interface MemberPage {
+  rows: MemberRow[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface MemberPolicy {
+  policy_number: string;
+  status_code: string;
+  plan_code: string | null;
+  entry_date: string | null;
+  premium_cents: number | null;
+  cover_cents: number | null;
+  currency: string;
+  member_type: string;
+  entry_age: number | null;
+  is_inferred: boolean;
+}
+
+export interface MemberDetail extends MemberRow {
+  initials: string | null;
+  id_number: string | null;
+  date_of_birth: string | null;
+  source: string;
+  phones: { number: string; phone_type: string; is_primary: boolean }[];
+  policies: MemberPolicy[];
+}
+
+export interface PolicyRow {
+  policy_id: string;
+  policy_number: string;
+  status_code: string;
+  status_label: string;
+  plan_code: string | null;
+  branch_code: string | null;
+  entry_date: string | null;
+  premium_cents: number | null;
+  cover_cents: number | null;
+  currency: string;
+  main_member_id: string | null;
+  main_member_surname: string | null;
+  main_member_first_names: string | null;
+  lives_covered: number;
+}
+
+export const fetchMembers = (query: { search?: string; limit?: number; offset?: number } = {}) => {
+  const params = new URLSearchParams();
+  if (query.search) params.set("search", query.search);
+  params.set("limit", String(query.limit ?? 25));
+  params.set("offset", String(query.offset ?? 0));
+  return request<MemberPage>("/api/admin/members", params);
+};
+
+export const fetchMember = (id: string) =>
+  request<MemberDetail>(`/api/admin/members/${encodeURIComponent(id)}`);
+
+export const fetchPolicies = () => request<PolicyRow[]>("/api/admin/policies");
+
 export type StaffRole = "viewer" | "admin" | "owner";
 
 export interface StaffIdentity {

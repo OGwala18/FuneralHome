@@ -25,7 +25,7 @@ export default function Person({ id, canEdit }: { id: string; canEdit: boolean }
 
   const back = (
     <Button variant="ghost" onClick={() => navigate({ name: "people" })}>
-      Back to people
+      Back to enquiries
     </Button>
   );
 
@@ -70,7 +70,7 @@ export default function Person({ id, canEdit }: { id: string; canEdit: boolean }
           </Empty>
           <div className="row" style={{ justifyContent: "center" }}>
             <Button variant="primary" onClick={() => navigate({ name: "people" })}>
-              Search people
+              Search enquiries
             </Button>
           </div>
         </div>

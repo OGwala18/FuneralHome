@@ -17,8 +17,9 @@ python-dotenv==1.2.3
 twilio==9.11.0
 
 # Verifies Supabase-issued staff tokens (ES256). Public-key only: the API
-# never holds a signing secret.
-pyjwt[crypto]==2.13.0
+# never holds a signing secret. 2.15.1 (8 Oct 2026) clears 14 advisories
+# against 2.13.0; ES256 verification behaviour is unchanged.
+pyjwt[crypto]==2.15.1
 
 # Error tracking. See app/observability.py for the PII scrubbing that must
 # stay in place before any event leaves the process.

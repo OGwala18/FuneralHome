@@ -119,3 +119,16 @@ docs/*.docx
 # --- Build artefacts ----------------------------------------------------------
 # TypeScript incremental build caches. Machine-specific and regenerated.
 *.tsbuildinfo
+
+# Rendered launch videos and their working files. Tens of megabytes of
+# regenerable output; the composition can be rebuilt from the site itself.
+brag-output/
+
+# --- Agent working notes ------------------------------------------------------
+# `memory/` holds procedural notes written during assisted sessions. The notes
+# themselves are written credentials-free on purpose, but the folder is exactly
+# the kind of place a hostname, a username or a pasted password drifts into
+# later — and this repository is public. Credentials belong in the Zuri
+# Technologies client folder or a password manager, never in the source tree.
+# Delete this rule if the notes are ever deliberately published.
+memory/
