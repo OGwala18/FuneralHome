@@ -137,11 +137,12 @@ td a:hover, .fact a:hover, .card a:not(.btn):hover { text-decoration-thickness: 
   color: var(--gold);
 }
 
-.nav-links { display: flex; gap: var(--s4); flex: 1 1 auto; }
+.nav-links { display: flex; gap: var(--s4); flex: 1 1 auto; min-width: 0; overflow-x: auto; white-space: nowrap; }
 
 /* 48px minimum target (Fitts). Active is nav-hover with a gold label, so the
    current destination is legible without relying on colour alone. */
 .nav-link {
+  flex: 0 0 auto;
   min-height: 48px;
   padding: 12px var(--s16);
   border: 0;

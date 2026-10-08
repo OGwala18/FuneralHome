@@ -20,7 +20,7 @@ load_dotenv()
 from .config import get_settings  # noqa: E402  (must follow load_dotenv)
 from .db import close_pool, connection, init_pool  # noqa: E402
 from .observability import init_sentry  # noqa: E402
-from .routers import admin, enquiries  # noqa: E402
+from .routers import admin, enquiries, members  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -92,6 +92,7 @@ async def security_headers(request: Request, call_next):
 
 app.include_router(enquiries.router)
 app.include_router(admin.router)
+app.include_router(members.router)
 
 
 @app.exception_handler(RequestValidationError)

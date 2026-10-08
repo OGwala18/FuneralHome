@@ -223,8 +223,12 @@ Employee ─▶ Portal ─▶ Supabase Auth        (issues a signed ES256 token)
                                   STAFF_EMAILS ──▶ Postgres
 ```
 
-Supabase stores no client data. It only proves who someone is. Client records
-stay in our own Postgres.
+Supabase Auth proves who someone is. The imported member and policy book is in
+Supabase Postgres; local Docker Postgres holds the website enquiries and staff
+authorisation rows. For member and policy reads, our API first checks the local
+staff row, then forwards that verified user's JWT and the application's
+publishable key to Supabase's Data API. The API records each read in
+`staff_events`. No client records or credentials are copied between databases.
 
 **Two gates, because one is not enough.** A valid Supabase token only proves
 somebody signed up somewhere; it does not prove they work here. So the API
@@ -235,8 +239,8 @@ Public sign-up should also be turned off in the Supabase dashboard.
 
 | Role | May do |
 |---|---|
-| `viewer` | View enquiries |
-| `admin` | View and edit enquiries |
+| `viewer` | View enquiries, members and policies |
+| `admin` | View enquiries, members and policies; manage permitted staff tasks |
 | `owner` | Everything, plus add staff and change roles |
 
 Roles live in **our** `staff_users` table, not in Supabase user metadata, so a
