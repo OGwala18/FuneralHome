@@ -94,84 +94,80 @@ DNS, Netlify and the database can still have incidents. Two API replicas,
 database high availability and a tested recovery procedure are later reliability
 upgrades.
 
-## Required repository work before deployment
+## Repository work before deployment
 
-The repository is close, but it is not currently a reliable Railway deployment
-artifact. Complete these items before connecting the production branch.
+Items 1–4 were completed on 8 October 2026 on branch `feat/railway-readiness`
+and verified locally against a throwaway Postgres 17. Item 5 is what remains.
 
-### 1. Add an explicit backend image
+### 1. The backend image — done
 
-Add `Dockerfile.backend` at the repository root using Python 3.12. It should:
-
-1. install `backend/requirements.txt`;
-2. copy `backend/` and `db/` into the image;
-3. start Uvicorn with `backend.app.main:app`;
-4. listen on `0.0.0.0` and Railway's injected `$PORT`;
-5. use `exec` so Railway's shutdown signal reaches Uvicorn.
-
-An explicit Dockerfile is preferable here because this repository is a
-monorepo containing two Vite applications and Python code. It prevents Railway
-from detecting the wrong application. Railway supports a nonstandard Dockerfile
-path in the service build settings. See [Railway build configuration](https://docs.railway.com/builds/build-configuration)
-and [start commands](https://docs.railway.com/deployments/start-command).
-
-Expected container start command:
+`Dockerfile.backend` at the repository root builds a Python 3.12 image holding
+only `backend/app`, the migration runner, `db/provision_api_role.py` and the
+migrations. `.dockerignore` denies everything else by default, so no `.env`
+file or import spreadsheet can reach an image layer. It runs as a non-root user
+and starts with:
 
 ```sh
 exec uvicorn backend.app.main:app --host 0.0.0.0 --port "${PORT:-8000}"
 ```
 
-Do not hard-code port `8000` for Railway. Railway injects `PORT` and uses the
-same value for its deployment health check.
+Railway injects `PORT`; nothing hard-codes it. `exec` makes Uvicorn PID 1, so
+Railway's stop signal reaches it (a local stop completes in about a second).
+An explicit Dockerfile stops Railway auto-detecting one of the two Vite apps
+instead. See [Railway build configuration](https://docs.railway.com/builds/build-configuration).
 
-### 2. Make the health check fail when the database is unavailable
+### 2. The health check fails when the database does — done
 
-The existing `/health` endpoint performs a real database query, which is good,
-but it still returns HTTP `200` when the database status is `degraded`.
-Railway treats any `2xx` response as healthy.
+`/health` now returns **HTTP 503** with `"database": "down"` when the database
+cannot be reached, and 200 only when it can. Railway and uptime monitors treat
+any `2xx` as healthy, so a new deployment that cannot save registrations no
+longer receives traffic. One endpoint serves both purposes: use `/health` for
+Railway's deploy check and for the external monitor.
 
-Change `/health` to return HTTP `503` when the database cannot be reached, or
-split it into:
+### 3. Production database provisioning — done
 
-- `/live`: process is running;
-- `/ready`: process and database are ready, returning `503` when they are not.
+```sh
+python db/provision_api_role.py
+```
 
-Configure Railway's health check to use the readiness endpoint. This prevents a
-new deployment from receiving traffic when it cannot save registrations.
+Reads `DATABASE_OWNER_URL` and `API_DB_PASSWORD` (at least 32 URL-safe
+characters). It applies pending migrations through `db/migrate.py`, refuses to
+continue if `induduzo_api` is a superuser or bypasses RLS, gives the role login
+with that password, then connects **as** `induduzo_api` to prove it works. It is
+safe to re-run. It never prints a connection string or the password, and the
+password reaches Postgres only as a SCRAM hash, computed client-side the way
+psql's `\password` does, so it cannot appear in a server log.
 
-### 3. Add a production database-provisioning command
+The `api` service receives only the restricted `induduzo_api` connection
+string, because the owner bypasses row-level security and can alter or delete
+the schema.
 
-The migration runner already exists at `db/migrate.py`. The schema deliberately
-creates `induduzo_api` as `NOLOGIN`, so production also needs a small command
-that:
+The first Railway run applies the complete schema. The member and policy tables
+it creates in Railway will be empty; the portal's member routes keep reading the
+imported records from Supabase. That is expected for this first deployment.
 
-1. connects with the Railway Postgres owner URL;
-2. applies all pending migrations;
-3. gives `induduzo_api` login permission;
-4. sets its password from an environment variable;
-5. never prints either database connection string or password.
+### 4. Backend behaviour checks in CI — done
 
-Put this in a repository script such as `db/provision_api_role.py`. Run it from
-the private `database-migrator` service. The `api` service should receive only
-the restricted `induduzo_api` connection string, because the database owner can
-bypass row-level security and alter or delete the schema.
+`.github/workflows/quality-checks.yml` gains two jobs:
 
-The first Railway migration will apply the repository's complete schema. The
-member and policy tables it creates in Railway will be empty; the current portal
-member routes continue to read the imported records from Supabase. That is
-expected for this first deployment.
+- **API behaviour** starts Postgres 17, runs `db/provision_api_role.py`, then
+  runs `backend/tests/` with pytest **as `induduzo_api`**, so grants and RLS
+  are exercised exactly as in production. It checks that `/health` is 200 or 503
+  with the database up or down; that stage one writes one row and one
+  `lead_captured` event; that stage two promotes that same row, not a second
+  one; that invalid input is 422 and writes nothing; and that every staff route
+  returns 401 without a token. The staff routes are discovered from the app,
+  so a route added later is checked automatically.
+- **Build the API image** builds `Dockerfile.backend` and imports the app inside
+  it, so a broken image fails CI rather than a release.
 
-### 4. Add backend behavior checks to CI
+Run the checks locally against a throwaway database:
 
-CI currently audits the Python dependencies but does not exercise the API.
-Before production, add at least these automated checks:
-
-- `/health` returns `200` with a reachable database and `503` without one;
-- stage-one registration creates one `plan_enquiries` row and one
-  `lead_captured` event;
-- stage-two application updates that same enquiry and adds its event;
-- invalid submissions return `422` without inserting a row;
-- unauthenticated staff endpoints return `401`.
+```sh
+cd backend
+pip install -r requirements.txt -r requirements-dev.txt
+DATABASE_URL=postgresql://induduzo_api:<password>@localhost:<port>/<db> python -m pytest
+```
 
 ### 5. Commit and push the exact release
 
@@ -223,8 +219,9 @@ Create a private service from the same GitHub repository:
 - **Restart policy:** Never
 - **Owner connection variable:**
   `DATABASE_OWNER_URL=${{postgres.DATABASE_URL}}`
-- **API password:** a long generated value stored as a sealed Railway variable
-- **Command:** the repository's provisioning command described above
+- **API password:** `API_DB_PASSWORD=${{shared.API_DB_PASSWORD}}`, the sealed
+  shared variable described in Step 5 (at least 32 URL-safe characters)
+- **Start command:** `python db/provision_api_role.py`
 
 Run this service once. Its log should list migration filenames and a successful
 completion, without printing credentials. Then verify the migration status.
@@ -246,7 +243,7 @@ Create a second service from the repository:
 - **Replicas:** 1 initially
 - **Serverless:** disabled
 - **Restart policy:** Always
-- **Health-check path:** `/ready` after the readiness change, otherwise `/health`
+- **Health-check path:** `/health`
 - **Health-check timeout:** 300 seconds
 
 Railway supports monorepo root directories and watch paths so frontend-only
@@ -346,7 +343,7 @@ Complete these checks in order.
 ### API and database
 
 - [ ] Railway deployment is Active.
-- [ ] `/health` or `/ready` returns HTTP `200`, `environment=production` and
+- [ ] `/health` returns HTTP `200`, `environment=production` and
       `database=up`.
 - [ ] `/docs` is unavailable in production.
 - [ ] Railway Postgres has no public TCP proxy.
@@ -379,7 +376,7 @@ Complete these checks in order.
 
 ### Operations
 
-- [ ] Configure an external monitor for `https://api.induduzo.co.za/ready` at a
+- [ ] Configure an external monitor for `https://api.induduzo.co.za/health` at a
       five-minute interval.
 - [ ] Send outage alerts to at least two people.
 - [ ] Confirm Railway usage email alerts are enabled.
@@ -427,11 +424,12 @@ and [Railway CLI IaC commands](https://docs.railway.com/cli).
 
 ## Recommended order of the next work
 
-1. Implement and test `Dockerfile.backend`.
-2. Fix the readiness response status.
-3. Add the database role-provisioning command.
-4. Add backend CI behavior checks.
-5. Commit and promote the release branch.
+1. ~~Implement and test `Dockerfile.backend`.~~ Done 8 Oct 2026.
+2. ~~Fix the readiness response status.~~ Done 8 Oct 2026.
+3. ~~Add the database role-provisioning command.~~ Done 8 Oct 2026.
+4. ~~Add backend CI behavior checks.~~ Done 8 Oct 2026.
+5. Push `feat/railway-readiness`, let CI pass, and promote it
+   `Dev -> internal -> main`.
 6. Create Railway Postgres and its backups.
 7. Run the migrator.
 8. Deploy the API with a temporary Railway domain.
@@ -439,5 +437,5 @@ and [Railway CLI IaC commands](https://docs.railway.com/cli).
 10. Add `api.induduzo.co.za` and update the Netlify builds.
 11. Add external monitoring and complete the restore drill.
 
-The next implementation session should complete items 1–4 locally and produce a
-reviewable release commit before any production service or database is created.
+Step 5 comes before anything is created on Railway: Railway deploys pushed
+commits, and `main` is the branch it will watch.

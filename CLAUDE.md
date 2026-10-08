@@ -94,9 +94,15 @@ gitignored, and must stay that way.
 cd frontend && npm run lint && npm run typecheck && npm run build
 ```
 
-CI runs those plus `npm audit --audit-level=high`, and `pip-audit --requirement
-requirements.txt --strict` in `backend/`. All must pass. **There are no tests in
-this repo** — CI is the only safety net.
+CI runs those plus `npm audit --audit-level=high`, `pip-audit --requirement
+requirements.txt --strict` in `backend/`, the API behaviour checks in
+`backend/tests/`, and a build of `Dockerfile.backend`. All must pass.
+
+The behaviour checks need a **throwaway** Postgres, connected as `induduzo_api`
+(see `ARCHITECTURE.md` §9). They write test enquiries, so never point them at
+Supabase or Railway. They cover the funnel, `/health` and the staff gate. They
+do not cover the portal or the member-book routes beyond refusing anonymous
+callers.
 
 Branch promotion is always `feature -> Dev -> internal -> main`. `main` deploys
 the live public site.
