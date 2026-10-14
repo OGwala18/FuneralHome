@@ -1,5 +1,7 @@
 import { NavLink } from "@/lib/navigation";
-import { Mail, Phone, MapPin } from "lucide-react";
+import { Mail, Phone } from "lucide-react";
+
+import { OfficeMap } from "@/components/OfficeMap";
 import { useLanguage } from "@/lib/i18n";
 import { CONTACT_EMAIL, CONTACT_EMAIL_LINK, CONTACT_PHONES } from "@/lib/contact";
 
@@ -55,10 +57,7 @@ export const Footer = () => {
                 <Mail className="h-5 w-5 mr-2" />
                 {CONTACT_EMAIL}
               </a>
-              <div className="flex items-start">
-                <MapPin className="h-5 w-5 mr-2 mt-1 flex-shrink-0" />
-                <span>Edendale Main Road Kwadaya, Pietermaritzburg 3201</span>
-              </div>
+              <OfficeMap height="h-48" />
             </div>
           </div>
         </div>

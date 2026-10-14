@@ -4,15 +4,16 @@ import { hrefFor, navigate, type Route } from "@/lib/router";
 import { Button } from "./ui";
 
 /**
- * The portal's one navigation. Four destinations plus Settings, which is the
- * whole application (Hick: the choice is small enough to read at a glance).
+ * The portal's one navigation, shared by all signed-in screens.
  *
  * Rendered on every signed-in screen so the frame never moves between pages.
  */
 
 const DESTINATIONS: { label: string; route: Route }[] = [
   { label: "Today", route: { name: "today" } },
-  { label: "People", route: { name: "people" } },
+  { label: "Members", route: { name: "members" } },
+  { label: "Policies", route: { name: "policies" } },
+  { label: "Enquiries", route: { name: "people" } },
   { label: "Applications", route: { name: "applications" } },
   { label: "Growth", route: { name: "growth" } },
   { label: "Settings", route: { name: "settings" } },
@@ -86,7 +87,8 @@ export default function PortalNav({
             key={label}
             className="nav-link"
             href={hrefFor(route)}
-            aria-current={active === route.name ? "page" : undefined}
+            aria-current={active === route.name || (active === "member" && route.name === "members")
+              || (active === "person" && route.name === "people") ? "page" : undefined}
             onClick={(e) => go(e, route)}
           >
             {label}
@@ -94,15 +96,15 @@ export default function PortalNav({
         ))}
       </nav>
 
-      {/* Search lives in People. Sending it there rather than duplicating a
+      {/* Search lives in Members. Sending it there rather than duplicating a
           second search box keeps one way to do the job. */}
       <a
         className="nav-search"
-        href={hrefFor({ name: "people" })}
-        onClick={(e) => go(e, { name: "people" })}
+        href={hrefFor({ name: "members" })}
+        onClick={(e) => go(e, { name: "members" })}
       >
         <SearchMark />
-        <span>Find a person or number</span>
+        <span>Find a member</span>
       </a>
 
       <div className="nav-me">

@@ -66,6 +66,9 @@ class Settings:
     # Supabase Auth issues the tokens; we only verify them against its public
     # JWKS. There is no shared secret here by design.
     supabase_url: str | None = os.getenv("SUPABASE_URL")
+    # Public application key for forwarding verified staff JWTs to the
+    # Supabase Data API. The JWT supplies the authenticated database role.
+    supabase_publishable_key: str | None = os.getenv("SUPABASE_PUBLISHABLE_KEY")
 
     # HIGHLY SENSITIVE. Can create accounts and read every user. Used only in
     # services/supabase_admin.py, server-side, and never returned or logged.

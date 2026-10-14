@@ -65,7 +65,7 @@ export default function People() {
   const mark = (field: string) => (sort === field ? (descending ? " ↓" : " ↑") : "");
 
   const showing = useMemo(() => {
-    if (!page || page.total === 0) return "No people yet";
+    if (!page || page.total === 0) return "No enquiries yet";
     const from = page.offset + 1;
     const to = Math.min(page.offset + page.rows.length, page.total);
     return `${from}–${to} of ${page.total}`;
@@ -75,8 +75,8 @@ export default function People() {
     <div className="page">
       <div className="page-head">
         <div className="page-head-text">
-          <h1 className="t-heading">People</h1>
-          <p className="muted">Everyone who has enquired, newest first.</p>
+          <h1 className="t-heading">Enquiries</h1>
+          <p className="muted">Website enquiries, newest first. Imported members are in Members.</p>
         </div>
       </div>
 
@@ -85,7 +85,7 @@ export default function People() {
           className="search-input"
           type="search"
           placeholder="Search a name, mobile number, email or reference"
-          aria-label="Search people"
+          aria-label="Search enquiries"
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
           autoFocus
@@ -128,7 +128,7 @@ export default function People() {
         <div style={{ marginBottom: "var(--s16)" }}>
           <Notice
             tone="error"
-            title="Could not load people."
+            title="Could not load enquiries."
             detail={error}
             action={
               <Button small onClick={() => void reload()}>

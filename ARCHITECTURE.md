@@ -45,10 +45,12 @@ FuneralHome/
 ├── docs/                      Business and operational documents
 │
 ├── docker-compose.yml         Local Postgres + Adminer + pgAdmin
+├── Dockerfile.backend         The API image Railway deploys
+├── .dockerignore              Deny-by-default: what may reach that image
 ├── start.ps1 / induduzo.cmd   One-command start/stop for the whole stack
 ├── netlify.toml               Production hosting config + security headers
 ├── .env.example               Infrastructure settings template
-└── .github/workflows/         CI: lint, typecheck, build, audit
+└── .github/workflows/         CI: lint, typecheck, build, audit, API checks
 ```
 
 **Rule:** the repo root holds only entry points and configuration. Business
@@ -83,8 +85,9 @@ frontend/
     │   └── NotFound.tsx       fallback
     │
     ├── components/
-    │   ├── Header.tsx         Nav, language switch, call button
-    │   ├── Footer.tsx         Contact details, quick links
+    │   ├── Header.tsx         Nav, language switch, call + social icons
+    │   ├── Footer.tsx         Contact details, quick links, map
+    │   ├── OfficeMap.tsx      Address link + embedded Google map
     │   ├── WhatsAppButton.tsx Floating action button
     │   ├── form/Field.tsx     Accessible field wrapper + step indicator
     │   ├── layout/            Page shell
@@ -97,8 +100,9 @@ frontend/
     │   └── testimonials.json  Testimonials
     │
     └── lib/
-        ├── contact.ts         ★ Phone numbers and email. Change them ONLY here.
+        ├── contact.ts         ★ Phone numbers, email, socials. Change them ONLY here.
         ├── i18n.ts            English / isiZulu strings
+        ├── location.ts        ★ Office address, map link and embed URL
         ├── navigation.ts      Tiny custom router (NavLink, usePathname)
         └── registration.ts    API client + SA ID / mobile validation
 ```
@@ -108,7 +112,8 @@ frontend/
 | I want to change | Edit this |
 |---|---|
 | A plan's price, name, or inclusions | `src/data/plans.ts` — nothing else |
-| A phone number or the public email | `src/lib/contact.ts` — nothing else |
+| A phone number, the public email, or a social link | `src/lib/contact.ts` — nothing else |
+| The office address or where the map points | `src/lib/location.ts` — nothing else |
 | Any colour | `src/index.css` tokens — never hard-code a hex in a component |
 | Page text / translations | `src/lib/i18n.ts` |
 | Add a page | Create in `src/pages/`, then register the route in `src/App.tsx` |
@@ -121,7 +126,9 @@ frontend/
 ```
 backend/
 ├── requirements.txt           Pinned dependencies
+├── requirements-dev.txt       Test-only dependencies (pytest, httpx)
 ├── .env.example               Settings template (copy to .env)
+├── tests/                     Behaviour checks, run against a real Postgres
 └── app/
     ├── main.py                App setup, CORS, /health, error shaping
     ├── config.py              ★ ALL settings read from environment. No secrets in code.
@@ -138,7 +145,7 @@ backend/
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/health` | Liveness + a real database round-trip |
+| `GET` | `/health` | Liveness + a real database round-trip. **503** when the database is down |
 | `POST` | `/api/enquiries` | **Stage 1.** Creates the lead, emails the office |
 | `PATCH` | `/api/enquiries/{id}/application` | **Stage 2.** Promotes to full application |
 
@@ -220,8 +227,12 @@ Employee ─▶ Portal ─▶ Supabase Auth        (issues a signed ES256 token)
                                   STAFF_EMAILS ──▶ Postgres
 ```
 
-Supabase stores no client data. It only proves who someone is. Client records
-stay in our own Postgres.
+Supabase Auth proves who someone is. The imported member and policy book is in
+Supabase Postgres; local Docker Postgres holds the website enquiries and staff
+authorisation rows. For member and policy reads, our API first checks the local
+staff row, then forwards that verified user's JWT and the application's
+publishable key to Supabase's Data API. The API records each read in
+`staff_events`. No client records or credentials are copied between databases.
 
 **Two gates, because one is not enough.** A valid Supabase token only proves
 somebody signed up somewhere; it does not prove they work here. So the API
@@ -232,8 +243,8 @@ Public sign-up should also be turned off in the Supabase dashboard.
 
 | Role | May do |
 |---|---|
-| `viewer` | View enquiries |
-| `admin` | View and edit enquiries |
+| `viewer` | View enquiries, members and policies |
+| `admin` | View enquiries, members and policies; manage permitted staff tasks |
 | `owner` | Everything, plus add staff and change roles |
 
 Roles live in **our** `staff_users` table, not in Supabase user metadata, so a
@@ -270,6 +281,9 @@ key we never hold; we verify with the public key from its JWKS endpoint.
 
 ```
 db/
+├── migrate.py                 Applies pending migrations to any Postgres
+├── provision_api_role.py      Production: migrate, then let induduzo_api log in
+├── keepalive.py               Stops the free Supabase project pausing
 ├── migrations/                ★ THE SCHEMA SOURCE OF TRUTH. Applied in filename order.
 │   ├── 0001_extensions_and_roles.sql
 │   ├── 0002_enums.sql
@@ -444,7 +458,19 @@ npm run build
 ```
 
 All three must exit `0`. CI (`.github/workflows/quality-checks.yml`) runs the
-same, plus `npm audit`.
+same, plus `npm audit`, `pip-audit`, the backend behaviour checks and an image
+build.
+
+If you touched `backend/` or `db/`, run the behaviour checks against a
+throwaway database, connected as `induduzo_api` the way production connects:
+
+```powershell
+cd backend
+$env:DATABASE_URL = "postgresql://induduzo_api:<password>@localhost:<port>/<db>"
+.venv\Scripts\python.exe -m pytest
+```
+
+Never point them at Supabase or Railway: they write test enquiries.
 
 If you touched the schema, also confirm a clean rebuild works:
 

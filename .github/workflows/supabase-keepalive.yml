@@ -1,0 +1,46 @@
+name: Supabase keepalive
+
+# The free Supabase project pauses after seven days without activity, and while
+# it is paused nobody at Induduzo can sign in to the portal. db/keepalive.py runs
+# one read-only query; this runs it twice a week so the gap never reaches seven
+# days. It can also be run by hand from the Actions tab.
+#
+# Needs one repository secret, SUPABASE_DATABASE_URL: the Session pooler
+# connection string from the Supabase dashboard (Connect). Not the direct
+# connection, whose host is IPv6 only while GitHub's runners have no IPv6.
+#
+# GitHub switches scheduled workflows off in public repositories after 60 days
+# without a commit. The Actions tab says so when it happens, and one click turns
+# it back on.
+
+on:
+  schedule:
+    # 06:00 UTC, 08:00 in South Africa, on Mondays and Thursdays.
+    - cron: "0 6 * * 1,4"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keepalive:
+    name: Touch the database
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Use supported Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install psycopg
+        run: pip install "psycopg[binary]==3.3.4"
+
+      - name: Run keepalive
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+        run: python db/keepalive.py

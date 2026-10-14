@@ -1,0 +1,43 @@
+# The API image. Railway builds this; so can anyone with Docker:
+#
+#   docker build -f Dockerfile.backend -t induduzo-api .
+#   docker run --rm -p 8000:8000 -e DATABASE_URL=... induduzo-api
+#
+# Explicit rather than auto-detected because this repository also holds two
+# Vite apps, and a builder that guesses can pick the wrong one.
+#
+# One image, two jobs: by default it serves the API; the database-migrator
+# service runs the same image with `python db/provision_api_role.py`.
+#
+# Nothing secret is baked in. Every credential arrives as an environment
+# variable at run time, and .dockerignore keeps .env files out of the build
+# context entirely.
+
+# 3.12, not newer: pydantic-core has no wheel for 3.14.
+FROM python:3.12-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /srv
+
+# Dependencies first, so a code-only change reuses this layer.
+COPY backend/requirements.txt backend/requirements.txt
+RUN pip install --requirement backend/requirements.txt
+
+COPY backend/app backend/app
+COPY db/migrate.py db/provision_api_role.py db/
+COPY db/migrations db/migrations
+
+# Not root. Nothing here needs to write to the filesystem.
+RUN useradd --system --uid 10001 --no-create-home induduzo
+USER induduzo
+
+EXPOSE 8000
+
+# Railway injects PORT and health-checks on it, so it must not be hard-coded.
+# `exec` replaces the shell, so Railway's stop signal reaches Uvicorn and
+# in-flight registrations finish before the container goes away.
+CMD ["sh", "-c", "exec uvicorn backend.app.main:app --host 0.0.0.0 --port \"${PORT:-8000}\""]

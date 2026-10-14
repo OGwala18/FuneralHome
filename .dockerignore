@@ -1,0 +1,20 @@
+# The build context for Dockerfile.backend is the repository root, and Docker
+# sends all of it to the builder before the Dockerfile picks anything out. So
+# this file decides what can EVER reach an image layer.
+#
+# Deny everything, then allow back only what the API image copies. A new file
+# anywhere in the repo is excluded until somebody adds it here on purpose.
+*
+
+!backend/requirements.txt
+!backend/app/
+!db/migrate.py
+!db/provision_api_role.py
+!db/migrations/
+
+# Re-excluded inside the allowed folders. backend/.env holds real credentials;
+# the rest is machine-specific.
+**/.env
+**/.env.*
+**/__pycache__/
+**/*.pyc
