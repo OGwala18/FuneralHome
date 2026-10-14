@@ -41,18 +41,22 @@ async def lifespan(_: FastAPI):
 
 settings = get_settings()
 
-_is_production = settings.environment.lower() == "production"
+# Every deployed environment (internal, production) is locked down. Only a
+# developer's own machine and the test suite get the interactive docs and go
+# without HSTS. An internal copy on a public Railway address is still public.
+_LOCAL_ENVIRONMENTS = {"development", "test"}
+_is_deployed = settings.environment.lower() not in _LOCAL_ENVIRONMENTS
 
 app = FastAPI(
     title="Induduzo Funeral Home API",
     version="0.1.0",
     description="Two-stage plan registration capture.",
     lifespan=lifespan,
-    # In production the interactive docs are an inventory of every endpoint and
-    # the full request schema. Useful locally, free reconnaissance in public.
-    docs_url=None if _is_production else "/docs",
-    redoc_url=None if _is_production else "/redoc",
-    openapi_url=None if _is_production else "/openapi.json",
+    # Deployed, the interactive docs are an inventory of every endpoint and the
+    # full request schema. Useful locally, free reconnaissance in public.
+    docs_url=None if _is_deployed else "/docs",
+    redoc_url=None if _is_deployed else "/redoc",
+    openapi_url=None if _is_deployed else "/openapi.json",
 )
 
 app.add_middleware(
@@ -84,8 +88,8 @@ async def security_headers(request: Request, call_next):
     # An API serves no documents and needs no browser features.
     response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    if _is_production:
-        # Only in production: sending HSTS over plain HTTP in dev would pin
+    if _is_deployed:
+        # Only when deployed: sending HSTS over plain HTTP in dev would pin
         # localhost to HTTPS in the browser and break the dev server.
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
