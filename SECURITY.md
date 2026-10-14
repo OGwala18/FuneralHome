@@ -66,12 +66,12 @@ It currently lists localhost. Set it to `https://induduzo.co.za`. It is already
 an explicit allowlist rather than `*`, which was the important half; this is
 just the deployment value.
 
-### Set `ENVIRONMENT=production`
+### Set `ENVIRONMENT` on every deployment
 
-This is not cosmetic. It is what disables `/docs`, `/redoc` and
-`/openapi.json`, and what turns on HSTS. Verified: with it set, all three doc
-routes return `404` and `Strict-Transport-Security` appears; without it, `/docs`
-returns `200`.
+Any value other than `development` or `test` (so `internal` or `production`)
+disables `/docs`, `/redoc` and `/openapi.json` and turns on HSTS. An internal
+copy on a public Railway address is still public, so it is locked down too.
+Leaving `ENVIRONMENT` unset falls back to `development` and exposes the docs.
 
 ### Set a real `API_DB_PASSWORD`
 

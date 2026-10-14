@@ -29,7 +29,7 @@ export default function Policies() {
     <div className="page-head"><div className="page-head-text">
       <h1 className="t-heading">Policies</h1>
       <p className="muted">{loading && rows.length === 0 ? "Loading policies…"
-        : `${rows.length} policies in the imported book.`}</p>
+        : `${rows.length} ${rows.length === 1 ? "policy" : "policies"} in the book.`}</p>
     </div></div>
     {error && <Notice tone="error" title="Could not load policies." detail={error}
       action={<Button small onClick={() => setRetry((value) => value + 1)}>Try again</Button>} />}
@@ -40,7 +40,9 @@ export default function Policies() {
           <thead><tr><th>Policy</th><th>Main member</th><th>Plan</th><th>Status</th>
             <th>Lives</th><th>Premium</th></tr></thead>
           <tbody>{rows.map((row) => <tr key={row.policy_id}>
-            <td className="ref">{row.policy_number}</td>
+            <td><Button variant="ghost" small
+              onClick={() => navigate({ name: "policy", id: row.policy_id })}>
+              <span className="ref">{row.policy_number}</span></Button></td>
             <td>{row.main_member_id ? <Button variant="ghost" small
               onClick={() => navigate({ name: "member", id: row.main_member_id! })}>
                 {row.main_member_first_names} {row.main_member_surname}</Button>

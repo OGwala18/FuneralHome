@@ -42,12 +42,21 @@ All ten in `ARCHITECTURE.md` §7 apply. The ones most often broken in practice:
 | Consent gating a review request | **`contact_consent`** | 14 Sep 2026 |
 | Scheduler | None yet. Jobs are built as idempotent commands; a clock gets wired at deploy | 14 Sep 2026 |
 | Payments | Delegated to a provider. Never collected or stored here | — |
+| Member book access | Through the API's own `induduzo_api` login, one database, one transaction per enrolment. Not via Supabase's Data API | 14 Oct 2026 |
+| Premium schedule | One row per expected payment (`premium_instalments`), generated forward only; overdue is derived, never stored | 14 Oct 2026 |
+| New policy numbers | Suggest the next AA number; staff may change it; duplicates refused | 14 Oct 2026 |
+| Who can enrol, add dependants, record payments | `admin` and `owner`. `viewer` reads only | 14 Oct 2026 |
 
 ## Things that will bite you
 
-**Migration numbering.** `0001`–`0012` exist. `docs/feature-1-review-loop.md`
-says its new tables go in "migration 0008" — that number is taken. It must be
-**0013**.
+**Migration numbering.** `0001`–`0013` exist. `docs/feature-1-review-loop.md`
+says its new tables go in "migration 0008" — that number is taken, and so is
+0013 (enrolment and the premium schedule). It must be **0014**.
+
+**The local portal shows the local member book.** Member reads and writes go
+through the API's own database. On a laptop that is Docker, with test data, not
+the 61 real members in Supabase. Never point a local API at production to "see
+the real ones": enrolment and the test suite write rows.
 
 **Supabase tracks migrations separately.** `0008`–`0012` were applied through
 Supabase's own migration system, so `public.schema_migrations` (what

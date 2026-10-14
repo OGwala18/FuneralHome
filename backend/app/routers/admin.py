@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import date
 from typing import Annotated, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -156,6 +158,60 @@ def list_enquiries(
         total=total,
         limit=limit,
         offset=offset,
+    )
+
+
+class EnquiryDetail(EnquiryRow):
+    """One enquiry in full, for its own page and for pre-filling an enrolment.
+
+    Wider than EnquiryRow on purpose: enrolling someone needs their ID number,
+    address and payment preference. Fetching it is audited.
+    """
+
+    province: str | None
+    language_preference: str
+    id_number: str | None
+    date_of_birth: date | None
+    address_line1: str | None
+    address_line2: str | None
+    postal_code: str | None
+    premium_amount_cents: int | None
+    payment_frequency: str | None
+    payment_preference: str | None
+    number_of_dependants: int | None
+    beneficiary_name: str | None
+    beneficiary_relationship: str | None
+    # Set once the enquiry has been enrolled as a member.
+    person_id: str | None
+
+
+@router.get("/enquiries/{enquiry_id}", response_model=EnquiryDetail)
+def get_enquiry(enquiry_id: UUID, staff: StaffUser = Depends(require_staff)) -> EnquiryDetail:
+    with connection() as conn:
+        row = conn.execute(
+            """
+            select id, reference, stage::text as stage, status::text as status,
+                   first_name, surname, mobile_number, email, city, suburb_or_town, province,
+                   language_preference::text as language_preference,
+                   plan_interest::text as plan_interest, plan_selected::text as plan_selected,
+                   id_number, date_of_birth, address_line1, address_line2, postal_code,
+                   premium_amount_cents, payment_frequency::text as payment_frequency,
+                   payment_preference::text as payment_preference, number_of_dependants,
+                   beneficiary_name, beneficiary_relationship, person_id, created_at
+              from plan_enquiries
+             where id = %s and archived_at is null
+            """,
+            (enquiry_id,),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such enquiry.")
+        # The reference identifies the record without repeating personal data.
+        log_staff_event(conn, staff.email, "enquiry_viewed", row["reference"])
+
+    return EnquiryDetail(
+        **{**row, "id": str(row["id"]),
+           "person_id": str(row["person_id"]) if row["person_id"] else None,
+           "created_at": row["created_at"].isoformat()},
     )
 
 

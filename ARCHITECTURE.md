@@ -135,10 +135,17 @@ backend/
     ├── db.py                  Connection pool + append-only event logging
     ├── schemas.py             ★ Request validation. The security boundary.
     ├── routers/
-    │   └── enquiries.py       The two funnel endpoints
-    └── services/
-        ├── email.py           Office notification (both stages)
-        └── whatsapp.py        Applicant confirmation (Twilio)
+    │   ├── enquiries.py       The two funnel endpoints (public)
+    │   ├── admin.py           Staff: enquiries, who am I, staff management
+    │   ├── members.py         Staff: the member book, enrolment, dependants
+    │   └── payments.py        Staff: premiums overdue / due, record a payment
+    ├── services/
+    │   ├── email.py           Office notification (both stages)
+    │   ├── whatsapp.py        Applicant confirmation (Twilio)
+    │   ├── enrolment.py       Enquiry -> person, policy, lives. One transaction.
+    │   └── instalments.py     The premium schedule: generate, pay, waive
+    └── jobs/
+        └── schedule_instalments.py  Roll every live schedule forward. Idempotent.
 ```
 
 ### Endpoints
@@ -148,6 +155,20 @@ backend/
 | `GET` | `/health` | Liveness + a real database round-trip. **503** when the database is down |
 | `POST` | `/api/enquiries` | **Stage 1.** Creates the lead, emails the office |
 | `PATCH` | `/api/enquiries/{id}/application` | **Stage 2.** Promotes to full application |
+
+Staff routes all sit under `/api/admin`, behind `require_staff`; every write
+also needs `require_role("admin")`. The ones that touch the book of business:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/admin/enquiries/{id}` | One enquiry in full, for its page and for pre-filling an enrolment |
+| `GET` | `/api/admin/members`, `/members/{id}` | The member book |
+| `POST` | `/api/admin/members` | **Enrol.** Person, policy, main member, payment arrangement, 12 instalments; links the enquiry |
+| `GET` | `/api/admin/policies`, `/policies/{id}` | Policies; one policy with its lives and schedule |
+| `GET` | `/api/admin/policies/next-number` | The next free AA number, as a suggestion |
+| `POST` | `/api/admin/policies/{id}/members` | Add a spouse, child, extended family member or beneficiary |
+| `GET` | `/api/admin/instalments?view=overdue\|upcoming` | Premiums owed, from `instalments_outstanding` |
+| `POST` | `/api/admin/instalments/{id}/payment`, `/waive` | Record a premium paid (the first one activates the policy) or waived |
 
 Interactive docs run at `/docs` in development.
 
@@ -168,8 +189,9 @@ portal/
     ├── index.css              Plain CSS; no Tailwind toolchain to maintain.
     │                          Holds the design tokens. See docs/DESIGN.md.
     ├── components/
-    │   ├── PortalNav.tsx      The one navigation. Five destinations.
-    │   └── ui.tsx             Button, Badge, Field, Notice, Fact, Skeleton, Empty.
+    │   ├── PortalNav.tsx      The one navigation, shared by every signed-in page.
+    │   ├── PaymentForm.tsx    Record or waive one instalment. No bank fields, ever.
+    │   └── ui.tsx             Button, Badge, Field, Select, Notice, Fact, Skeleton, Empty.
     ├── lib/
     │   ├── supabase.ts        Auth client. AUTHENTICATION ONLY, no data.
     │   ├── api.ts             Calls our API with the staff token attached.
@@ -180,7 +202,13 @@ portal/
         ├── Login.tsx          Email + password. No sign-up link, deliberately.
         ├── Today.tsx          Call desk: prioritised queue and the next person.
         ├── People.tsx         Searchable, sortable, paginated directory.
-        ├── Person.tsx         One family's record.
+        ├── Person.tsx         One enquiry. "Add as member" starts enrolment from it.
+        ├── Members.tsx        The member book. "New member" for walk-ins.
+        ├── Member.tsx         One person and the policies they are on.
+        ├── Enrol.tsx          Enrol a main member, pre-filled from an enquiry.
+        ├── Policies.tsx       Every policy.
+        ├── Policy.tsx         Lives covered, add dependants, the premium schedule.
+        ├── Payments.tsx       Overdue, and due in the next 7 days.
         ├── Applications.tsx   Enquiries that reached stage 'application'.
         ├── Growth.tsx         Counts derived from the loaded enquiries.
         ├── Settings.tsx       Your account, plus team and access for owners.
@@ -198,7 +226,6 @@ them and a control that silently does nothing is worse than no control:
 | Recording a call outcome | `POST /api/admin/enquiries/{id}/outcome` |
 | Editing an enquiry | An update route on the admin router |
 | Call history on a record | `enquiry_events` exposed through the admin API |
-| Fetching one person directly | `GET /api/admin/enquiries/{id}`. Person.tsx currently finds its row inside a page of the list endpoint. |
 | Office details, integrations | Nothing in the schema or API supports them |
 
 Growth counts what it loaded and says so on screen, rather than presenting a
@@ -227,12 +254,17 @@ Employee ─▶ Portal ─▶ Supabase Auth        (issues a signed ES256 token)
                                   STAFF_EMAILS ──▶ Postgres
 ```
 
-Supabase Auth proves who someone is. The imported member and policy book is in
-Supabase Postgres; local Docker Postgres holds the website enquiries and staff
-authorisation rows. For member and policy reads, our API first checks the local
-staff row, then forwards that verified user's JWT and the application's
-publishable key to Supabase's Data API. The API records each read in
-`staff_events`. No client records or credentials are copied between databases.
+Supabase Auth proves who someone is; it holds no say over what they may do.
+Enquiries, staff, and the member and policy book all live in **one database**,
+reached only by the API through its restricted `induduzo_api` login. So a role
+check happens before any row is read or written, an enrolment is a single
+transaction, and the links between an enquiry and the policy it became are real
+foreign keys. The API records each read and write in `staff_events`.
+
+Locally that database is Docker's, holding test data, so the portal on a laptop
+shows the local book, not the real one. Which database production uses
+(Supabase, where the imported 61 members are today, or Railway Postgres) is
+chosen at deploy; see `docs/railway-backend-deployment.md`.
 
 **Two gates, because one is not enough.** A valid Supabase token only proves
 somebody signed up somewhere; it does not prove they work here. So the API
@@ -296,7 +328,8 @@ db/
 │   ├── 0009_people_and_contacts.sql
 │   ├── 0010_policies.sql
 │   ├── 0011_data_quality_and_enquiry_link.sql
-│   └── 0012_foreign_key_indexes.sql
+│   ├── 0012_foreign_key_indexes.sql
+│   └── 0013_enrolment_and_premium_schedule.sql
 ├── seed/                      Import tooling. Scripts tracked, their data is NOT.
 │   ├── import_policy_template.py       spreadsheet  → SQL
 │   ├── export_phone_capture_sheet.sql  database     → blank capture sheet
@@ -356,6 +389,22 @@ between environments needs no id remapping: `ref_member_types`,
 - **`policy_overview`** — a `security_invoker` view with the main member and
   their primary phone already joined, so screens do not each rewrite that join.
 
+*Premiums (0013)* —
+
+- **`premium_instalments`** — one row per expected payment: due date, amount
+  in cents, `due | paid | waived | cancelled`, and the office's record of the
+  payment (date, amount, method, who recorded it). Generated twelve months
+  ahead, **forward only**: it never back-fills arrears for an imported policy
+  with no payment history. Unique on `(policy_id, due_date)`, so generating
+  twice is harmless. **Overdue is never stored**; it is a due row whose date
+  has passed. No bank or card fields, by the same rule as `policy_payments`.
+- **`payment_reminders`** — what was sent about an instalment, unique per
+  `(instalment, kind)` once sent, so a family is reminded once. Empty until
+  WhatsApp reminders are approved (they need their own Utility template).
+- **`instalments_outstanding`** — every due row on a live policy with the main
+  member and primary phone, and `days_overdue`. The Payments screen reads it;
+  the reminder job will too.
+
 `plan_enquiries.person_id` is the seam between the two halves: null until a
 lead has been matched to a person.
 
@@ -371,7 +420,9 @@ from scratch.
 > — or it will try to re-run everything and fail on the first `create type`.
 > Note that 0005 and 0007 have **not** been applied to Supabase: there is no
 > `induduzo_api` role and no `staff_users` table there yet. Every migration from
-> 0008 on guards its grants with a `pg_roles` check for exactly this reason.
+> 0008 on guards its grants with a `pg_roles` check for exactly this reason, and
+> 0013 re-asserts the API role's grants on every 0008–0012 table, so once 0005
+> lands on Supabase a single run of 0013 brings the role level.
 
 ---
 

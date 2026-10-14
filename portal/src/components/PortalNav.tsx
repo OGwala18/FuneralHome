@@ -13,11 +13,20 @@ const DESTINATIONS: { label: string; route: Route }[] = [
   { label: "Today", route: { name: "today" } },
   { label: "Members", route: { name: "members" } },
   { label: "Policies", route: { name: "policies" } },
+  { label: "Payments", route: { name: "payments" } },
   { label: "Enquiries", route: { name: "people" } },
   { label: "Applications", route: { name: "applications" } },
   { label: "Growth", route: { name: "growth" } },
   { label: "Settings", route: { name: "settings" } },
 ];
+
+/** A detail page lights up the list it belongs to. */
+const PARENT: Partial<Record<Route["name"], Route["name"]>> = {
+  member: "members",
+  enrol: "members",
+  person: "people",
+  policy: "policies",
+};
 
 const LeafMark = () => (
   <svg
@@ -87,8 +96,7 @@ export default function PortalNav({
             key={label}
             className="nav-link"
             href={hrefFor(route)}
-            aria-current={active === route.name || (active === "member" && route.name === "members")
-              || (active === "person" && route.name === "people") ? "page" : undefined}
+            aria-current={active === route.name || PARENT[active] === route.name ? "page" : undefined}
             onClick={(e) => go(e, route)}
           >
             {label}

@@ -14,11 +14,11 @@ After this work:
 1. `https://induduzo.co.za` remains the public Netlify website.
 2. The registration form sends requests to `https://api.induduzo.co.za`.
 3. Railway runs the Python/FastAPI API continuously.
-4. New enquiries are stored in hosted PostgreSQL rather than the laptop's Docker
-   database.
+4. Enquiries, staff, and the member and policy book live in **one** hosted
+   PostgreSQL database, not the laptop's Docker one.
 5. Staff continue signing in through Supabase Auth.
-6. The staff portal reads the imported member and policy book from Supabase and
-   reads new enquiries from the API database.
+6. The staff portal reads and writes everything through the API, which enrols
+   members, adds dependants and keeps the premium schedule.
 
 ## Current system, in plain language
 
@@ -29,28 +29,44 @@ flowchart LR
     Web --> API[FastAPI backend<br/>Railway]
     Portal --> API
     Portal --> Auth[Supabase Auth]
-    API --> OpsDB[(Operational PostgreSQL<br/>Railway)]
-    API --> MemberDB[(Member and policy book<br/>Supabase PostgreSQL)]
+    API --> DB[(One PostgreSQL:<br/>enquiries, staff,<br/>member book, premiums)]
 ```
 
-There are two PostgreSQL roles in the architecture:
+**One database, decided 14 October 2026.** Enrolling a member links the
+enquiry to the person and policy it became, writes the policy, its lives and a
+year of premium instalments in one transaction, and checks the staff member's
+role first. Those links are foreign keys, so they only work inside a single
+database, and the API reaches it through its restricted `induduzo_api` login.
+The portal no longer reads Supabase's Data API at all.
 
-| Data | Present location | Production recommendation |
+| Data | Present location | Production |
 |---|---|---|
-| Website enquiries, enquiry events, staff authorization and staff audit events | Local Docker Postgres | Railway Postgres |
-| Imported people, policy members and policies | Supabase Postgres | Keep in Supabase for this launch |
-| Staff passwords and sessions | Supabase Auth | Keep in Supabase Auth |
+| Website enquiries, staff, enquiry and staff audit events | Local Docker Postgres | The one production database |
+| People, policies, lives, premium schedule | 61 imported members in **Supabase** Postgres; local Docker has test data | The one production database |
+| Staff passwords and sessions | Supabase Auth | Supabase Auth |
 
-Supabase includes PostgreSQL, but the project currently also uses a separate
-ordinary PostgreSQL database. The local Docker database is only a development
-database. Railway cannot connect to `localhost` on this computer, and this
-computer must not become a production server.
+### Which database is production: decide before Step 2
 
-The current cloud Supabase database contains the imported member book. It does
-not contain the complete operational schema used by the enquiry API and staff
-authorization. Combining both databases is possible later, but doing that as
-part of the first API deployment adds a data migration and access-control change
-to an otherwise straightforward launch.
+Either works with no code change; the API only needs `DATABASE_URL`.
+
+- **Supabase Postgres** (simplest today). The 61 members are already there and
+  nothing is copied. Supabase lacks 0005, 0007 and 0013: apply them in that
+  order (0013 re-asserts every grant the API role needs on the 0008–0012
+  tables), then run `db/provision_api_role.py` with `DATABASE_OWNER_URL` set to
+  the Session pooler string. `db/migrate.py` cannot do this on its own, because
+  Supabase applied 0008–0012 through its own system: baseline at 0004, apply
+  0005 and 0007 by hand, then baseline at 0012 and let the runner apply 0013.
+  Cost: the free tier has **no automated backups** and pauses when idle, and
+  more real clients would then sit behind that accepted risk.
+- **Railway Postgres** (backups, no pausing). Follow Steps 2–3 below unchanged,
+  then copy the 61 members across once with `pg_dump --data-only` of the
+  member-book tables from Supabase, and run
+  `python -m backend.app.jobs.schedule_instalments`. Supabase then holds sign-in
+  only.
+
+The local Docker database is only a development database. Railway cannot
+connect to `localhost` on this computer, and this computer must not become a
+production server.
 
 ## Recommended Railway project
 
@@ -59,7 +75,7 @@ Create one Railway project named `induduzo-production` with these services:
 | Railway service | Purpose | Public? | Runs continuously? |
 |---|---|---:|---:|
 | `api` | FastAPI application | Yes | Yes |
-| `postgres` | Enquiries and staff authorization | No | Yes |
+| `postgres` | The one database, if Railway Postgres is chosen | No | Yes |
 | `database-migrator` | Applies schema changes and provisions the restricted API role | No | Only when a migration is required |
 
 Use **EU West (Amsterdam)** for the API and Railway Postgres. Railway currently
@@ -108,7 +124,7 @@ file or import spreadsheet can reach an image layer. It runs as a non-root user
 and starts with:
 
 ```sh
-exec uvicorn backend.app.main:app --host 0.0.0.0 --port "${PORT:-8000}"
+exec uvicorn backend.app.main:app --host '' --port "${PORT:-8000}"
 ```
 
 Railway injects `PORT`; nothing hard-codes it. `exec` makes Uvicorn PID 1, so
@@ -262,7 +278,6 @@ Set these on the `api` service. Seal secret values after confirming them.
 | `ENVIRONMENT` | `production` | Yes |
 | `CORS_ORIGINS` | `https://induduzo.co.za,https://portal.induduzo.co.za` | Yes |
 | `SUPABASE_URL` | Current Induduzo Supabase project URL | Staff portal |
-| `SUPABASE_PUBLISHABLE_KEY` | Current Supabase publishable key | Member book in portal |
 | `STAFF_EMAILS` | Bootstrap owner address | First staff setup |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase server-side secret | Optional; automated staff invites |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | Business mailbox provider | Optional for saving; required for notification email |
@@ -370,8 +385,11 @@ Complete these checks in order.
 
 - [ ] Sign in through Supabase Auth.
 - [ ] Confirm the new enquiry appears through the Railway API.
-- [ ] Confirm Members still shows the 61 imported Supabase people.
-- [ ] Confirm Policies still shows the 11 imported policies.
+- [ ] Confirm Members shows the 61 imported people and Policies the 11 policies.
+- [ ] Enrol the controlled test enquiry, add one dependant, record its first
+      instalment as paid, and confirm the policy turns Active. Archive it after.
+- [ ] Run `python -m backend.app.jobs.schedule_instalments` once; it should
+      report the live policies it checked.
 - [ ] Confirm an unauthorized Supabase account receives `403` from the API.
 
 ### Operations
@@ -410,6 +428,7 @@ until the missing data has been assessed.
 | Postgres PITR | Before the operational database holds a larger live book |
 | Logical `pg_dump` to off-platform storage | To survive accidental Railway project or volume deletion |
 | Railway cron | To schedule the Supabase free-tier keepalive after giving it a separate Supabase database URL |
+| Railway cron, monthly | `python -m backend.app.jobs.schedule_instalments` keeps every schedule twelve months ahead. Idempotent |
 | Metrics and deployment logs | Immediately for CPU, memory, restarts and error diagnosis |
 | Sentry | Immediately for application exceptions with the existing PII scrubber |
 | Usage alerts and replica limits | Immediately for cost control, sized high enough that ordinary traffic cannot stop the API |
