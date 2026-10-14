@@ -126,8 +126,8 @@ export default function Policy({ id, canEdit, addLives }:
 
       <div className="page-head">
         <div className="page-head-text">
-          <h1 className="t-heading"><span className="ref">{policy.policy_number}</span>
-            {main ? ` · ${main.first_names} ${main.surname}` : ""}</h1>
+          <h1 className="t-heading">
+            {policy.policy_number}{main ? ` · ${main.first_names} ${main.surname}` : ""}</h1>
           <p className="muted">
             {policy.plan_code ? planLabel(policy.plan_code) : "No plan recorded"} · {policy.lives.length}{" "}
             {policy.lives.length === 1 ? "life" : "lives"} covered
