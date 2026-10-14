@@ -38,6 +38,11 @@ USER induduzo
 EXPOSE 8000
 
 # Railway injects PORT and health-checks on it, so it must not be hard-coded.
+# An EMPTY host, not 0.0.0.0 and not `::`. Railway's private network is IPv6
+# (the internal environment is reached only through it, via the Tailscale
+# forwarder), while health checks and the public edge may use IPv4. 0.0.0.0 is
+# IPv4 only, and asyncio makes an explicit `::` socket IPv6 only. An empty host
+# makes it open one socket of each, so both work.
 # `exec` replaces the shell, so Railway's stop signal reaches Uvicorn and
 # in-flight registrations finish before the container goes away.
-CMD ["sh", "-c", "exec uvicorn backend.app.main:app --host 0.0.0.0 --port \"${PORT:-8000}\""]
+CMD ["sh", "-c", "exec uvicorn backend.app.main:app --host '' --port \"${PORT:-8000}\""]

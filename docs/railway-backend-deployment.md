@@ -124,7 +124,7 @@ file or import spreadsheet can reach an image layer. It runs as a non-root user
 and starts with:
 
 ```sh
-exec uvicorn backend.app.main:app --host 0.0.0.0 --port "${PORT:-8000}"
+exec uvicorn backend.app.main:app --host '' --port "${PORT:-8000}"
 ```
 
 Railway injects `PORT`; nothing hard-codes it. `exec` makes Uvicorn PID 1, so
