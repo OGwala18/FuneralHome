@@ -1,0 +1,27 @@
+{
+  "name": "induduzo-portal",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Staff portal for Induduzo Funeral Home. Deployed separately from the public website so no admin code ever ships in the public bundle.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+  },
+  "dependencies": {
+    "@sentry/react": "^10.73.0",
+    "@supabase/supabase-js": "^2.58.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react-swc": "^3.11.0",
+    "typescript": "^5.6.3",
+    "vite": "^7.1.5"
+  }
+}

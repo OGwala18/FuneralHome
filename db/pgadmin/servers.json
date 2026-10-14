@@ -1,0 +1,15 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Induduzo (local)",
+      "Group": "Servers",
+      "Host": "db",
+      "Port": 5432,
+      "MaintenanceDB": "induduzo",
+      "Username": "induduzo",
+      "PassFile": "/var/lib/pgadmin/pgpass",
+      "SSLMode": "prefer",
+      "Comment": "Local development database. Right-click the 'induduzo' database -> ERD Tool to see the table relationships."
+    }
+  }
+}
