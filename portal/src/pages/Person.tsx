@@ -1,27 +1,37 @@
+import { useEffect, useState } from "react";
+import { ApiError, fetchEnquiry, type EnquiryDetail } from "@/lib/api";
 import { area, formatDate, fullName, label, planLabel, waitingFor } from "@/lib/derive";
 import { navigate } from "@/lib/router";
-import { useEnquiries } from "@/lib/useEnquiries";
 import { Badge, Button, Empty, Fact, Notice, Skeleton } from "@/components/ui";
 
 /**
- * One family's record.
- *
- * A caveat worth knowing: the API has no `GET /api/admin/enquiries/{id}`, so
- * this page finds its person inside a page of the list endpoint. That is fine
- * at the office's current volume and honest about its limit below, but the
- * right fix is the single-record route, not a bigger window here.
+ * One family's enquiry, and the way into the member book: Add as member opens
+ * the enrolment form already filled in from what they typed on the website.
+ * Once enrolled, the same button opens their member record instead.
  */
 
-const LOOKUP_WINDOW = 200;
-
 export default function Person({ id, canEdit }: { id: string; canEdit: boolean }) {
-  const { rows, loading, error, reload } = useEnquiries({
-    sort: "created_at",
-    descending: true,
-    limit: LOOKUP_WINDOW,
-  });
+  const [row, setRow] = useState<EnquiryDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [missing, setMissing] = useState(false);
+  const [retry, setRetry] = useState(0);
 
-  const row = rows.find((r) => r.id === id);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setMissing(false);
+    fetchEnquiry(id)
+      .then((result) => { if (!cancelled) setRow(result); })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && (err.status === 404 || err.status === 422)) setMissing(true);
+        else setError(err instanceof ApiError ? err.message : "Could not load this record.");
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [id, retry]);
 
   const back = (
     <Button variant="ghost" onClick={() => navigate({ name: "people" })}>
@@ -29,7 +39,7 @@ export default function Person({ id, canEdit }: { id: string; canEdit: boolean }
     </Button>
   );
 
-  if (loading && rows.length === 0) {
+  if (loading && !row) {
     return (
       <div className="page">
         <div className="page-head">{back}</div>
@@ -49,7 +59,7 @@ export default function Person({ id, canEdit }: { id: string; canEdit: boolean }
           title="Could not load this record."
           detail={error}
           action={
-            <Button small onClick={() => void reload()}>
+            <Button small onClick={() => setRetry((n) => n + 1)}>
               Try again
             </Button>
           }
@@ -58,15 +68,13 @@ export default function Person({ id, canEdit }: { id: string; canEdit: boolean }
     );
   }
 
-  if (!row) {
+  if (missing || !row) {
     return (
       <div className="page">
         <div className="page-head">{back}</div>
         <div className="card">
-          <Empty title="That record is not in view">
-            This page looks for a person inside the most recent {LOOKUP_WINDOW} enquiries,
-            because the API has no route for fetching one by id. Search for them by name or
-            reference instead.
+          <Empty title="That enquiry is not on record">
+            It may have been archived. Search for them by name or reference instead.
           </Empty>
           <div className="row" style={{ justifyContent: "center" }}>
             <Button variant="primary" onClick={() => navigate({ name: "people" })}>
@@ -87,6 +95,7 @@ export default function Person({ id, canEdit }: { id: string; canEdit: boolean }
         <Badge tone={row.stage === "application" ? "success" : "neutral"}>
           {row.stage === "application" ? "Application" : "Enquiry"}
         </Badge>
+        {row.person_id && <Badge tone="success">Member</Badge>}
       </div>
 
       <div className="page-head">
@@ -97,9 +106,20 @@ export default function Person({ id, canEdit }: { id: string; canEdit: boolean }
             {formatDate(row.created_at)}
           </p>
         </div>
-        <Button variant="primary" onClick={() => { window.location.href = `tel:${tel}`; }}>
-          Call {row.first_name}
-        </Button>
+        <div className="row">
+          {row.person_id ? (
+            <Button onClick={() => navigate({ name: "member", id: row.person_id! })}>
+              View member
+            </Button>
+          ) : canEdit && (
+            <Button onClick={() => navigate({ name: "enrol", enquiryId: row.id })}>
+              Add as member
+            </Button>
+          )}
+          <Button variant="primary" onClick={() => { window.location.href = `tel:${tel}`; }}>
+            Call {row.first_name}
+          </Button>
+        </div>
       </div>
 
       <div className="split">
@@ -131,16 +151,11 @@ export default function Person({ id, canEdit }: { id: string; canEdit: boolean }
               </Fact>
               <Fact label="Stage">{label(row.stage)}</Fact>
               <Fact label="Status">{label(row.status)}</Fact>
+              {row.number_of_dependants !== null && (
+                <Fact label="Dependants listed">{row.number_of_dependants}</Fact>
+              )}
             </div>
           </section>
-
-          {canEdit && (
-            <Notice
-              tone="warn"
-              title="Editing is not wired up"
-              detail="The API exposes no update route for an enquiry, so this record is read-only in the portal. Changes are made the way the office makes them today."
-            />
-          )}
         </div>
 
         <aside className="stack">

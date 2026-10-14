@@ -35,7 +35,6 @@ for _name in (
     "TWILIO_CONTENT_SID",
     "SENTRY_DSN",
     "SUPABASE_URL",
-    "SUPABASE_PUBLISHABLE_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
     "STAFF_EMAILS",
 ):
@@ -44,6 +43,7 @@ os.environ["ENVIRONMENT"] = "test"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.auth import StaffUser, require_staff  # noqa: E402
 from app.main import app  # noqa: E402
 from app.ratelimit import application_limiter, lead_limiter  # noqa: E402
 
@@ -62,6 +62,25 @@ def _fresh_rate_limits():
     # seventh lead in a run is refused and the failure looks like a real bug.
     lead_limiter._hits.clear()
     application_limiter._hits.clear()
+
+
+@pytest.fixture
+def staff_as():
+    """Sign requests in as a staff member with the given role.
+
+    Replaces require_staff, the one dependency every admin route and every
+    require_role() check is built on, so the role gate itself is still the real
+    one. Removed again after the test, so the anonymous checks stay anonymous.
+    """
+    def sign_in(role: str = "admin") -> StaffUser:
+        user = StaffUser(user_id="00000000-0000-0000-0000-0000000000aa",
+                         email=f"{role}@staff.test", role=role,
+                         staff_id="00000000-0000-0000-0000-0000000000bb")
+        app.dependency_overrides[require_staff] = lambda: user
+        return user
+
+    yield sign_in
+    app.dependency_overrides.pop(require_staff, None)
 
 
 @pytest.fixture

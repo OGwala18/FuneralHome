@@ -32,6 +32,25 @@ export const planLabel = (value: string) =>
 
 export const planOf = (row: EnquiryRow) => planLabel(row.plan_selected ?? row.plan_interest);
 
+/* ---------------------------------------------------------------- Money --- */
+
+/** Integer cents to "R 250.00". Money is never a float until it is on screen. */
+export const formatMoney = (cents: number | null, currency = "ZAR") =>
+  cents === null ? "Not recorded"
+    : `${currency === "ZAR" ? "R" : `${currency} `}${(cents / 100).toLocaleString("en-ZA", {
+      minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/**
+ * "250", "250.5" or "R 1 250,00" typed by a person, to integer cents. Null when
+ * it is not a usable amount, so a form can say so rather than guess.
+ */
+export const toCents = (typed: string): number | null => {
+  const cleaned = typed.replace(/[Rr\s]/g, "").replace(",", ".");
+  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+  const [whole, fraction = ""] = cleaned.split(".");
+  return Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+};
+
 /* ----------------------------------------------------------------- Time --- */
 
 export const formatDate = (iso: string) => {
