@@ -5,6 +5,17 @@ has never sent a real message.** `TWILIO_CONTENT_SID` is blank, so
 `send_registration_confirmation()` silently takes its sandbox fallback path and
 writes a log line instead of sending.
 
+### Progress, 14 October 2026
+
+| Step | State |
+|---|---|
+| Twilio account | Exists. Still a **trial** and still named "My first Twilio account". Upgrading (a payment method) is for the owner to do. |
+| Template `induduzo_registration_confirmation` | **Created.** Utility wording from §2, English, Text, `{{1}}` = first name, `{{2}}` = reference, sample values saved. Its `HX…` SID is the `TWILIO_CONTENT_SID` value. Read it from Content Template Builder; it is not a secret, but it lives in the deployment's variables, not in this repo. |
+| WhatsApp approval | **Not submitted.** Twilio refuses until a WhatsApp sender exists. Submit it, as **Utility**, right after step 3 of §1. |
+| Meta Business Manager + verification | Not started. |
+| WhatsApp sender (the business number) | Not registered. Needs the number and a Meta sign-in, so it is the owner's step. |
+| Credentials in Railway | Not set. `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` go into Railway's sealed variables directly from the console, never through chat, a document or this repo. |
+
 No application code needs to change to fix this. `backend/app/services/whatsapp.py`
 already has the approved-template path; it is skipped only because the content
 SID is empty. What follows is console work and environment wiring.

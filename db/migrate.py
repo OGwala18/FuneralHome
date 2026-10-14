@@ -176,8 +176,7 @@ def main() -> int:
         print("\nApplied %d migration(s)." % len(pending))
         if skipped:
             print("Skipped (shell, local Docker only): %s" % ", ".join(skipped))
-            print("On a managed host, set the API role password out of band:")
-            print("  alter role induduzo_api login password '<from your secret store>';")
+            print("On a managed host, db/provision_api_role.py sets the API role password.")
     return 0
 
 

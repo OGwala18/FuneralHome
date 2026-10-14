@@ -9,6 +9,9 @@ import Login from "@/pages/Login";
 import Today from "@/pages/Today";
 import People from "@/pages/People";
 import Person from "@/pages/Person";
+import Members from "@/pages/Members";
+import Member from "@/pages/Member";
+import Policies from "@/pages/Policies";
 import Applications from "@/pages/Applications";
 import Growth from "@/pages/Growth";
 import Settings from "@/pages/Settings";
@@ -119,6 +122,9 @@ export default function App() {
         {route.name === "today" && <Today canEdit={canEdit} />}
         {route.name === "people" && <People />}
         {route.name === "person" && <Person id={route.id} canEdit={canEdit} />}
+        {route.name === "members" && <Members />}
+        {route.name === "member" && <Member id={route.id} />}
+        {route.name === "policies" && <Policies />}
         {route.name === "applications" && <Applications />}
         {route.name === "growth" && <Growth />}
         {route.name === "settings" && <Settings me={me} />}

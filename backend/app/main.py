@@ -10,7 +10,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -20,7 +20,7 @@ load_dotenv()
 from .config import get_settings  # noqa: E402  (must follow load_dotenv)
 from .db import close_pool, connection, init_pool  # noqa: E402
 from .observability import init_sentry  # noqa: E402
-from .routers import admin, enquiries  # noqa: E402
+from .routers import admin, enquiries, members  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -92,6 +92,7 @@ async def security_headers(request: Request, call_next):
 
 app.include_router(enquiries.router)
 app.include_router(admin.router)
+app.include_router(members.router)
 
 
 @app.exception_handler(RequestValidationError)
@@ -117,8 +118,13 @@ async def validation_handler(_: Request, exc: RequestValidationError) -> JSONRes
 
 
 @app.get("/health", tags=["ops"])
-def health() -> dict:
-    """Liveness plus a real database round-trip."""
+def health(response: Response) -> dict:
+    """Liveness plus a real database round-trip.
+
+    503 when the database is unreachable. Railway's deploy check and any uptime
+    monitor treat every 2xx as healthy, so a 200 here would route traffic to an
+    instance that cannot save a single registration.
+    """
     database_ok = True
     try:
         with connection() as conn:
@@ -126,6 +132,9 @@ def health() -> dict:
     except Exception:  # noqa: BLE001
         logger.exception("Health check: database unreachable")
         database_ok = False
+
+    if not database_ok:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
     return {
         "status": "ok" if database_ok else "degraded",

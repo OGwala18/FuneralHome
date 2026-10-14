@@ -39,3 +39,13 @@ export const WHATSAPP_URL = PRIMARY_PHONE.whatsapp;
 
 export const CONTACT_EMAIL = "Info@induduzo.co.za";
 export const CONTACT_EMAIL_LINK = `mailto:${CONTACT_EMAIL}`;
+
+/**
+ * Social profiles.
+ *
+ * A blank URL means "we have the icon but not the page yet" — call sites render
+ * the icon without a link rather than sending a visitor nowhere.
+ */
+export const INSTAGRAM_URL =
+  "https://www.instagram.com/induduzofuneralhome?stkn=dzl3dGkzOXI5dnBv";
+export const FACEBOOK_URL = "";
