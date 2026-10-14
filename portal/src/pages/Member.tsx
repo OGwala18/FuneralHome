@@ -66,7 +66,9 @@ export default function Member({ id }: { id: string }) {
           <div className="card-head"><h2 className="t-section">Policies</h2></div>
           {member.policies.length === 0 ? <p className="muted">No linked policy.</p>
             : <div className="stack">{member.policies.map((policy) => <div key={policy.policy_number}>
-                <strong className="ref">{policy.policy_number}</strong>
+                <Button variant="ghost" small
+                  onClick={() => navigate({ name: "policy", id: policy.policy_id })}>
+                  <strong className="ref">{policy.policy_number}</strong></Button>
                 <span className="muted"> · {policy.status_code.replace(/_/g, " ")}
                   {policy.plan_code ? ` · ${policy.plan_code}` : ""}</span>
                 <div className="fact-grid" style={{ marginTop: "var(--s12)" }}>

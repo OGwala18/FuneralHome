@@ -18,22 +18,35 @@ export type Route =
   | { name: "person"; id: string }
   | { name: "members" }
   | { name: "member"; id: string }
+  /** Enrol a new member. With an enquiry id, the form starts from that enquiry. */
+  | { name: "enrol"; enquiryId?: string }
   | { name: "policies" }
+  /** `addLives` opens the dependant form straight away, as it is after enrolment. */
+  | { name: "policy"; id: string; addLives?: boolean }
+  | { name: "payments" }
   | { name: "applications" }
   | { name: "growth" }
   | { name: "settings" };
 
-const parse = (pathname: string): Route => {
+const parse = (pathname: string, search: string): Route => {
   const parts = pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+  const query = new URLSearchParams(search);
   if (parts.length === 0) return { name: "today" };
 
   switch (parts[0]) {
     case "people":
       return parts[1] ? { name: "person", id: decodeURIComponent(parts[1]) } : { name: "people" };
     case "members":
+      if (parts[1] === "new") {
+        return { name: "enrol", enquiryId: query.get("enquiry") ?? undefined };
+      }
       return parts[1] ? { name: "member", id: decodeURIComponent(parts[1]) } : { name: "members" };
     case "policies":
-      return { name: "policies" };
+      return parts[1]
+        ? { name: "policy", id: decodeURIComponent(parts[1]), addLives: query.has("add") }
+        : { name: "policies" };
+    case "payments":
+      return { name: "payments" };
     case "applications":
       return { name: "applications" };
     case "growth":
@@ -54,7 +67,13 @@ export const hrefFor = (route: Route): string => {
     case "person": return `/people/${encodeURIComponent(route.id)}`;
     case "members": return "/members";
     case "member": return `/members/${encodeURIComponent(route.id)}`;
+    case "enrol":
+      return route.enquiryId
+        ? `/members/new?enquiry=${encodeURIComponent(route.enquiryId)}` : "/members/new";
     case "policies": return "/policies";
+    case "policy":
+      return `/policies/${encodeURIComponent(route.id)}${route.addLives ? "?add" : ""}`;
+    case "payments": return "/payments";
     case "applications": return "/applications";
     case "growth": return "/growth";
     case "settings": return "/settings";
@@ -68,10 +87,11 @@ export const navigate = (route: Route) => {
 };
 
 export const useRoute = (): Route => {
-  const [route, setRoute] = useState<Route>(() => parse(window.location.pathname));
+  const [route, setRoute] = useState<Route>(() =>
+    parse(window.location.pathname, window.location.search));
 
   useEffect(() => {
-    const onPop = () => setRoute(parse(window.location.pathname));
+    const onPop = () => setRoute(parse(window.location.pathname, window.location.search));
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
@@ -79,7 +99,7 @@ export const useRoute = (): Route => {
   // Every route change starts a new task, so start it at the top.
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [route.name, route.name === "person" || route.name === "member" ? route.id : ""]);
+  }, [route.name, "id" in route ? route.id : ""]);
 
   return route;
 };

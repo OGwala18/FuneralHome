@@ -317,6 +317,13 @@ td a:hover, .fact a:hover, .card a:not(.btn):hover { text-decoration-thickness: 
 .field-error input, .field-error select { border-color: var(--red); border-width: 2px; }
 .field-error .field-hint { color: var(--red); }
 
+/* A form section: as many fields per row as fit, never narrower than 220px. */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s8) var(--s20);
+}
+
 .search-input {
   width: 100%;
   min-height: 48px;

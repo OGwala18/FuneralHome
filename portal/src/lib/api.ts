@@ -29,10 +29,13 @@ export interface EnquiryPage {
 
 export class ApiError extends Error {
   readonly status: number;
-  constructor(message: string, status: number) {
+  /** Per-field messages from a 422, keyed by the request field name. */
+  readonly fieldErrors: Record<string, string>;
+  constructor(message: string, status: number, fieldErrors: Record<string, string> = {}) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.fieldErrors = fieldErrors;
   }
 }
 
@@ -85,16 +88,20 @@ const mutate = async <T>(path: string, method: "POST" | "PATCH", body: unknown):
 
   if (!response.ok) {
     let detail = "Something went wrong.";
+    let fieldErrors: Record<string, string> = {};
     try {
       const parsed = await response.json();
       if (typeof parsed?.detail === "string") detail = parsed.detail;
       else if (Array.isArray(parsed?.detail) && parsed.detail[0]?.msg) {
         detail = String(parsed.detail[0].msg).replace("Value error, ", "");
       }
+      if (parsed?.field_errors && typeof parsed.field_errors === "object") {
+        fieldErrors = parsed.field_errors as Record<string, string>;
+      }
     } catch {
       /* keep the generic message */
     }
-    throw new ApiError(detail, response.status);
+    throw new ApiError(detail, response.status, fieldErrors);
   }
 
   return (await response.json()) as T;
@@ -137,6 +144,7 @@ export interface MemberPage {
 }
 
 export interface MemberPolicy {
+  policy_id: string;
   policy_number: string;
   status_code: string;
   plan_code: string | null;
@@ -187,6 +195,164 @@ export const fetchMember = (id: string) =>
   request<MemberDetail>(`/api/admin/members/${encodeURIComponent(id)}`);
 
 export const fetchPolicies = () => request<PolicyRow[]>("/api/admin/policies");
+
+/* ------------------------------------------------- Enquiry, in full --- */
+
+export interface EnquiryDetail extends EnquiryRow {
+  province: string | null;
+  language_preference: string;
+  id_number: string | null;
+  date_of_birth: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  postal_code: string | null;
+  premium_amount_cents: number | null;
+  payment_frequency: string | null;
+  payment_preference: string | null;
+  number_of_dependants: number | null;
+  beneficiary_name: string | null;
+  beneficiary_relationship: string | null;
+  /** Set once the enquiry has been enrolled as a member. */
+  person_id: string | null;
+}
+
+export const fetchEnquiry = (id: string) =>
+  request<EnquiryDetail>(`/api/admin/enquiries/${encodeURIComponent(id)}`);
+
+/* -------------------------------------------------------- Enrolment --- */
+
+export type PaymentMethod =
+  | "debit_order" | "stop_order" | "eft" | "cash" | "card" | "easypay" | "payat" | "undecided";
+
+export type DependantType = "spouse" | "child" | "extended" | "beneficiary";
+
+interface PersonIn {
+  surname: string;
+  first_names: string;
+  id_number?: string | null;
+  date_of_birth?: string | null;
+  gender?: "male" | "female" | "unspecified" | null;
+  mobile?: string | null;
+  language_preference?: string;
+}
+
+export interface EnrolmentIn extends PersonIn {
+  enquiry_id?: string | null;
+  initials?: string | null;
+  email?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  suburb?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postal_code?: string | null;
+  policy_number: string;
+  plan_code?: string | null;
+  entry_date?: string | null;
+  premium_cents: number;
+  cover_cents?: number | null;
+  payment_method: PaymentMethod;
+  debit_day?: number | null;
+  frequency: "monthly" | "once_off";
+}
+
+export interface EnrolmentOut {
+  person_id: string;
+  policy_id: string;
+  policy_number: string;
+  instalments_scheduled: number;
+}
+
+export interface DependantIn extends PersonIn {
+  member_type: DependantType;
+}
+
+export const fetchNextPolicyNumber = () =>
+  request<{ policy_number: string }>("/api/admin/policies/next-number");
+
+export const enrolMember = (body: EnrolmentIn) =>
+  mutate<EnrolmentOut>("/api/admin/members", "POST", body);
+
+export const addDependant = (policyId: string, body: DependantIn) =>
+  mutate<{ person_id: string; policy_member_id: string; existing_person: boolean }>(
+    `/api/admin/policies/${encodeURIComponent(policyId)}/members`, "POST", body);
+
+/* ---------------------------------------------- Policy and premiums --- */
+
+export interface Instalment {
+  id: string;
+  policy_id: string;
+  due_date: string;
+  amount_cents: number;
+  currency: string;
+  status: "due" | "paid" | "waived" | "cancelled";
+  paid_at: string | null;
+  paid_amount_cents: number | null;
+  paid_method: string | null;
+  recorded_by: string | null;
+  notes: string | null;
+}
+
+export interface PolicyLife {
+  policy_member_id: string;
+  person_id: string;
+  surname: string;
+  first_names: string;
+  id_number: string | null;
+  date_of_birth: string | null;
+  member_type: string;
+  member_type_label: string;
+  entry_age: number | null;
+  joined_at: string | null;
+}
+
+export interface PolicyDetail {
+  policy_id: string;
+  policy_number: string;
+  status_code: string;
+  status_label: string;
+  plan_code: string | null;
+  branch_code: string | null;
+  entry_date: string | null;
+  premium_cents: number | null;
+  cover_cents: number | null;
+  currency: string;
+  enquiry_id: string | null;
+  enquiry_reference: string | null;
+  dependants_expected: number | null;
+  lives: PolicyLife[];
+  payment: { method: string; debit_day: number | null; frequency: string } | null;
+  instalments: Instalment[];
+}
+
+export interface OutstandingRow {
+  instalment_id: string;
+  policy_id: string;
+  policy_number: string;
+  due_date: string;
+  amount_cents: number;
+  currency: string;
+  /** Positive: days late. Zero or negative: not yet late. */
+  days_overdue: number;
+  main_member_id: string | null;
+  main_member_surname: string | null;
+  main_member_first_names: string | null;
+  main_member_phone: string | null;
+}
+
+export const fetchPolicy = (id: string) =>
+  request<PolicyDetail>(`/api/admin/policies/${encodeURIComponent(id)}`);
+
+export const fetchOutstanding = (view: "overdue" | "upcoming", days = 7) =>
+  request<OutstandingRow[]>("/api/admin/instalments",
+    new URLSearchParams({ view, days: String(days) }));
+
+export const recordPayment = (
+  id: string, body: { paid_on: string; amount_cents: number; method: PaymentMethod; notes?: string },
+) => mutate<Instalment>(`/api/admin/instalments/${encodeURIComponent(id)}/payment`, "POST", body);
+
+export const waiveInstalment = (id: string, reason: string) =>
+  mutate<Instalment>(`/api/admin/instalments/${encodeURIComponent(id)}/waive`, "POST", { reason });
 
 export type StaffRole = "viewer" | "admin" | "owner";
 

@@ -5,7 +5,7 @@ import { Badge, Button, Empty, Notice, Skeleton } from "@/components/ui";
 
 const PAGE_SIZE = 25;
 
-export default function Members() {
+export default function Members({ canEdit }: { canEdit: boolean }) {
   const [typed, setTyped] = useState("");
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
@@ -46,8 +46,13 @@ export default function Members() {
       <div className="page-head">
         <div className="page-head-text">
           <h1 className="t-heading">Members</h1>
-          <p className="muted">People in the imported policy book.</p>
+          <p className="muted">Everyone in the policy book, main members and dependants.</p>
         </div>
+        {canEdit && (
+          <Button variant="primary" onClick={() => navigate({ name: "enrol" })}>
+            New member
+          </Button>
+        )}
       </div>
 
       <div className="stack" style={{ marginBottom: "var(--s20)" }}>

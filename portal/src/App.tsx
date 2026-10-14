@@ -12,6 +12,9 @@ import Person from "@/pages/Person";
 import Members from "@/pages/Members";
 import Member from "@/pages/Member";
 import Policies from "@/pages/Policies";
+import Policy from "@/pages/Policy";
+import Enrol from "@/pages/Enrol";
+import Payments from "@/pages/Payments";
 import Applications from "@/pages/Applications";
 import Growth from "@/pages/Growth";
 import Settings from "@/pages/Settings";
@@ -122,9 +125,14 @@ export default function App() {
         {route.name === "today" && <Today canEdit={canEdit} />}
         {route.name === "people" && <People />}
         {route.name === "person" && <Person id={route.id} canEdit={canEdit} />}
-        {route.name === "members" && <Members />}
+        {route.name === "members" && <Members canEdit={canEdit} />}
         {route.name === "member" && <Member id={route.id} />}
+        {route.name === "enrol" && (canEdit
+          ? <Enrol key={route.enquiryId ?? "walk-in"} enquiryId={route.enquiryId} />
+          : <Members canEdit={false} />)}
         {route.name === "policies" && <Policies />}
+        {route.name === "policy" && <Policy key={route.id} id={route.id} canEdit={canEdit} addLives={route.addLives} />}
+        {route.name === "payments" && <Payments canEdit={canEdit} />}
         {route.name === "applications" && <Applications />}
         {route.name === "growth" && <Growth />}
         {route.name === "settings" && <Settings me={me} />}
