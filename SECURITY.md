@@ -116,6 +116,10 @@ These are enforced in code and must stay true.
    subject on failure.
 7. **`VITE_*` variables are public** — they are compiled into browser
    JavaScript. Never put a secret in one.
+8. **Supabase's Data API serves nothing.** No table or view grants anything to
+   Supabase's `authenticated` role (migration 0014), and public sign-up is off.
+   The publishable key in the portal bundle is public, so any grant to a
+   signed-in role is a way around the API's staff, role and 2FA checks.
 
 ---
 
