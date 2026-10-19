@@ -778,7 +778,7 @@ Each bit's pull request updates its own row.
 | 0 | Land the groundwork: the Supabase fix (0014) and this plan | — | ~3M | In progress |
 | 1 | Portal checks in CI | 0 | ~4M | Not started |
 | 2 | Prove the office email sends on internal | — | ~2M | Not started |
-| 3 | Database tables, settings and crypto helpers | 0 | ~8M | Not started |
+| 3 | Database tables, settings and crypto helpers | 0 | ~8M | Done (#14) |
 | 4 | Enforcement core and the guard test (enforcement off) | 3 | ~10M | Not started |
 | 5 | Emailed code (API) | 2, 4 | ~10M | Not started |
 | 6 | Trusted computers and the "Confirm it's you" screen; enforcement on for internal | 1, 5 | ~15M | Not started |
