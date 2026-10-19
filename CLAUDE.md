@@ -49,10 +49,11 @@ All ten in `ARCHITECTURE.md` §7 apply. The ones most often broken in practice:
 
 ## Things that will bite you
 
-**Migration numbering.** `0001`–`0014` exist. `docs/feature-1-review-loop.md`
+**Migration numbering.** `0001`–`0015` exist. `docs/feature-1-review-loop.md`
 says its new tables go in "migration 0008". That number is taken, and so are
-0013 (enrolment and the premium schedule) and 0014 (closing the Data API). It
-must be **0015**, or the next free number when it is built.
+0013 (enrolment and the premium schedule), 0014 (closing the Data API) and 0015
+(the business's own phone numbers). It must be **0016**, or the next free number
+when it is built.
 
 **Supabase's Data API is closed, and must stay closed.** Since 0014, no table
 or view grants anything to Supabase's `authenticated` role, and public sign-up
@@ -78,8 +79,9 @@ python db/migrate.py --baseline 0012_foreign_key_indexes.sql
 `0005` and `0007` are **not** applied to Supabase — there is no `induduzo_api`
 role and no `staff_users` table there. Every migration from `0008` guards its
 grants with a `pg_roles` check for exactly this reason. `0013` is not applied
-there either. `0014` was applied through Supabase's own system on 16 Oct 2026,
-and it is safe to run again.
+there either. `0014` (16 Oct 2026) and `0015` (19 Oct 2026) were applied through
+Supabase's own system. `0014` is safe to run again; `0015` creates a table, so
+baseline past it rather than re-running it there.
 
 **`config.py` is a stdlib dataclass, not pydantic-settings.** Its fields resolve
 `os.getenv(...)` **once, at import time**. Any new entrypoint must call
