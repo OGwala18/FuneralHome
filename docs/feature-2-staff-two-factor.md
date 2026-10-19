@@ -176,11 +176,30 @@ code unless the person presses **Send a new code**.
 
 ## 6. Data model
 
-One migration, using the next free number when it's built (0015 today). Follow
-the house style of 0007 and 0013:
+Built in Bit 3 as `db/migrations/0016_staff_two_step_sign_in.sql`, which is the
+final word. It follows the house style of 0007 and 0013:
 - `tenant_id` on every table;
 - RLS on, with policies for `induduzo_api` only, guarded by a `pg_roles` check;
 - **nothing for `anon` or `authenticated`.** See SECURITY.md rule 8.
+
+What the migration adds to the sketch below:
+- `revoked_at` on `staff_session_verifications`, so an owner reset or a
+  deactivation can cut a verified session short without deleting the row;
+- checks that refuse:
+  - a `code_hash` or `token_hash` that isn't 32 bytes, so a code or token stored
+    in readable form is an error;
+  - a removed authenticator app that still has its secret, and an active one
+    that was never confirmed;
+  - a challenge that lives more than 15 minutes (the API's limit is 5), and a
+    passkey handle outside 16–64 bytes;
+- `induduzo_api` may select, insert and update, but **not delete**. The purge
+  job (Bit 11) needs delete on challenges, verifications and devices, in a
+  migration of its own;
+- `staff_users` and `staff_events` are closed to `anon` and `authenticated` too.
+
+**Set `created_at` from the same clock as `expires_at`.** The 15-minute and
+30-day checks compare the two, so a test clock that moves `expires_at` but
+leaves `created_at` to the database's `now()` will trip them.
 
 Sketch, not final SQL:
 
@@ -310,6 +329,14 @@ All on the API. Nothing new in the portal is secret.
 
 **Fail closed:** if enforcement is on but a key is missing, staff routes return
 503 "Two-step sign-in is not configured". They never quietly let people through.
+
+Built in Bit 3, in `backend/app/config.py`:
+- `Settings.two_step_configured` is false while anything is missing or unusable
+  (a malformed Fernet key, a pepper under 32 bytes), and `two_step_missing`
+  names the variables, never their values;
+- `TWO_STEP_ENFORCEMENT` other than `on` or `off` also stops the API starting;
+- missing keys never stop it starting, so the public enquiry form keeps working.
+  Only staff routes refuse.
 
 **Constants, kept in code rather than env:**
 - 6-digit codes, valid 5 minutes, at most 5 attempts;
