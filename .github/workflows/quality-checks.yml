@@ -64,6 +64,44 @@ jobs:
         continue-on-error: true
         run: npm audit --audit-level=high
 
+  # The site was checked but the staff portal was not, so a type error, a broken
+  # build or a vulnerable package in the app that shows client records would
+  # only have been found once it was deployed.
+  portal:
+    name: Portal typecheck, build, and audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: portal
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # The portal has no .nvmrc of its own, so it uses the site's. `22`
+      # resolves to a current 22.x; Vite 7 needs 22.12 or later.
+      - name: Use supported Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: portal/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      # No lint step: the portal has no lint script.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build production bundle
+        run: npm run build
+
+      # Blocking: everything that ships in the bundle staff download.
+      - name: Check shipped dependencies for high-severity vulnerabilities
+        run: npm audit --omit=dev --audit-level=high
+
   # The frontend was scanned but the API was not, so a known CVE in FastAPI,
   # psycopg or their transitive dependencies would have shipped unnoticed.
   backend-audit:
