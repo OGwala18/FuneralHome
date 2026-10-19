@@ -6,13 +6,31 @@ variables. Never in the database, never in the repo, never in the frontend.
 
 from __future__ import annotations
 
+import base64
 import os
 from dataclasses import dataclass, field
 from functools import lru_cache
 
+# The pepper keys the HMAC that emailed and recovery codes are stored as. Any
+# shorter and it adds too little to stop a stolen copy of the database being
+# used to guess codes offline.
+MIN_PEPPER_BYTES = 32
+
 
 def _split(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _is_fernet_key(key: str) -> bool:
+    """Whether Fernet would accept `key`: 32 bytes, url-safe base64.
+
+    Checked here, so a mistyped key reads as "not configured" rather than as an
+    error inside the first request that needs it.
+    """
+    try:
+        return len(base64.urlsafe_b64decode(key)) == 32
+    except ValueError:  # binascii.Error is a ValueError
+        return False
 
 
 @dataclass(frozen=True)
@@ -80,6 +98,53 @@ class Settings:
         )
     )
 
+    # --- Staff two-step sign-in ---------------------------------------------
+    # docs/feature-2-staff-two-factor.md §7. Internal and production each
+    # have their own keys and pepper, and never share them.
+
+    # "on" or "off". Production refuses to start with it off (__post_init__),
+    # so a forgotten variable fails loudly instead of leaving the door open.
+    two_step_enforcement: str = (os.getenv("TWO_STEP_ENFORCEMENT") or "off").strip().lower()
+
+    # SEALED. Fernet keys, comma-separated. The first one encrypts
+    # authenticator-app secrets and every one decrypts, so a key is rotated by
+    # putting a new one first. Kept out of repr(), like the pepper.
+    two_step_encryption_keys: list[str] = field(
+        default_factory=lambda: _split(os.getenv("TWO_STEP_ENCRYPTION_KEYS", "")),
+        repr=False,
+    )
+
+    # SEALED. Keys the HMAC that emailed and recovery codes are stored as. It
+    # lives here and never in the database, so a stolen copy of the database
+    # can't be used to guess codes offline.
+    two_step_code_pepper: str | None = field(
+        default=os.getenv("TWO_STEP_CODE_PEPPER") or None, repr=False
+    )
+
+    # Passkeys. The RP ID is the portal's bare domain: localhost,
+    # portal-internal.up.railway.app or portal.induduzo.co.za. A passkey only
+    # ever works on the domain it was made for, so production's is set once,
+    # at launch, and never changed.
+    webauthn_rp_id: str | None = os.getenv("WEBAUTHN_RP_ID") or None
+    # Shown in the passkey prompt.
+    webauthn_rp_name: str = os.getenv("WEBAUTHN_RP_NAME") or "Induduzo Staff Portal"
+    # The exact portal origins a passkey may be used from.
+    webauthn_origins: list[str] = field(
+        default_factory=lambda: _split(os.getenv("WEBAUTHN_ORIGINS", ""))
+    )
+
+    def __post_init__(self) -> None:
+        # Refuse to start rather than run in a state nobody chose. Every
+        # entrypoint builds these settings before it serves or changes anything.
+        if self.two_step_enforcement not in ("on", "off"):
+            raise ValueError("TWO_STEP_ENFORCEMENT must be 'on' or 'off'.")
+        if self.two_step_enforcement == "off" and self.environment.strip().lower() == "production":
+            raise RuntimeError(
+                "TWO_STEP_ENFORCEMENT is off and ENVIRONMENT is production. Staff "
+                "sign-in in production must ask for a second step, so the API "
+                "will not start. Set TWO_STEP_ENFORCEMENT=on."
+            )
+
     @property
     def supabase_jwks_url(self) -> str | None:
         if not self.supabase_url:
@@ -127,6 +192,39 @@ class Settings:
     @property
     def email_enabled(self) -> bool:
         return bool(self.smtp_host and self.mail_to)
+
+    @property
+    def two_step_enforced(self) -> bool:
+        return self.two_step_enforcement == "on"
+
+    @property
+    def two_step_missing(self) -> list[str]:
+        """The two-step settings that are absent or unusable, by name.
+
+        Empty means two-step sign-in is fully configured. Names only, never
+        values, so the list is safe to log.
+
+        This is how enforcement fails closed (§7): with enforcement on and
+        anything listed here, staff routes must answer 503 "Two-step sign-in is
+        not configured", never let someone in on a password alone.
+        """
+        missing = []
+        keys = self.two_step_encryption_keys
+        if not keys or not all(_is_fernet_key(key) for key in keys):
+            missing.append("TWO_STEP_ENCRYPTION_KEYS")
+        if len((self.two_step_code_pepper or "").encode("utf-8")) < MIN_PEPPER_BYTES:
+            missing.append("TWO_STEP_CODE_PEPPER")
+        if not self.webauthn_rp_id:
+            missing.append("WEBAUTHN_RP_ID")
+        if not self.webauthn_rp_name.strip():
+            missing.append("WEBAUTHN_RP_NAME")
+        if not self.webauthn_origins:
+            missing.append("WEBAUTHN_ORIGINS")
+        return missing
+
+    @property
+    def two_step_configured(self) -> bool:
+        return not self.two_step_missing
 
 
 @lru_cache
