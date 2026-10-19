@@ -7,7 +7,7 @@ prove it works.
 
 | | |
 |---|---|
-| Status | Planned. Bit 0 in progress (see §12 tracker) |
+| Status | Being built, one bit at a time (see the §12 tracker) |
 | Priority | Required before the production portal launches |
 | Repo state at time of writing | `fae330d` (Dev), 16 Oct 2026 |
 | Touches | `backend/`, `db/migrations/`, `portal/`, `.github/workflows/`, docs |
@@ -37,9 +37,10 @@ that it asks again.
 - someone sitting at an unlocked, trusted laptop. Windows sign-in still matters;
 - malware on a staff computer;
 - someone who has both the password and access to that person's mailbox, when
-  the emailed code is the method used. This is why passkeys and the app are
-  preferred, and why §3 asks whether email should stay available once a stronger
-  method is set up.
+  the emailed code is the method used. The owner chose to keep the emailed code
+  available to everyone (§3), so a staff member's mailbox password matters as
+  much as their portal password. Passkeys and the app are offered to anyone who
+  wants a stronger second step.
 
 ---
 
@@ -53,22 +54,23 @@ that it asks again.
 | Where it is enforced | In our API, for every staff route, as one dependency | This plan; reasons in §4 |
 | Where codes are sent | Only to the email address on the person's staff record, which the owner sets. Never to an address typed on the screen | This plan |
 | Prerequisite: no way around the API | Public sign-up is off, and migration 0014 closed Supabase's Data API to signed-in accounts | Done 16 Oct 2026 |
+| When 2FA is switched on for internal | As soon as Bit 6 works, so the team uses it for real while later bits add the app and passkeys | Owner, 19 Oct 2026 |
 
 ---
 
-## 3. Decisions still open (with recommendations)
+## 3. Decisions settled (owner, 19 Oct 2026)
 
-Settle these before the phase that needs them. Each one is a setting, so changing
-it later does not mean rebuilding.
+These were open questions. Each one is a setting, so changing it later does not
+mean rebuilding.
 
-| # | Question | Recommendation | Needed by |
-|---|---|---|---|
-| 1 | Once someone has set up a passkey or the app, can they still use the emailed code? | **Internal: yes. Production: no** for owners and admins. They use a recovery code or ask the owner. Otherwise the weakest method decides the real security. | Production launch |
-| 2 | Must every staff member set up a passkey or the app? | **Owners and admins: required by launch.** Viewers are asked at every sign-in until they do. | Production launch |
-| 3 | Is "Trust this computer" ticked by default? | **No.** It should be a deliberate choice, made only on your own work laptop. | Phase 2 |
-| 4 | How long does an untrusted computer stay signed in before asking again? | **12 hours**, one working day. | Phase 2 |
-| 5 | Production passkey domain (WebAuthn "relying party") | **`portal.induduzo.co.za`**, the narrowest choice. A passkey made for it can't be used by any other site, including our own public one. | Phase 4 |
-| 6 | Laptop-only passkeys? Some passkeys sync to a phone through a password manager. | **Off for now.** It's available as a switch: reject passkeys that report they sync. This fits the earlier wish that phones can't get in. | Phase 4 |
+| # | Question | Decision |
+|---|---|---|
+| 1 | Once someone has set up a passkey or the app, can they still use the emailed code? | **Yes, always, for everyone.** The emailed code stays a fallback on every environment |
+| 2 | Must staff set up a passkey or the app? | **No, optional for everyone.** The "Make sign-in stronger" screen always offers "Not now" |
+| 3 | Is "Trust this computer" ticked by default? | **No, unticked.** It's a deliberate choice, made only on your own work laptop |
+| 4 | How long does an untrusted computer stay signed in before asking again? | **12 hours** |
+| 5 | Production passkey domain (WebAuthn "relying party") | **The production portal's own address.** `portal.induduzo.co.za` if that domain is set up; otherwise whatever address production runs on. Set it at launch in `WEBAUTHN_RP_ID`, then never change it. If production keeps the internal portal's address, passkeys made on internal carry over |
+| 6 | Laptop-only passkeys? | **No, synced passkeys are allowed.** The laptop-only switch exists but is off |
 
 ---
 
@@ -368,7 +370,7 @@ already be done:
 | POST | `/passkeys/setup/start` | Registration options |
 | POST | `/passkeys/setup/finish` | `{challenge_id, credential, name}` |
 | PATCH | `/passkeys/{id}` | Rename |
-| POST | `/methods/{id}/remove` | **Needs a recent check.** Refused if it would leave an owner or admin with no strong method, once decision 2 applies |
+| POST | `/methods/{id}/remove` | **Needs a recent check.** Always allowed, because the emailed code stays available (decisions 1 and 2) |
 | GET | `/devices` | Trusted computers, with this one marked |
 | POST | `/devices/{id}/forget`, `/devices/forget-others` | Revoke trust |
 | POST | `/recovery-codes` | **Needs a recent check.** A new set; the old set stops working |
@@ -551,7 +553,7 @@ These are notifications, so failures are logged and swallowed:
 2. **Make sign-in stronger**, shown once someone has passed with email and has no
    passkey or app:
    - Passkey (recommended on your laptop), Authenticator app, or Not now;
-   - "Not now" disappears for owners and admins once decision 2 is on.
+   - "Not now" is always available (decision 2).
 3. **Settings → Sign-in security:**
    - passkeys (rename, remove), apps (remove), trusted computers;
    - recovery codes (how many left, make new ones);
@@ -748,8 +750,8 @@ Each bit's pull request updates its own row.
 
 | Bit | What | Depends on | Size (tokens) | Status |
 |---|---|---|---|---|
-| 0 | Land the groundwork: the Supabase fix (0014) and this plan | — | ~3M | In progress |
-| 1 | Portal checks in CI | 0 | ~4M | Not started |
+| 0 | Land the groundwork: the Supabase fix (0014) and this plan | — | ~3M | Done (#9, #10) |
+| 1 | Portal checks in CI | 0 | ~4M | Done (#12) |
 | 2 | Prove the office email sends on internal | — | ~2M | Not started |
 | 3 | Database tables, settings and crypto helpers | 0 | ~8M | Not started |
 | 4 | Enforcement core and the guard test (enforcement off) | 3 | ~10M | Not started |
@@ -841,7 +843,7 @@ Paste this into a new session, with the bit number filled in:
   after expiry" and "no code in logs".
 
 **Bit 6. Trusted computers, the "Confirm it's you" screen, and enforcement on.** Read: §5; §9 Trusted computers; §10.
-- Settle decisions 3 and 4 first.
+- Decisions 3 and 4 are settled: unticked by default, and 12 hours.
 - API: issue, check and revoke device tokens; add `X-Induduzo-Device` to CORS.
 - Portal:
   - the device header and the error `code` in `lib/api.ts`;
@@ -859,7 +861,8 @@ Paste this into a new session, with the bit number filled in:
   both work on internal.
 
 **Bit 8. Passkeys (API).** Read: §9 Passkeys.
-- Settle decisions 5 and 6 first.
+- Decisions 5 and 6 are settled: the RP ID comes from `WEBAUTHN_RP_ID` per
+  environment, and synced passkeys are allowed.
 - `webauthn` 3.x: setup start and finish, sign-in start and verify, rename and
   remove.
 - The software passkey helper for tests.
@@ -900,7 +903,7 @@ Paste this into a new session, with the bit number filled in:
 
 **Bit 14. A week on internal, then production.** Read: §11D, §11E, §13.
 - The whole team uses internal for a week.
-- Work through §11D and §11E, and settle decisions 1 and 2.
+- Work through §11D and §11E.
 - Then the production checklist.
 - Done when: nobody is stuck, no lockouts are unresolved, and §13 is ticked.
 
@@ -912,12 +915,11 @@ Paste this into a new session, with the bit number filled in:
 ---
 
 ## 13. Production launch checklist
-- [ ] `WEBAUTHN_RP_ID=portal.induduzo.co.za`, `WEBAUTHN_ORIGINS=https://portal.induduzo.co.za`
+- [ ] `WEBAUTHN_RP_ID` and `WEBAUTHN_ORIGINS` set to the production portal's address (`portal.induduzo.co.za` if that domain exists). Decide before anyone adds a passkey on production
 - [ ] Fresh `TWO_STEP_ENCRYPTION_KEYS` and `TWO_STEP_CODE_PEPPER` for production, sealed, never shared with internal
 - [ ] `TWO_STEP_ENFORCEMENT=on` (production refuses `off` anyway)
 - [ ] `CORS_ORIGINS` is the production portal only, and `X-Induduzo-Device` is allowed
 - [ ] Code emails pass SPF, DKIM and DMARC from the production sender
-- [ ] Decisions 1 and 2 applied: owners and admins have a passkey or app, and email is off for them
 - [ ] Every staff member has set up a method on production (passkeys don't carry over from internal) and stored recovery codes
 - [ ] Break-glass drill done on production
 - [ ] Portal security headers live and checked on the production URL
