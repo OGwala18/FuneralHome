@@ -5,6 +5,7 @@ import {
   fetchStaff,
   inviteStaff,
   setStaffActive,
+  type StaffAdded,
   type StaffMember,
   type StaffRole,
 } from "@/lib/api";
@@ -24,6 +25,34 @@ const ROLES: { value: StaffRole; label: string; what: string }[] = [
   { value: "owner", label: "Owner", what: "Everything, including managing staff" },
 ];
 
+type AddedNotice = { tone: "success" | "warn"; title: string; detail: string };
+
+/**
+ * What to tell the owner after adding someone. The portal signs in with email
+ * and password only, and nothing here sets a password from an invitation link,
+ * so the owner usually has to create the sign-in in Supabase by hand. Say that
+ * plainly rather than leave them waiting for an email that was never sent.
+ */
+const addedNotice = (member: StaffAdded): AddedNotice =>
+  member.invite_sent
+    ? {
+        tone: "success",
+        title: "Added, and invited",
+        detail:
+          `Supabase has emailed ${member.email} an invitation. The portal can't set ` +
+          `a password from that email yet, so if they can't sign in, delete them under ` +
+          `Authentication → Users in Supabase and add them again with a password.`,
+      }
+    : {
+        tone: "warn",
+        title: "Added. No invitation email was sent",
+        detail:
+          `${member.email} is on the staff list, but this server doesn't send ` +
+          `invitations. In Supabase, go to Authentication → Users → Add user → Create ` +
+          `new user. Use this same address, choose a password, and tick Auto Confirm ` +
+          `User. Then tell them the password in person or by phone.`,
+      };
+
 const formatWhen = (iso: string | null) => {
   if (!iso) return "Never";
   const d = new Date(iso);
@@ -36,7 +65,7 @@ export default function Staff({ myEmail }: { myEmail: string }) {
   const [rows, setRows] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<AddedNotice | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const [email, setEmail] = useState("");
@@ -74,10 +103,7 @@ export default function Staff({ myEmail }: { myEmail: string }) {
       setEmail("");
       setFullName("");
       setRole("viewer");
-      setNotice(
-        `${created.email} can now be given access. If they did not receive an ` +
-          `invitation email, create their account in Supabase.`,
-      );
+      setNotice(addedNotice(created));
       await load();
     } catch (err) {
       // The typed values stay on screen, so a rejected address can be corrected
@@ -120,7 +146,7 @@ export default function Staff({ myEmail }: { myEmail: string }) {
   return (
     <div className="stack" style={{ gap: "var(--s24)" }}>
       {error && <Notice tone="error" title="That did not work" detail={error} />}
-      {notice && <Notice tone="success" title="Added" detail={notice} />}
+      {notice && <Notice tone={notice.tone} title={notice.title} detail={notice.detail} />}
 
       <section className="card">
         <div className="card-head">

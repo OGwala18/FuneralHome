@@ -378,8 +378,13 @@ export const fetchMe = () => request<StaffIdentity>("/api/admin/me");
 
 export const fetchStaff = () => request<StaffMember[]>("/api/admin/staff");
 
+/** The new row, and whether Supabase emailed them an invitation. */
+export interface StaffAdded extends StaffMember {
+  invite_sent: boolean;
+}
+
 export const inviteStaff = (body: { email: string; full_name?: string; role: StaffRole }) =>
-  mutate<StaffMember>("/api/admin/staff", "POST", body);
+  mutate<StaffAdded>("/api/admin/staff", "POST", body);
 
 export const changeStaffRole = (id: string, role: StaffRole) =>
   mutate<StaffMember>(`/api/admin/staff/${id}/role`, "PATCH", { role });
