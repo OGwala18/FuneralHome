@@ -5,6 +5,26 @@ has never sent a real message.** `TWILIO_CONTENT_SID` is blank, so
 `send_registration_confirmation()` silently takes its sandbox fallback path and
 writes a log line instead of sending.
 
+### Progress, 20 October 2026
+
+| Step | State |
+|---|---|
+| Twilio account | **Upgraded** (19 Oct). Still named "My first Twilio account". |
+| Meta Business Manager | Induduzo's business and its WhatsApp Business account are **linked to Twilio**. |
+| WhatsApp sender | **073 731 0521 (+27 73 731 0521), Online**, display name "Induduzo". It replaces 069 706 0387, which is retired. Migration 0017 records the change in `business_phone_numbers`. |
+| WhatsApp approval | **Submitted as Utility** on 20 Oct, under review with Meta. Until it is approved, business-initiated sends are not delivered. |
+| Railway internal `api` | `TWILIO_WHATSAPP_FROM=+27737310521` and `TWILIO_CONTENT_SID` set. The owner added `TWILIO_ACCOUNT_SID` and the sealed `TWILIO_AUTH_TOKEN`. Railway had paused deploys platform-wide that day, so they were not yet live. |
+| End-to-end test | **Not yet run.** It waits for the template approval and the redeploy. Then §5 applies. |
+| Replies | No inbound webhook is set, so replies to 073 731 0521 reach Twilio and nobody sees them (below). |
+
+**Getting the sender registered took two goes.** The first time, Meta showed the
+number as "Pending" with "Please reach out to Twilio", and Twilio listed no
+sender, because Twilio's own wizard never finished. Running Twilio Console →
+WhatsApp senders → **Create new sender** → My own phone number → **Continue with
+Facebook** again, choosing the existing business, account and number, fixed it.
+In Meta's popup the last button, **Continue to feature setup**, must be pressed,
+or Twilio's page never moves on.
+
 ### Progress, 14 October 2026
 
 | Step | State |
@@ -13,7 +33,7 @@ writes a log line instead of sending.
 | Template `induduzo_registration_confirmation` | **Created.** Utility wording from §2, English, Text, `{{1}}` = first name, `{{2}}` = reference, sample values saved. Its `HX…` SID is the `TWILIO_CONTENT_SID` value. Read it from Content Template Builder; it is not a secret, but it lives in the deployment's variables, not in this repo. |
 | WhatsApp approval | **Not submitted.** Twilio refuses until a WhatsApp sender exists. Submit it, as **Utility**, right after step 3 of §1. |
 | Meta Business Manager + verification | Not started. |
-| WhatsApp sender (the business number) | **Number chosen: 069 706 0387 (+27 69 706 0387)**, a new SIM never used on WhatsApp. Recorded in `business_phone_numbers` (migration 0015). Not registered yet: the account must be upgraded first, and the Meta sign-in and the verification code sent to that phone are the owner's steps. |
+| WhatsApp sender (the business number) | **Number chosen: 069 706 0387 (+27 69 706 0387)**, a new SIM never used on WhatsApp. *(Superseded on 20 Oct by 073 731 0521; see above.)* Recorded in `business_phone_numbers` (migration 0015). Not registered yet: the account must be upgraded first, and the Meta sign-in and the verification code sent to that phone are the owner's steps. |
 | Credentials in Railway | Not set. `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` go into Railway's sealed variables directly from the console, never through chat, a document or this repo. |
 
 No application code needs to change to fix this. `backend/app/services/whatsapp.py`
@@ -42,7 +62,7 @@ sender registration will fail with an error that does not explain itself.
 
 ### Replies to the WhatsApp line
 
-Once 069 706 0387 is a Twilio WhatsApp sender, it is an API line, not a phone.
+073 731 0521 is a Twilio WhatsApp sender, so it is an API line, not a phone.
 A family that replies to a confirmation, or messages the number directly, reaches
 Twilio, and nothing in this system reads those messages yet. They are not lost
 in Twilio, but nobody sees them.
