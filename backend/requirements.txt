@@ -21,6 +21,11 @@ twilio==9.11.0
 # against 2.13.0; ES256 verification behaviour is unchanged.
 pyjwt[crypto]==2.15.1
 
+# Encrypts staff authenticator-app secrets (MultiFernet, in
+# app/services/two_step_crypto.py). It already arrived through pyjwt[crypto];
+# pinned now that the API uses it directly.
+cryptography==50.0.2
+
 # Error tracking. See app/observability.py for the PII scrubbing that must
 # stay in place before any event leaves the process.
 sentry-sdk[fastapi]==2.68.1
