@@ -183,3 +183,26 @@ def test_staff_routes_refuse_a_caller_without_a_token(client, method, path):
 
     assert response.status_code == 401
     assert response.headers["www-authenticate"] == "Bearer"
+
+
+# --- Adding staff --------------------------------------------------------------
+
+def test_adding_staff_says_whether_an_invitation_was_sent(client, db, staff_as, caplog):
+    owner = staff_as("owner")
+    address = f"new-{uuid.uuid4().hex[:10]}@staff.test"
+
+    with caplog.at_level("INFO"):
+        response = client.post("/api/admin/staff", json={"email": address, "role": "viewer"})
+
+    assert response.status_code == 201
+    body = response.json()
+    # conftest leaves the service-role key blank, so no invitation can be sent,
+    # and the portal must be told so rather than say "check your email".
+    assert body["invite_sent"] is False
+    assert body["email"] == address
+    assert db.execute(
+        "select role::text from staff_users where email = %s", (address,)
+    ).fetchall() == [("viewer",)]
+    # Neither the owner's address nor the new person's reaches the logs.
+    assert owner.email not in caplog.text
+    assert address not in caplog.text
