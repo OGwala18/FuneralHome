@@ -13,7 +13,7 @@ writes a log line instead of sending.
 | Template `induduzo_registration_confirmation` | **Created.** Utility wording from §2, English, Text, `{{1}}` = first name, `{{2}}` = reference, sample values saved. Its `HX…` SID is the `TWILIO_CONTENT_SID` value. Read it from Content Template Builder; it is not a secret, but it lives in the deployment's variables, not in this repo. |
 | WhatsApp approval | **Not submitted.** Twilio refuses until a WhatsApp sender exists. Submit it, as **Utility**, right after step 3 of §1. |
 | Meta Business Manager + verification | Not started. |
-| WhatsApp sender (the business number) | Not registered. Needs the number and a Meta sign-in, so it is the owner's step. |
+| WhatsApp sender (the business number) | **Number chosen: 069 706 0387 (+27 69 706 0387)**, a new SIM never used on WhatsApp. Recorded in `business_phone_numbers` (migration 0015). Not registered yet: the account must be upgraded first, and the Meta sign-in and the verification code sent to that phone are the owner's steps. |
 | Credentials in Railway | Not set. `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` go into Railway's sealed variables directly from the console, never through chat, a document or this repo. |
 
 No application code needs to change to fix this. `backend/app/services/whatsapp.py`
@@ -37,6 +37,20 @@ here takes under an hour.
 The number must be one that is **not already registered to a personal WhatsApp
 or WhatsApp Business app account.** If it is, deregister it there first, or the
 sender registration will fail with an error that does not explain itself.
+
+---
+
+### Replies to the WhatsApp line
+
+Once 069 706 0387 is a Twilio WhatsApp sender, it is an API line, not a phone.
+A family that replies to a confirmation, or messages the number directly, reaches
+Twilio, and nothing in this system reads those messages yet. They are not lost
+in Twilio, but nobody sees them.
+
+Today the website's "WhatsApp us" button goes to 079 751 0648, which staff
+answer in the WhatsApp app. Before it points at the Twilio line, replies need
+somewhere to go. For example, an inbound handler could forward each message to
+the office email.
 
 ---
 

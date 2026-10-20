@@ -269,7 +269,9 @@ chosen at deploy; see `docs/railway-backend-deployment.md`.
 **Two gates, because one is not enough.** A valid Supabase token only proves
 somebody signed up somewhere; it does not prove they work here. So the API
 additionally looks the person up in `staff_users` and requires an active row.
-Public sign-up should also be turned off in the Supabase dashboard.
+Public sign-up is turned off in the Supabase dashboard (16 Oct 2026). Since
+migration 0014, Supabase's own Data API serves no table to a signed-in account,
+so the API is the only way to the data. Never add a policy `to authenticated`.
 
 ### Roles
 
