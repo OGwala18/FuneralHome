@@ -134,7 +134,7 @@ def list_enquiries(
             params,
         ).fetchall()
 
-    logger.info("Staff listing served to %s (%d rows)", staff.email, len(rows))
+    logger.info("Enquiry list served to staff %s (%d rows)", staff.staff_id, len(rows))
 
     return EnquiryPage(
         rows=[
@@ -247,6 +247,13 @@ class StaffMember(BaseModel):
     created_at: str
 
 
+class StaffAdded(StaffMember):
+    # Whether Supabase emailed them an invitation. False whenever the server
+    # has no service-role key, which is the normal case: the owner then creates
+    # the sign-in by hand, and the portal has to say so.
+    invite_sent: bool
+
+
 class InviteStaff(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
@@ -294,10 +301,10 @@ def get_staff(staff: StaffUser = Depends(require_role("owner"))) -> list[StaffMe
         return [_to_member(r) for r in list_staff(conn)]
 
 
-@router.post("/staff", response_model=StaffMember, status_code=status.HTTP_201_CREATED)
+@router.post("/staff", response_model=StaffAdded, status_code=status.HTTP_201_CREATED)
 def invite_staff(
     payload: InviteStaff, staff: StaffUser = Depends(require_role("owner"))
-) -> StaffMember:
+) -> StaffAdded:
     """Grant someone access.
 
     This creates the AUTHORISATION record. The person still needs a Supabase
@@ -327,9 +334,13 @@ def invite_staff(
         log_staff_event(conn, staff.email, "staff_invited", email, {"role": payload.role})
 
     invited = invite_supabase_user(email)
-    logger.info("Staff invited by %s (supabase invite: %s)", staff.email, invited.sent)
+    # Row ids, not addresses: no personal data in logs (ARCHITECTURE.md rule 9).
+    logger.info(
+        "Staff member %s added by %s as %s (invitation email sent: %s)",
+        row["id"], staff.staff_id, payload.role, invited.sent,
+    )
 
-    return _to_member(row)
+    return StaffAdded(**_to_member(row).model_dump(), invite_sent=invited.sent)
 
 
 @router.patch("/staff/{staff_id}/role", response_model=StaffMember)
