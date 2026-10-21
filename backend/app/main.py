@@ -146,6 +146,8 @@ def health(response: Response) -> dict:
         "environment": settings.environment,
         "database": "up" if database_ok else "down",
         "whatsapp": "configured" if settings.whatsapp_enabled else "not_configured",
+        # Who it may send to: off, allowlist or on. Never the numbers.
+        "whatsapp_outbound": settings.whatsapp_outbound,
         "email": "configured" if settings.email_enabled else "not_configured",
         "staff_portal": "configured" if settings.staff_portal_enabled else "not_configured",
         "error_tracking": "enabled" if _sentry_enabled else "disabled",
