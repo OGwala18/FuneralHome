@@ -68,6 +68,11 @@ def test_health_is_503_when_the_database_does_not(client, monkeypatch):
     assert response.json()["database"] == "down"
 
 
+def test_health_says_who_whatsapp_may_message(client):
+    # conftest leaves WHATSAPP_OUTBOUND blank, and blank means off.
+    assert client.get("/health").json()["whatsapp_outbound"] == "off"
+
+
 # --- Stage 1 -------------------------------------------------------------------
 
 def test_stage_one_saves_one_lead_and_one_lead_captured_event(client, db):
