@@ -49,11 +49,12 @@ All ten in `ARCHITECTURE.md` §7 apply. The ones most often broken in practice:
 
 ## Things that will bite you
 
-**Migration numbering.** `0001`–`0015` exist. `docs/feature-1-review-loop.md`
+**Migration numbering.** `0001`–`0017` exist. `docs/feature-1-review-loop.md`
 says its new tables go in "migration 0008". That number is taken, and so are
-0013 (enrolment and the premium schedule), 0014 (closing the Data API) and 0015
-(the business's own phone numbers). It must be **0016**, or the next free number
-when it is built.
+0013 (enrolment and the premium schedule), 0014 (closing the Data API), 0015
+(the business's own phone numbers), 0016 (staff two-step sign-in) and 0017 (the
+WhatsApp line moving to 073 731 0521). It must be **0018**, or the next free
+number when it is built.
 
 **Supabase's Data API is closed, and must stay closed.** Since 0014, no table
 or view grants anything to Supabase's `authenticated` role, and public sign-up
@@ -81,7 +82,9 @@ role and no `staff_users` table there. Every migration from `0008` guards its
 grants with a `pg_roles` check for exactly this reason. `0013` is not applied
 there either. `0014` (16 Oct 2026) and `0015` (19 Oct 2026) were applied through
 Supabase's own system. `0014` is safe to run again; `0015` creates a table, so
-baseline past it rather than re-running it there.
+baseline past it rather than re-running it there. `0016` needs `staff_users`, so
+it cannot run there yet. `0017` only updates the `0015` table and is safe to run
+twice, but Supabase still lists 069 706 0387 until it is applied there.
 
 **`config.py` is a stdlib dataclass, not pydantic-settings.** Its fields resolve
 `os.getenv(...)` **once, at import time**. Any new entrypoint must call
@@ -92,6 +95,11 @@ and `db/keepalive.py` sidestep it by reading `DATABASE_URL` directly.
 **`whatsapp_enabled` excludes `TWILIO_CONTENT_SID`.** `/health` will report
 WhatsApp as configured while sends are still falling back to the sandbox path. A
 green health check is not proof that the approved-template path is live.
+
+**Twilio credentials alone send nothing.** `WHATSAPP_OUTBOUND` decides who the
+line may message: `off` (the default when unset), `allowlist` (only
+`WHATSAPP_TEST_RECIPIENTS`) or `on`. Internal uses `allowlist`. Production must
+set `on`, or no family gets a confirmation. `/health` shows the mode.
 
 **The free Supabase tier has no automated backups.** There are 61 real members
 with ID numbers in that database. See the revision note in

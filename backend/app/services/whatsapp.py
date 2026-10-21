@@ -10,6 +10,10 @@ Two things drive the shape of this module:
 
 2. A messaging failure must never cost a lead. Every failure here is logged and
    swallowed: the enquiry is already committed before this is called.
+
+Nothing goes out unless WHATSAPP_OUTBOUND allows it (outbound_refusal). Logs
+carry the reference, never the number or Twilio's message text, which can
+quote the number.
 """
 
 from __future__ import annotations
@@ -17,9 +21,13 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from ..config import get_settings
+from ..config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
+
+# The Twilio library logs every API request it makes at INFO, and the request
+# URL carries the account SID. Its warnings and errors still come through.
+logging.getLogger("twilio.http_client").setLevel(logging.WARNING)
 
 
 @dataclass(frozen=True)
@@ -39,6 +47,30 @@ def _plain_body(first_name: str, reference: str) -> str:
     )
 
 
+def outbound_refusal(settings: Settings, to_mobile: str) -> str | None:
+    """Why WHATSAPP_OUTBOUND forbids a message to `to_mobile`, or None if it
+    allows one. Every message the line sends asks this first."""
+    if settings.whatsapp_outbound == "on":
+        return None
+    if settings.whatsapp_outbound == "allowlist":
+        if to_mobile in settings.whatsapp_test_recipients:
+            return None
+        return "whatsapp_not_allowlisted"
+    return "whatsapp_outbound_off"
+
+
+def _failure_code(exc: Exception) -> str:
+    """What went wrong, safe to log and store: Twilio's error code, never its
+    message. A message like 21211's quotes the number it was sending to.
+
+    The codes are listed at https://www.twilio.com/docs/api/errors.
+    """
+    code = getattr(exc, "code", None)  # set on TwilioRestException
+    if isinstance(code, int):
+        return f"twilio_{code}"
+    return type(exc).__name__
+
+
 def send_registration_confirmation(
     *, to_mobile: str, first_name: str, reference: str
 ) -> WhatsAppResult:
@@ -52,6 +84,14 @@ def send_registration_confirmation(
         # must not reach a log file (ARCHITECTURE.md rule 9).
         logger.info("WhatsApp not configured; would send confirmation for %s", reference)
         return WhatsAppResult(sent=False, error="whatsapp_not_configured")
+
+    refusal = outbound_refusal(settings, to_mobile)
+    if refusal:
+        logger.info(
+            "WhatsApp confirmation for %s not sent: %s (WHATSAPP_OUTBOUND=%s)",
+            reference, refusal, settings.whatsapp_outbound,
+        )
+        return WhatsAppResult(sent=False, error=refusal)
 
     try:
         from twilio.rest import Client
@@ -83,5 +123,6 @@ def send_registration_confirmation(
         return WhatsAppResult(sent=True, message_sid=message.sid)
 
     except Exception as exc:  # noqa: BLE001 - a send failure must not fail the request
-        logger.warning("WhatsApp send failed for reference %s: %s", reference, exc)
-        return WhatsAppResult(sent=False, error=str(exc)[:200])
+        code = _failure_code(exc)
+        logger.warning("WhatsApp send failed for reference %s: %s", reference, code)
+        return WhatsAppResult(sent=False, error=code)
