@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 
@@ -16,9 +17,20 @@ from functools import lru_cache
 # used to guess codes offline.
 MIN_PEPPER_BYTES = 32
 
+# Who an outbound WhatsApp may go to: nobody, the test numbers, or anyone.
+WHATSAPP_OUTBOUND_MODES = ("off", "allowlist", "on")
+
+_E164_RE = re.compile(r"^\+[1-9][0-9]{7,14}$")
+
 
 def _split(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _phone_numbers(value: str) -> frozenset[str]:
+    """Comma-separated numbers, with the spaces and dashes people type taken
+    out, so "+27 82 000 0001" matches the +27820000001 the API stores."""
+    return frozenset(re.sub(r"[\s()-]", "", item) for item in _split(value))
 
 
 def _is_fernet_key(key: str) -> bool:
@@ -56,6 +68,25 @@ class Settings:
     twilio_auth_token: str | None = os.getenv("TWILIO_AUTH_TOKEN")
     twilio_whatsapp_from: str | None = os.getenv("TWILIO_WHATSAPP_FROM")
     twilio_content_sid: str | None = os.getenv("TWILIO_CONTENT_SID")
+
+    # Who a WhatsApp from the line may go to: "off" (nobody), "allowlist" (only
+    # WHATSAPP_TEST_RECIPIENTS) or "on" (anyone). docs/feature-3-whatsapp-line.md
+    # §7. Unset means "off": credentials alone never start messaging families,
+    # so an environment sends only once someone has chosen to. Internal uses
+    # "allowlist", so a test never reaches a real family; production uses "on".
+    whatsapp_outbound: str = (os.getenv("WHATSAPP_OUTBOUND") or "off").strip().lower()
+
+    # Comma-separated E.164 numbers: staff phones, internal only. Personal
+    # data, so kept out of repr() and never logged.
+    whatsapp_test_recipients: frozenset[str] = field(
+        default_factory=lambda: _phone_numbers(os.getenv("WHATSAPP_TEST_RECIPIENTS", "")),
+        repr=False,
+    )
+
+    # The API's public address, e.g. https://<service>.up.railway.app.
+    # Behind Railway's proxy the request URL is not the one Twilio signed, so
+    # the webhook signature check rebuilds it from this.
+    public_api_url: str | None = (os.getenv("PUBLIC_API_URL") or "").strip().rstrip("/") or None
 
     # Admin notification email. Same rule as WhatsApp: absent in dev means the
     # message is logged rather than sent, and the enquiry still succeeds.
@@ -143,6 +174,16 @@ class Settings:
                 "TWO_STEP_ENFORCEMENT is off and ENVIRONMENT is production. Staff "
                 "sign-in in production must ask for a second step, so the API "
                 "will not start. Set TWO_STEP_ENFORCEMENT=on."
+            )
+        if self.whatsapp_outbound not in WHATSAPP_OUTBOUND_MODES:
+            raise ValueError("WHATSAPP_OUTBOUND must be 'off', 'allowlist' or 'on'.")
+        # A number in any other form could never match, so the allowlist would
+        # quietly send to nobody. The message names the setting, not the
+        # numbers, which are personal.
+        if not all(_E164_RE.fullmatch(number) for number in self.whatsapp_test_recipients):
+            raise ValueError(
+                "WHATSAPP_TEST_RECIPIENTS must be E.164 numbers, comma-separated: "
+                "a + and the country code (+27), with no leading 0."
             )
 
     @property
