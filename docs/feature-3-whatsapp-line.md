@@ -394,7 +394,7 @@ updated in that pull request.
 
 | Bit | What | Depends on | Size (tokens) | Status |
 |---|---|---|---|---|
-| W1 | Outbound switch with the internal allowlist; `PUBLIC_API_URL`; stop the two log leaks (§8) | — | ~4M | Not started |
+| W1 | Outbound switch with the internal allowlist; `PUBLIC_API_URL`; stop the two log leaks (§8) | — | ~4M | In review (#20) |
 | W2 | `whatsapp_messages` table; store outbound confirmations; signed status-callback endpoint | W1 | ~8M | Not started |
 | W3 | Inbound webhook: signature, store, match, reply with a placeholder greeting | W2 | ~8M | Not started |
 | M1 | Menu engine and content file: greeting, the seven options, plan answers, branches and hours, 0/menu, misunderstood replies, 30-minute restart; the plans test | W3 | ~12M | Not started |
