@@ -132,6 +132,22 @@ TWILIO_CONTENT_SID=HX...
 `whatsapp:` — `whatsapp.py:67-68` adds that itself, and doing it twice produces
 `whatsapp:whatsapp:+27...` and a confusing Twilio error.
 
+Credentials make sending possible; `WHATSAPP_OUTBOUND` decides who may be sent
+to (`docs/feature-3-whatsapp-line.md` §7):
+
+```
+WHATSAPP_OUTBOUND=allowlist                 # off (default) | allowlist | on
+WHATSAPP_TEST_RECIPIENTS=+27...,+27...      # allowlist only: staff phones, E.164
+```
+
+- **Unset means `off`**: nothing is sent, and each skip is logged by reference.
+- **Internal** uses `allowlist`, so a test registration never messages a real
+  family.
+- **Production** uses `on`.
+- A value other than these three, or an allowlist number not in E.164 form,
+  stops the API starting.
+- `/health` shows the mode as `whatsapp_outbound`, never the numbers.
+
 ---
 
 ## 4. Three traps

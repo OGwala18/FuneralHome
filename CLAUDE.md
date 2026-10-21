@@ -96,6 +96,11 @@ and `db/keepalive.py` sidestep it by reading `DATABASE_URL` directly.
 WhatsApp as configured while sends are still falling back to the sandbox path. A
 green health check is not proof that the approved-template path is live.
 
+**Twilio credentials alone send nothing.** `WHATSAPP_OUTBOUND` decides who the
+line may message: `off` (the default when unset), `allowlist` (only
+`WHATSAPP_TEST_RECIPIENTS`) or `on`. Internal uses `allowlist`. Production must
+set `on`, or no family gets a confirmation. `/health` shows the mode.
+
 **The free Supabase tier has no automated backups.** There are 61 real members
 with ID numbers in that database. See the revision note in
 `docs/hosting-decision.md` — this is an accepted temporary risk, not a solved
