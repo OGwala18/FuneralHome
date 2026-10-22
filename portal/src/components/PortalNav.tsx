@@ -1,6 +1,7 @@
 import { useEffect, useState, type MouseEvent } from "react";
 import { fetchWhatsAppSummary, type StaffIdentity, type WhatsAppSummary } from "@/lib/api";
 import { hrefFor, navigate, type Route } from "@/lib/router";
+import logoOnDark from "@/assets/logo-on-dark.png";
 import { Button } from "./ui";
 
 /**
@@ -60,23 +61,6 @@ function useWhatsAppWaiting(): WhatsAppSummary | null {
   return summary;
 }
 
-const LeafMark = () => (
-  <svg
-    className="brand-mark"
-    width="30"
-    height="30"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.6"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <path d="M20 3C9 2 3 7 4 14s12 8 15-1c1-3 1-7 1-10zM4 21 16 7" />
-  </svg>
-);
-
 const SearchMark = () => (
   <svg
     width="20"
@@ -116,10 +100,9 @@ export default function PortalNav({
   return (
     <header className="portal-nav">
       <a className="brand" href="/" onClick={(e) => go(e, { name: "today" })}>
-        <LeafMark />
+        <img className="brand-logo" src={logoOnDark} alt="Induduzo Funeral Home" />
         <span className="brand-words">
-          <span className="brand-name">induduzo</span>
-          <span className="brand-sub">Funeral home · Staff portal</span>
+          <span className="brand-sub">Staff portal</span>
         </span>
       </a>
 
