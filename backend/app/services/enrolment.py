@@ -35,6 +35,14 @@ class NotFound(Exception):
     """The thing to act on does not exist. Maps to 404."""
 
 
+class Invalid(Exception):
+    """Well-formed, but not something the business sells. Maps to 422 on `field`."""
+
+    def __init__(self, field: str, message: str) -> None:
+        super().__init__(message)
+        self.field = field
+
+
 # ---------------------------------------------------------------------------
 # South African ID numbers
 # ---------------------------------------------------------------------------
@@ -64,23 +72,87 @@ def age_on(born: date | None, on: date) -> int | None:
     return on.year - born.year - ((on.month, on.day) < (born.month, born.day))
 
 
-def suggest_policy_number(conn: Any) -> str:
-    """The number after the highest AA-series policy, keeping its zero padding.
+POLICY_PREFIX = "IFH"
 
-    Archived policies count too, so a retired number is never handed out again.
+
+def suggest_policy_number(conn: Any) -> str:
+    """The next IFH (Induduzo Funeral Home) number, keeping the zero padding.
+
+    It counts on from the highest number in either series: the imported book is
+    numbered AA, and an IFH policy that shared its digits with an AA one would
+    make "policy 1332" mean two families. Archived policies count too, so a
+    retired number is never handed out again.
     """
     row = conn.execute(
         r"""
-        select policy_number from policies
-         where policy_number ~ '^AA[0-9]+$'
-         order by length(policy_number) desc, policy_number desc
-         limit 1
+        select max(digits::bigint) as top, max(length(digits)) as width
+          from (select substring(policy_number from '^(?:AA|IFH)([0-9]+)$') as digits
+                  from policies) numbered
+         where digits is not null
         """
     ).fetchone()
-    if row is None:
-        return "AA0001"
-    digits = row["policy_number"][2:]
-    return "AA" + str(int(digits) + 1).zfill(len(digits))
+    if row is None or row["top"] is None:
+        return POLICY_PREFIX + "0001"
+    return POLICY_PREFIX + str(row["top"] + 1).zfill(row["width"])
+
+
+# ---------------------------------------------------------------------------
+# Prices
+# ---------------------------------------------------------------------------
+
+def price_list(conn: Any) -> list[dict]:
+    return conn.execute(
+        """
+        select plan_code, option_code, option_label, min_age, max_age,
+               premium_cents, currency, billing
+          from ref_plan_prices
+         where is_active
+         order by sort_order, min_age nulls first
+        """
+    ).fetchall()
+
+
+def price(conn: Any, *, plan_code: str, plan_option: str | None, born: date | None,
+          on: date, frequency: str) -> tuple[int, str]:
+    """(premium per payment in cents, price option) from the price list.
+
+    The premium is never typed in: two families on the same plan, option and
+    age band pay the same. A monthly price is multiplied up for quarterly and
+    annual payment; a once-off plan must be paid once-off.
+    """
+    rows = [r for r in price_list(conn) if r["plan_code"] == plan_code]
+    if not rows:
+        raise Invalid("plan_code", "This plan has no price on record yet.")
+
+    options = list(dict.fromkeys(r["option_code"] for r in rows))
+    if plan_option is None and len(options) == 1:
+        plan_option = options[0]
+    if plan_option not in options:
+        raise Invalid("plan_option", "Choose which option of this plan the member is taking.")
+
+    bands = [r for r in rows if r["option_code"] == plan_option]
+    match = bands[0]
+    if any(r["min_age"] is not None or r["max_age"] is not None for r in bands):
+        age = age_on(born, on)
+        if age is None:
+            raise Invalid("date_of_birth",
+                          "This option is priced by age. Enter the ID number or date of birth.")
+        match = next((r for r in bands
+                      if (r["min_age"] is None or age >= r["min_age"])
+                      and (r["max_age"] is None or age <= r["max_age"])), None)
+        if match is None:
+            lowest = min(r["min_age"] for r in bands if r["min_age"] is not None)
+            highest = max(r["max_age"] for r in bands if r["max_age"] is not None)
+            raise Invalid("plan_option", f"{bands[0]['option_label']} is for ages {lowest} to "
+                                         f"{highest}. This member is {age} on the start date.")
+
+    if match["billing"] == "once_off":
+        if frequency != "once_off":
+            raise Invalid("frequency", "This plan is paid once-off.")
+        return match["premium_cents"], plan_option
+    if frequency == "once_off":
+        raise Invalid("frequency", "This plan is paid monthly, quarterly or annually.")
+    return match["premium_cents"] * instalments.STEP_MONTHS[frequency], plan_option
 
 
 # ---------------------------------------------------------------------------
@@ -109,16 +181,28 @@ def _identity(data: Any, today: date) -> dict:
     }
 
 
+# Asked of the main member only. A dependant's request has none of them.
+_COMPLIANCE = ("country_of_birth", "citizenship", "passport_number", "employment_status",
+               "employer_name", "industry", "occupation", "job_role", "source_of_funds",
+               "source_of_funds_other", "salary_day")
+
+
 def _insert_person(conn: Any, data: Any, identity: dict, *, email: str | None,
                    language: str, source: str) -> str:
     return str(conn.execute(
         """
         insert into people (surname, first_names, initials, id_number, id_number_raw,
                             id_number_status, date_of_birth, date_of_birth_source,
-                            gender, email, language_preference, source)
+                            gender, email, language_preference, source,
+                            country_of_birth, citizenship, passport_number,
+                            employment_status, employer_name, industry, occupation,
+                            job_role, source_of_funds, source_of_funds_other, salary_day)
         values (%(surname)s, %(first_names)s, %(initials)s, %(id_number)s, %(id_number)s,
                 %(id_number_status)s, %(date_of_birth)s, %(date_of_birth_source)s,
-                %(gender)s, %(email)s, %(language)s, %(source)s)
+                %(gender)s, %(email)s, %(language)s, %(source)s,
+                %(country_of_birth)s, %(citizenship)s, %(passport_number)s,
+                %(employment_status)s, %(employer_name)s, %(industry)s, %(occupation)s,
+                %(job_role)s, %(source_of_funds)s, %(source_of_funds_other)s, %(salary_day)s)
         returning id
         """,
         {
@@ -128,6 +212,7 @@ def _insert_person(conn: Any, data: Any, identity: dict, *, email: str | None,
             "email": email,
             "language": language,
             "source": source,
+            **{field: getattr(data, field, None) for field in _COMPLIANCE},
             **identity,
         },
     ).fetchone()["id"])
@@ -166,6 +251,9 @@ def _conflict_message(exc: pg_errors.UniqueViolation, data: Any) -> str:
     if constraint == "people_id_number_idx":
         return ("Someone with this ID number is already in the member book. "
                 "Search Members for them instead of enrolling them again.")
+    if constraint == "people_passport_idx":
+        return ("Someone with this passport number is already in the member book. "
+                "Search Members for them instead of enrolling them again.")
     if constraint == "policies_number_idx":
         return f"Policy number {data.policy_number} is already in use. Choose another."
     if constraint == "policy_members_unique_idx":
@@ -176,7 +264,8 @@ def _conflict_message(exc: pg_errors.UniqueViolation, data: Any) -> str:
 
 
 def enrol(conn: Any, data: Any, *, staff_email: str, today: date | None = None) -> dict:
-    """Create the person, policy, main member, payment arrangement and schedule."""
+    """Create the person, policy, main member, beneficiary, payment arrangement
+    and schedule."""
     today = today or date.today()
     entry_date = data.entry_date or today
 
@@ -197,6 +286,9 @@ def enrol(conn: Any, data: Any, *, staff_email: str, today: date | None = None) 
             raise Conflict("This enquiry has already been enrolled as a member.")
 
     identity = _identity(data, today)
+    premium_cents, plan_option = price(
+        conn, plan_code=data.plan_code, plan_option=data.plan_option,
+        born=identity["date_of_birth"], on=entry_date, frequency=data.frequency)
 
     try:
         person_id = _insert_person(conn, data, identity, email=data.email,
@@ -218,13 +310,13 @@ def enrol(conn: Any, data: Any, *, staff_email: str, today: date | None = None) 
         policy_id = str(conn.execute(
             """
             insert into policies (policy_number, policy_number_raw, status_code, plan_code,
-                                  branch_code, entry_date, premium_cents, cover_cents,
-                                  enquiry_id, source)
-            values (%s, %s, 'pending', %s, %s, %s, %s, %s, %s, 'portal')
+                                  plan_option, branch_code, entry_date, premium_cents,
+                                  cover_cents, enquiry_id, source)
+            values (%s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, 'portal')
             returning id
             """,
-            (data.policy_number, data.policy_number, data.plan_code, data.branch_code,
-             entry_date, data.premium_cents, data.cover_cents,
+            (data.policy_number, data.policy_number, data.plan_code, plan_option,
+             data.branch_code, entry_date, premium_cents, data.cover_cents,
              data.enquiry_id if enquiry else None),
         ).fetchone()["id"])
 
@@ -245,6 +337,8 @@ def enrol(conn: Any, data: Any, *, staff_email: str, today: date | None = None) 
         )
     except pg_errors.UniqueViolation as exc:
         raise Conflict(_conflict_message(exc, data)) from exc
+
+    add_dependant(conn, policy_id, data.beneficiary, staff_email=staff_email, today=today)
 
     scheduled = instalments.generate(conn, policy_id, today=today)
 
@@ -276,6 +370,7 @@ def enrol(conn: Any, data: Any, *, staff_email: str, today: date | None = None) 
         "person_id": person_id,
         "policy_id": policy_id,
         "policy_number": data.policy_number,
+        "premium_cents": premium_cents,
         "instalments_scheduled": scheduled,
     }
 

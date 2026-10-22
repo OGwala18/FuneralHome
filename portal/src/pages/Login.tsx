@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import logo from "@/assets/logo.png";
 import { Button } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
 
@@ -44,6 +45,7 @@ export default function Login() {
   return (
     <div className="login-wrap">
       <form className="card login-card" onSubmit={onSubmit}>
+        <img className="login-logo" src={logo} alt="Induduzo Funeral Home" />
         <h1>
           Induduzo <span style={{ color: "var(--gold)" }}>Staff Portal</span>
         </h1>

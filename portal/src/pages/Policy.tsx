@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import {
   ApiError, addDependant, fetchPolicy, type DependantType, type Instalment, type PolicyDetail,
 } from "@/lib/api";
+import { dayLabel } from "@/lib/compliance";
 import { formatDate, formatMoney, planLabel } from "@/lib/derive";
 import { navigate } from "@/lib/router";
 import PaymentForm, { PAYMENT_METHODS, today } from "@/components/PaymentForm";
@@ -28,6 +29,10 @@ const BLANK_DEPENDANT = {
 
 const methodLabel = (code: string) =>
   PAYMENT_METHODS.find((m) => m.value === code)?.label ?? code;
+
+const FREQUENCY_LABELS: Record<string, string> = {
+  monthly: "Monthly", quarterly: "Quarterly", annually: "Annually", once_off: "Once-off",
+};
 
 const instalmentBadge = (row: Instalment) => {
   if (row.status === "paid") return <Badge tone="success">Paid</Badge>;
@@ -261,8 +266,10 @@ export default function Policy({ id, canEdit, addLives }:
               <hr className="divider" />
               {policy.payment ? <>
                 <Fact label="Method">{methodLabel(policy.payment.method)}</Fact>
-                <Fact label="Debit day">{policy.payment.debit_day ?? "No fixed day"}</Fact>
-                <Fact label="Frequency">{policy.payment.frequency === "once_off" ? "Once-off" : "Monthly"}</Fact>
+                <Fact label="Debit day">{policy.payment.debit_day
+                  ? dayLabel(policy.payment.debit_day) : "No fixed day"}</Fact>
+                <Fact label="Frequency">{FREQUENCY_LABELS[policy.payment.frequency]
+                  ?? policy.payment.frequency}</Fact>
               </> : <p className="t-small muted" style={{ margin: 0 }}>No payment arrangement recorded.</p>}
             </div>
           </section>

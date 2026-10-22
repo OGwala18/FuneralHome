@@ -51,6 +51,51 @@ export const toCents = (typed: string): number | null => {
   return Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
 };
 
+/* ------------------------------------------------------ SA ID numbers --- */
+
+/** 13 digits with a valid Luhn check digit and a real month and day. */
+export const isValidSaId = (raw: string): boolean => {
+  const digits = raw.replace(/\s/g, "");
+  if (!/^[0-9]{13}$/.test(digits)) return false;
+  const month = Number(digits.slice(2, 4));
+  const day = Number(digits.slice(4, 6));
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  let sum = 0;
+  for (let i = 0; i < 12; i += 1) {
+    let digit = Number(digits[11 - i]);
+    if (i % 2 === 0) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+  }
+  return (10 - (sum % 10)) % 10 === Number(digits[12]);
+};
+
+/**
+ * Date of birth (YYYY-MM-DD) and gender read from a valid SA ID number, by the
+ * same rules as the API's decode_id: the century from today's date, and
+ * digits 7-10 of 5000 and above for male.
+ */
+export const decodeSaId = (raw: string): { dob: string; gender: "male" | "female" } | null => {
+  const digits = raw.replace(/\s/g, "");
+  if (!isValidSaId(digits)) return null;
+  const yy = Number(digits.slice(0, 2));
+  const year = 2000 + yy <= new Date().getFullYear() ? 2000 + yy : 1900 + yy;
+  return {
+    dob: `${year}-${digits.slice(2, 4)}-${digits.slice(4, 6)}`,
+    gender: Number(digits.slice(6, 10)) >= 5000 ? "male" : "female",
+  };
+};
+
+/** Whole years between a YYYY-MM-DD birth date and another date. */
+export const ageOn = (dob: string, on: string): number | null => {
+  const [by, bm, bd] = dob.split("-").map(Number);
+  const [y, m, d] = on.split("-").map(Number);
+  if (!by || !y) return null;
+  return y - by - (m < bm || (m === bm && d < bd) ? 1 : 0);
+};
+
 /* ----------------------------------------------------------------- Time --- */
 
 export const formatDate = (iso: string) => {
