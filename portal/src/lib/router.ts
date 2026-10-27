@@ -26,6 +26,8 @@ export type Route =
   | { name: "payments" }
   | { name: "applications" }
   | { name: "growth" }
+  /** Families who asked the WhatsApp menu for a person. Lives under Growth. */
+  | { name: "whatsapp"; id?: string }
   | { name: "settings" };
 
 const parse = (pathname: string, search: string): Route => {
@@ -50,6 +52,9 @@ const parse = (pathname: string, search: string): Route => {
     case "applications":
       return { name: "applications" };
     case "growth":
+      if (parts[1] === "whatsapp") {
+        return { name: "whatsapp", id: parts[2] ? decodeURIComponent(parts[2]) : undefined };
+      }
       return { name: "growth" };
     case "settings":
       return { name: "settings" };
@@ -76,6 +81,8 @@ export const hrefFor = (route: Route): string => {
     case "payments": return "/payments";
     case "applications": return "/applications";
     case "growth": return "/growth";
+    case "whatsapp":
+      return route.id ? `/growth/whatsapp/${encodeURIComponent(route.id)}` : "/growth/whatsapp";
     case "settings": return "/settings";
   }
 };

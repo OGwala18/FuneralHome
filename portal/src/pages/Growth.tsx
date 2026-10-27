@@ -1,7 +1,9 @@
-import { useMemo } from "react";
-import { byArea, byPlan, conversion, perDay, type Tally } from "@/lib/derive";
+import { useEffect, useMemo, useState } from "react";
+import { ApiError, fetchWhatsAppStats, type WhatsAppStats } from "@/lib/api";
+import { byArea, byPlan, conversion, formatDate, perDay, type Tally } from "@/lib/derive";
+import { hrefFor, navigate } from "@/lib/router";
 import { useEnquiries } from "@/lib/useEnquiries";
-import { Button, Empty, Notice, Skeleton } from "@/components/ui";
+import { Badge, Button, Empty, Notice, Skeleton } from "@/components/ui";
 
 /**
  * Where enquiries are coming from.
@@ -64,6 +66,8 @@ export default function Growth() {
           </p>
         </div>
       </div>
+
+      <WhatsAppCard />
 
       {error && (
         <div style={{ marginBottom: "var(--s16)" }}>
@@ -174,5 +178,119 @@ function BarCard({ title, rows, total }: { title: string; rows: Tally[]; total: 
         </div>
       )}
     </section>
+  );
+}
+
+/* ------------------------------------------------------------- WhatsApp --- */
+
+/**
+ * The WhatsApp line at a glance: who is waiting for a person, how much the
+ * menu is used, and what families ask about. Counts and topics only; the
+ * conversations themselves open on the WhatsApp screen, and only once a family
+ * has asked for a person.
+ */
+function WhatsAppCard() {
+  const [stats, setStats] = useState<WhatsAppStats | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchWhatsAppStats(30)
+      .then((next) => { if (!cancelled) setStats(next); })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof ApiError ? err.message : "Could not load WhatsApp.");
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const waiting = stats?.open_escalations ?? 0;
+
+  return (
+    <section className="card" style={{ marginBottom: "var(--s24)" }}>
+      <div className="card-head">
+        <h2 className="t-section">WhatsApp line</h2>
+        <a className={`btn btn-small${waiting > 0 ? " btn-primary" : ""}`}
+          href={hrefFor({ name: "whatsapp" })}
+          onClick={(e) => { e.preventDefault(); navigate({ name: "whatsapp" }); }}>
+          {waiting > 0 ? `${waiting} waiting for a person` : "Open WhatsApp"}
+        </a>
+      </div>
+
+      {error ? (
+        <p className="t-small muted" style={{ margin: 0 }}>{error}</p>
+      ) : !stats ? (
+        <Skeleton rows={3} />
+      ) : (
+        <div className="stack" style={{ gap: "var(--s20)" }}>
+          <div className="metrics">
+            <div>
+              <span className="t-micro">Families, last 30 days</span>
+              <div className="metric-value">{stats.conversations}</div>
+              <span className="t-small muted">{stats.messages_in} messages in</span>
+            </div>
+            <div>
+              <span className="t-micro">Asked for a person</span>
+              <div className="metric-value">{stats.escalations}</div>
+              <span className="t-small muted">
+                {stats.conversations > 0
+                  ? `${Math.round((stats.escalations / stats.conversations) * 100)}% of families; the menu answered the rest`
+                  : "The menu answers the rest"}
+              </span>
+            </div>
+            <div>
+              <span className="t-micro">Rating</span>
+              <div className="metric-value">
+                {stats.average_rating !== null ? `${stats.average_rating} / 5` : "\u2014"}
+              </div>
+              <span className="t-small muted">
+                {stats.ratings} {stats.ratings === 1 ? "rating" : "ratings"}
+              </span>
+            </div>
+          </div>
+
+          {(stats.top_answers.length > 0 || stats.escalated_topics.length > 0) && (
+            <div className="split split-even">
+              <TopicBars title="Answers families read most" rows={stats.top_answers} />
+              <TopicBars title="What they asked a person about" rows={stats.escalated_topics} />
+            </div>
+          )}
+
+          {stats.recent_feedback.some((f) => f.comment) && (
+            <div className="stack-8">
+              <span className="t-micro">What families said</span>
+              {stats.recent_feedback.filter((f) => f.comment).slice(0, 5).map((f, i) => (
+                <div className="row" key={i} style={{ gap: "var(--s8)", alignItems: "baseline" }}>
+                  {f.rating !== null && (
+                    <Badge tone={f.rating >= 4 ? "success" : f.rating <= 2 ? "overdue" : "neutral"}>
+                      {f.rating} / 5
+                    </Badge>
+                  )}
+                  <span>&ldquo;{f.comment}&rdquo;</span>
+                  <span className="t-small muted">{f.topic_label} &middot; {formatDate(f.created_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TopicBars({ title, rows }: { title: string; rows: { topic: string; label: string; count: number }[] }) {
+  const top = Math.max(1, ...rows.map((r) => r.count));
+  return (
+    <div className="stack-8">
+      <span className="t-micro">{title}</span>
+      {rows.length === 0 ? (
+        <span className="t-small muted">None in the last 30 days.</span>
+      ) : rows.map((row) => (
+        <div className="bar-row" key={row.topic}>
+          <span className="t-small">{row.label}</span>
+          <span className="bar"><i style={{ width: `${(row.count / top) * 100}%` }} /></span>
+          <span className="bar-count">{row.count}</span>
+        </div>
+      ))}
+    </div>
   );
 }

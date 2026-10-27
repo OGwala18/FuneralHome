@@ -391,3 +391,126 @@ export const changeStaffRole = (id: string, role: StaffRole) =>
 
 export const setStaffActive = (id: string, is_active: boolean) =>
   mutate<StaffMember>(`/api/admin/staff/${id}/active`, "PATCH", { is_active });
+
+/* ------------------------------------------------------------- WhatsApp --- */
+/* Only escalations: conversations where a family asked the WhatsApp menu for a
+   person. Everything else the menu answers on its own and never shows here. */
+
+export interface WhatsAppEscalation {
+  id: string;
+  status: "open" | "resolved";
+  channel: "whatsapp" | "call";
+  topic: string;
+  topic_label: string;
+  urgent: boolean;
+  out_of_hours: boolean;
+  promised_for: string | null;
+  requested_at: string;
+  notified_at: string | null;
+  first_reply_at: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  resolution_note: string | null;
+  name: string;
+  other_number: string;
+  profile_name: string | null;
+  enquiry_id: string | null;
+  enquiry_reference: string | null;
+  person_id: string | null;
+  member_name: string | null;
+  last_inbound_at: string | null;
+  /** Free text is allowed until 24 hours after the family last wrote. */
+  window_open: boolean;
+  /** Messages from the family since staff last wrote. */
+  unanswered: number;
+}
+
+export interface WhatsAppMessage {
+  id: string;
+  direction: "inbound" | "outbound";
+  /** "family", "menu", "system", or the staff member's email. */
+  author: string;
+  body: string | null;
+  media: { sid: string; content_type: string }[];
+  status: string;
+  error_code: string | null;
+  menu_node: string | null;
+  created_at: string;
+}
+
+export interface WhatsAppConversation extends WhatsAppEscalation {
+  messages: WhatsAppMessage[];
+}
+
+export interface WhatsAppSummary {
+  open: number;
+  urgent: number;
+  oldest_requested_at: string | null;
+}
+
+export interface WhatsAppTopicCount {
+  topic: string;
+  label: string;
+  count: number;
+}
+
+export interface WhatsAppStats {
+  days: number;
+  conversations: number;
+  messages_in: number;
+  escalations: number;
+  open_escalations: number;
+  ratings: number;
+  average_rating: number | null;
+  top_answers: WhatsAppTopicCount[];
+  escalated_topics: WhatsAppTopicCount[];
+  recent_feedback: { rating: number | null; comment: string | null; topic_label: string; created_at: string }[];
+}
+
+export const fetchWhatsAppSummary = () =>
+  request<WhatsAppSummary>("/api/admin/whatsapp/escalations/summary");
+
+export const fetchEscalations = (view: "open" | "resolved") =>
+  request<WhatsAppEscalation[]>("/api/admin/whatsapp/escalations", new URLSearchParams({ view }));
+
+export const fetchEscalation = (id: string) =>
+  request<WhatsAppConversation>(`/api/admin/whatsapp/escalations/${encodeURIComponent(id)}`);
+
+export const replyToEscalation = (id: string, body: string) =>
+  mutate<WhatsAppMessage>(`/api/admin/whatsapp/escalations/${encodeURIComponent(id)}/reply`,
+    "POST", { body });
+
+export const resolveEscalation = (id: string, body: { note?: string; ask_rating: boolean }) =>
+  mutate<WhatsAppEscalation>(`/api/admin/whatsapp/escalations/${encodeURIComponent(id)}/resolve`,
+    "POST", body);
+
+export const fetchWhatsAppStats = (days = 30) =>
+  request<WhatsAppStats>("/api/admin/whatsapp/stats", new URLSearchParams({ days: String(days) }));
+
+/** A photo or document a family sent. The API fetches it from Twilio, so the
+ *  browser never sees a Twilio address; an <img> can't send the staff token,
+ *  so it comes back as a Blob for an object URL. */
+export const fetchWhatsAppMedia = async (messageId: string, index: number): Promise<Blob> => {
+  const token = await getAccessToken();
+  if (!token) throw new ApiError("Your session has ended. Please sign in again.", 401);
+  let response: Response;
+  try {
+    response = await fetch(
+      `${API_BASE}/api/admin/whatsapp/messages/${encodeURIComponent(messageId)}/media/${index}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+  } catch {
+    throw new ApiError("Could not reach the server.", 0);
+  }
+  if (!response.ok) {
+    let detail = "Could not open the attachment.";
+    try {
+      const body = await response.json();
+      if (typeof body?.detail === "string") detail = body.detail;
+    } catch {
+      /* keep the generic message */
+    }
+    throw new ApiError(detail, response.status);
+  }
+  return response.blob();
+};
