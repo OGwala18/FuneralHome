@@ -17,6 +17,7 @@ import Enrol from "@/pages/Enrol";
 import Payments from "@/pages/Payments";
 import Applications from "@/pages/Applications";
 import Growth from "@/pages/Growth";
+import WhatsApp from "@/pages/WhatsApp";
 import Settings from "@/pages/Settings";
 
 /**
@@ -135,6 +136,7 @@ export default function App() {
         {route.name === "payments" && <Payments canEdit={canEdit} />}
         {route.name === "applications" && <Applications />}
         {route.name === "growth" && <Growth />}
+        {route.name === "whatsapp" && <WhatsApp id={route.id} canEdit={canEdit} />}
         {route.name === "settings" && <Settings me={me} />}
       </main>
     </>

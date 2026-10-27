@@ -88,6 +88,11 @@ class Settings:
     # the webhook signature check rebuilds it from this.
     public_api_url: str | None = (os.getenv("PUBLIC_API_URL") or "").strip().rstrip("/") or None
 
+    # The staff portal's address, e.g. https://portal-internal.up.railway.app.
+    # Optional: the WhatsApp escalation email links straight to the
+    # conversation when it is set.
+    portal_url: str | None = (os.getenv("PORTAL_URL") or "").strip().rstrip("/") or None
+
     # Admin notification email. Same rule as WhatsApp: absent in dev means the
     # message is logged rather than sent, and the enquiry still succeeds.
     smtp_host: str | None = os.getenv("SMTP_HOST")
