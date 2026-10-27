@@ -535,10 +535,11 @@ def test_the_conversation_shows_the_menu_steps_for_context(client, line, family,
     assert detail["messages"][0]["body"] == "hi"
 
 
-def test_a_viewer_cannot_reply_or_resolve(client, line, family, staff_as):
-    staff_as("admin")
+@pytest.mark.parametrize("role", ["viewer", "admin"])
+def test_only_an_owner_can_reply_or_resolve(client, line, family, staff_as, role):
+    staff_as("owner")
     escalation_id = _escalate(client, line, family)
-    staff_as("viewer")
+    staff_as(role)
 
     assert client.post(f"/api/admin/whatsapp/escalations/{escalation_id}/reply",
                        json={"body": "Hello"}).status_code == 403
@@ -547,13 +548,13 @@ def test_a_viewer_cannot_reply_or_resolve(client, line, family, staff_as):
 
 
 def test_staff_reply_from_the_line_and_are_recorded(client, line, family, staff_as, db):
-    admin = staff_as("admin")
+    owner = staff_as("owner")
     escalation_id = _escalate(client, line, family)
 
     response = client.post(f"/api/admin/whatsapp/escalations/{escalation_id}/reply",
                            json={"body": "Sawubona, this is the Induduzo office."})
     assert response.status_code == 200
-    assert response.json()["author"] == admin.email
+    assert response.json()["author"] == owner.email
 
     assert line.twilio.to(family)[-1] == "Sawubona, this is the Induduzo office."
     first_reply = db.execute("select first_reply_at from whatsapp_escalations where id = %s",
@@ -567,7 +568,7 @@ def test_staff_reply_from_the_line_and_are_recorded(client, line, family, staff_
 
 
 def test_a_reply_after_24_hours_is_refused(client, line, family, staff_as):
-    staff_as("admin")
+    staff_as("owner")
     escalation_id = _escalate(client, line, family)
     line.clock.advance(hours=25)
 
@@ -578,7 +579,7 @@ def test_a_reply_after_24_hours_is_refused(client, line, family, staff_as):
 
 
 def test_a_reply_the_allowlist_refuses_says_why(client, line, family, staff_as, db):
-    staff_as("admin")
+    staff_as("owner")
     escalation_id = _escalate(client, line, family)
     line.use(whatsapp_outbound="allowlist", whatsapp_test_recipients=frozenset())
 
@@ -589,7 +590,7 @@ def test_a_reply_the_allowlist_refuses_says_why(client, line, family, staff_as, 
 
 
 def test_resolving_asks_for_a_rating_and_stores_it(client, line, family, staff_as, db):
-    staff_as("admin")
+    staff_as("owner")
     escalation_id = _escalate(client, line, family)
 
     response = client.post(f"/api/admin/whatsapp/escalations/{escalation_id}/resolve",
@@ -612,7 +613,7 @@ def test_resolving_asks_for_a_rating_and_stores_it(client, line, family, staff_a
 
 
 def test_after_resolving_the_menu_takes_over_again(client, line, family, staff_as):
-    staff_as("admin")
+    staff_as("owner")
     escalation_id = _escalate(client, line, family)
     client.post(f"/api/admin/whatsapp/escalations/{escalation_id}/resolve",
                 json={"ask_rating": False})
@@ -684,7 +685,7 @@ def _phone_numbers_in(text: str) -> list[str]:
 
 
 def test_the_logs_carry_no_numbers_and_no_message_text(client, line, family, staff_as, caplog):
-    staff_as("admin")
+    staff_as("owner")
     with caplog.at_level(logging.INFO):
         walk(client, family, "hi", "2", "5", "2", "My secret question about Gogo")
         escalation_id = next(r["id"] for r in client.get("/api/admin/whatsapp/escalations").json()

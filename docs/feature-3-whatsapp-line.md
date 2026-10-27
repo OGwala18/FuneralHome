@@ -47,7 +47,8 @@ the real number (W8).
 | The menu | **Seven topics drawn from the questions and complaints a funeral home gets most**, so a family isn't forced to wait for a person. Each topic has sub-options with answers, and ends with "None of these" | Owner, 27 Oct 2026 |
 | When staff are involved | **Only when a family asks for a person** and picks WhatsApp or a call. Menu answers are never emailed or listed | Owner, 27 Oct 2026 |
 | The office email | One per escalation to admin@induduzo.co.za: *"Please respond to <name> using the system, or call them"*, with a link to the conversation. Bereavements are marked urgent | Owner, 27 Oct 2026 |
-| Staff replies | From the portal's WhatsApp screen under Growth, **only on an escalated conversation** | Owner, 27 Oct 2026 |
+| Staff replies | From the portal's WhatsApp screen under Growth, **only on an escalated conversation**, and **only by someone with the owner role** for now. Admins and viewers can read | Owner, 27 Oct 2026 |
+| Domains | **induduzo.co.za** is the public website; **induduzohome.co.za** becomes the staff portal at launch (so it is also the production passkey RP ID) | Owner, 27 Oct 2026 |
 | Office hours | **Mon–Fri 08:00–17:00, Sat 08:00–13:00** (South African time). Sundays and public holidays are closed. Asking for a person out of hours still works; the family is told when the office opens | Owner, 21 Oct 2026 |
 | Family details over WhatsApp | **Never ID numbers.** Any run of 13 or more digits is removed before storing, and Twilio's copy is deleted | Owner, 21 Oct 2026 |
 | Joining over WhatsApp | **Not in the menu.** "How to join" links to the website's registration, which already captures consent and sends the confirmation. The planned WhatsApp registration (old M3, M4) is dropped | 27 Oct 2026, following the owner's new menu design |
@@ -215,7 +216,7 @@ Office hours and public holidays are in the content file, not in settings.
 - **The office email:** subject *"Please respond: WhatsApp from <name>"*, or
   *"URGENT – someone has passed away"*, marked high priority. It carries the
   name and number, so it is never logged; the log line carries `WA-<id>`.
-- **Staff replies:** admin and owner only; only on an open escalation; only
+- **Staff replies:** owner role only, for now; only on an open escalation; only
   within 24 hours of the family's last message. Outside that, WhatsApp allows
   only approved templates, so the portal says to phone instead.
 - **Resolving** closes the escalation and, if the window is open and staff tick

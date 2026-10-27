@@ -46,6 +46,8 @@ All ten in `ARCHITECTURE.md` §7 apply. The ones most often broken in practice:
 | Premium schedule | One row per expected payment (`premium_instalments`), generated forward only; overdue is derived, never stored | 14 Oct 2026 |
 | New policy numbers | Suggest the next AA number; staff may change it; duplicates refused | 14 Oct 2026 |
 | Who can enrol, add dependants, record payments | `admin` and `owner`. `viewer` reads only | 14 Oct 2026 |
+| Who can reply to or send WhatsApps from the portal | `owner` only, for now. Others read escalations | 27 Oct 2026 |
+| Domains | `induduzo.co.za` is the public site; `induduzohome.co.za` is the staff portal at launch (and the production passkey RP ID) | 27 Oct 2026 |
 
 ## Things that will bite you
 
