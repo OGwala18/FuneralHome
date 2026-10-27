@@ -138,14 +138,19 @@ backend/
     │   ├── enquiries.py       The two funnel endpoints (public)
     │   ├── admin.py           Staff: enquiries, who am I, staff management
     │   ├── members.py         Staff: the member book, enrolment, dependants
-    │   └── payments.py        Staff: premiums overdue / due, record a payment
+    │   ├── payments.py        Staff: premiums overdue / due, record a payment
+    │   └── whatsapp.py        Twilio's signed webhooks, and the staff WhatsApp screen
     ├── services/
-    │   ├── email.py           Office notification (both stages)
-    │   ├── whatsapp.py        Applicant confirmation (Twilio)
+    │   ├── email.py           Office notification (both stages, WhatsApp escalations)
+    │   ├── whatsapp.py        Twilio sends: confirmation, menu and staff replies
+    │   ├── whatsapp_content.py  ★ Every word the WhatsApp menu says, and office hours
+    │   ├── whatsapp_menu.py   The menu engine. Pure: state + message in, reply out
+    │   ├── whatsapp_line.py   Stores messages, runs the menu, opens escalations
     │   ├── enrolment.py       Enquiry -> person, policy, lives. One transaction.
     │   └── instalments.py     The premium schedule: generate, pay, waive
     └── jobs/
-        └── schedule_instalments.py  Roll every live schedule forward. Idempotent.
+        ├── schedule_instalments.py  Roll every live schedule forward. Idempotent.
+        └── whatsapp_backfill.py     Re-send failed escalation emails; store missed messages.
 ```
 
 ### Endpoints
@@ -155,6 +160,8 @@ backend/
 | `GET` | `/health` | Liveness + a real database round-trip. **503** when the database is down |
 | `POST` | `/api/enquiries` | **Stage 1.** Creates the lead, emails the office |
 | `PATCH` | `/api/enquiries/{id}/application` | **Stage 2.** Promotes to full application |
+| `POST` | `/api/whatsapp/inbound` | Twilio: a family's WhatsApp message. Signature-checked; stored, answered by the menu |
+| `POST` | `/api/whatsapp/status` | Twilio: sent, delivered, read or failed. Signature-checked |
 
 Staff routes all sit under `/api/admin`, behind `require_staff`; every write
 also needs `require_role("admin")`. The ones that touch the book of business:
@@ -169,6 +176,11 @@ also needs `require_role("admin")`. The ones that touch the book of business:
 | `POST` | `/api/admin/policies/{id}/members` | Add a spouse, child, extended family member or beneficiary |
 | `GET` | `/api/admin/instalments?view=overdue\|upcoming` | Premiums owed, from `instalments_outstanding` |
 | `POST` | `/api/admin/instalments/{id}/payment`, `/waive` | Record a premium paid (the first one activates the policy) or waived |
+| `GET` | `/api/admin/whatsapp/escalations`, `/escalations/{id}` | WhatsApp families who asked for a person, and one conversation |
+| `GET` | `/api/admin/whatsapp/escalations/summary` | Counts for the nav badge. Not audited: it is polled |
+| `POST` | `/api/admin/whatsapp/escalations/{id}/reply`, `/resolve` | Reply from the line's number (open, within 24 h), or close it |
+| `GET` | `/api/admin/whatsapp/messages/{id}/media/{n}` | A photo a family sent, fetched from Twilio. Escalated conversations only |
+| `GET` | `/api/admin/whatsapp/stats` | Growth: usage, topics and ratings. No numbers |
 
 Interactive docs run at `/docs` in development.
 
@@ -189,7 +201,7 @@ portal/
     ├── index.css              Plain CSS; no Tailwind toolchain to maintain.
     │                          Holds the design tokens. See docs/DESIGN.md.
     ├── components/
-    │   ├── PortalNav.tsx      The one navigation, shared by every signed-in page.
+    │   ├── PortalNav.tsx      The one navigation. Growth shows how many WhatsApp families wait.
     │   ├── PaymentForm.tsx    Record or waive one instalment. No bank fields, ever.
     │   └── ui.tsx             Button, Badge, Field, Select, Notice, Fact, Skeleton, Empty.
     ├── lib/
@@ -210,7 +222,8 @@ portal/
         ├── Policy.tsx         Lives covered, add dependants, the premium schedule.
         ├── Payments.tsx       Overdue, and due in the next 7 days.
         ├── Applications.tsx   Enquiries that reached stage 'application'.
-        ├── Growth.tsx         Counts derived from the loaded enquiries.
+        ├── Growth.tsx         Counts derived from the loaded enquiries, and the WhatsApp line.
+        ├── WhatsApp.tsx       /growth/whatsapp: families who asked for a person; reply, resolve.
         ├── Settings.tsx       Your account, plus team and access for owners.
         └── Staff.tsx          Staff table and invite form. Owners only.
 ```
@@ -331,7 +344,12 @@ db/
 │   ├── 0010_policies.sql
 │   ├── 0011_data_quality_and_enquiry_link.sql
 │   ├── 0012_foreign_key_indexes.sql
-│   └── 0013_enrolment_and_premium_schedule.sql
+│   ├── 0013_enrolment_and_premium_schedule.sql
+│   ├── 0014_close_data_api_to_signed_in_accounts.sql
+│   ├── 0015_business_phone_numbers.sql
+│   ├── 0016_staff_two_step_sign_in.sql
+│   ├── 0017_whatsapp_line_moves_to_073.sql
+│   └── 0018_whatsapp_conversations.sql
 ├── seed/                      Import tooling. Scripts tracked, their data is NOT.
 │   ├── import_policy_template.py       spreadsheet  → SQL
 │   ├── export_phone_capture_sheet.sql  database     → blank capture sheet
@@ -406,6 +424,19 @@ between environments needs no id remapping: `ref_member_types`,
 - **`instalments_outstanding`** — every due row on a live policy with the main
   member and primary phone, and `days_overdue`. The Payments screen reads it;
   the reminder job will too.
+
+*The WhatsApp line (0018)* — docs/feature-3-whatsapp-line.md.
+
+- **`whatsapp_conversations`** — one row per family number: where it is in the
+  automatic menu, and the enquiry or member the number matched.
+- **`whatsapp_messages`** — every message both ways, the registration
+  confirmation included. Keyed by Twilio's MessageSid, so a webhook delivered
+  twice is stored once. Any run of 13 or more digits (an ID or card number) is
+  removed before a row is written, and Twilio's copy is deleted.
+- **`whatsapp_escalations`** — a family asked for a person. **The only WhatsApp
+  conversations the office is emailed about or shown.** One open per
+  conversation.
+- **`whatsapp_feedback`** — 1-5 ratings and the comments that came with them.
 
 `plan_enquiries.person_id` is the seam between the two halves: null until a
 lead has been matched to a person.
