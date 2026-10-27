@@ -314,7 +314,7 @@ td a:hover, .fact a:hover, .card a:not(.btn):hover { text-decoration-thickness: 
 }
 .field input::placeholder { color: var(--subtle); }
 .field-hint { min-height: 20px; font: 400 14px/20px var(--sans); color: var(--muted); }
-.field-error input, .field-error select { border-color: var(--red); border-width: 2px; }
+.field-error input, .field-error select, .field-error textarea { border-color: var(--red); border-width: 2px; }
 .field-error .field-hint { color: var(--red); }
 
 /* A form section: as many fields per row as fit, never narrower than 220px. */
@@ -406,6 +406,57 @@ tbody tr.clickable:hover { background: var(--paper); }
 .column { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
 .column > i { display: block; background: var(--navy); border-radius: 3px 3px 0 0; min-height: 2px; }
 
+/* ------------------------------------------------------------- WhatsApp -- */
+/* The count of families waiting for a person, on Growth in the nav. Gold, or
+   red when someone has passed away; the number always carries the meaning. */
+.nav-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  margin-left: var(--s8);
+  border-radius: var(--r-pill);
+  background: var(--gold);
+  color: var(--navy);
+  font: 600 13px/1 var(--sans);
+}
+.nav-badge-urgent { background: var(--red); color: var(--white); }
+
+.split-even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+
+/* Queue on the left, the conversation beside it, as on Today. */
+.inbox { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: var(--s24); align-items: start; }
+
+.transcript {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s8);
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: var(--s16);
+  background: var(--paper);
+  border-radius: var(--r12);
+}
+.bubble {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  max-width: 78%;
+  padding: var(--s8) var(--s12);
+  border-radius: var(--r12);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 400 15px/22px var(--sans);
+}
+.bubble-family { align-self: flex-start; background: var(--white); border: 1px solid var(--line); }
+.bubble-staff  { align-self: flex-end; background: var(--navy); color: var(--white); }
+/* The menu's own messages are context, not conversation: quieter, folded. */
+.bubble-menu   { align-self: flex-end; background: var(--soft); color: var(--muted); font-size: 14px; }
+.bubble-menu summary { cursor: pointer; }
+.bubble-meta { font: 400 12px/16px var(--sans); opacity: 0.8; }
+.bubble-image { max-width: 260px; border-radius: var(--r8); }
+
 /* --------------------------------------------------------------- States --- */
 .notice {
   display: flex;
@@ -472,6 +523,7 @@ tbody tr.clickable:hover { background: var(--paper); }
 /* Structural, not fluid type: the layout collapses, the scale does not shrink. */
 @media (max-width: 1100px) {
   .split { grid-template-columns: minmax(0, 1fr); }
+  .inbox { grid-template-columns: minmax(0, 1fr); }
   .nav-search { width: 200px; }
 }
 

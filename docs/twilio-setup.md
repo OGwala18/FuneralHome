@@ -63,14 +63,16 @@ sender registration will fail with an error that does not explain itself.
 ### Replies to the WhatsApp line
 
 073 731 0521 is a Twilio WhatsApp sender, so it is an API line, not a phone.
-A family that replies to a confirmation, or messages the number directly, reaches
-Twilio, and nothing in this system reads those messages yet. They are not lost
-in Twilio, but nobody sees them.
+A family that replies to a confirmation, or messages the number directly,
+reaches Twilio. The API now answers them with an automatic menu and hands over
+to staff when they ask for a person: see `docs/feature-3-whatsapp-line.md`.
+
+That only works once the sender's webhooks point at the API (that document's
+§9): incoming messages to `/api/whatsapp/inbound`, and status callbacks to
+`/api/whatsapp/status`. Until then, messages reach Twilio and nobody sees them.
 
 Today the website's "WhatsApp us" button goes to 079 751 0648, which staff
-answer in the WhatsApp app. Before it points at the Twilio line, replies need
-somewhere to go. For example, an inbound handler could forward each message to
-the office email.
+answer in the WhatsApp app. It moves to 073 731 0521 once the line is proven.
 
 ---
 
