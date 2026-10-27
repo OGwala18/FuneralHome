@@ -339,7 +339,7 @@ function Conversation({
 
       {open && !canEdit && (
         <p className="t-small muted" style={{ margin: 0 }}>
-          Viewers can read conversations. Replying and resolving need an admin.
+          You can read conversations. For now, only an owner can reply or resolve.
         </p>
       )}
     </div>

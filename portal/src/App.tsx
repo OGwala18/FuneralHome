@@ -136,7 +136,8 @@ export default function App() {
         {route.name === "payments" && <Payments canEdit={canEdit} />}
         {route.name === "applications" && <Applications />}
         {route.name === "growth" && <Growth />}
-        {route.name === "whatsapp" && <WhatsApp id={route.id} canEdit={canEdit} />}
+        {/* Only an owner sends from the WhatsApp line, for now. The API enforces it. */}
+        {route.name === "whatsapp" && <WhatsApp id={route.id} canEdit={me.role === "owner"} />}
         {route.name === "settings" && <Settings me={me} />}
       </main>
     </>

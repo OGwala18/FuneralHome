@@ -9,6 +9,10 @@ docs/feature-3-whatsapp-line.md. Two routers:
 - `admin_router`, /api/admin/whatsapp: the portal's WhatsApp screen under
   Growth. It lists only escalations, the conversations where a family asked
   for a person; everything else the menu handles stays out of sight.
+
+Only an owner may send from the line: replying, and resolving (which can ask
+the family for a rating). Decided by the owner on 27 Oct 2026, for now. Admins
+and viewers read.
 """
 
 from __future__ import annotations
@@ -315,7 +319,7 @@ _REFUSALS = {
 
 @admin_router.post("/escalations/{escalation_id}/reply", response_model=MessageRow)
 def reply(escalation_id: UUID, payload: ReplyIn,
-          staff: StaffUser = Depends(require_role("admin"))) -> MessageRow:
+          staff: StaffUser = Depends(require_role("owner"))) -> MessageRow:
     """Write to the family from the line's own number. Only on an open
     escalation, and only within 24 hours of their last message."""
     with connection() as conn:
@@ -364,7 +368,7 @@ def reply(escalation_id: UUID, payload: ReplyIn,
 
 @admin_router.post("/escalations/{escalation_id}/resolve", response_model=EscalationRow)
 def resolve(escalation_id: UUID, payload: ResolveIn, background: BackgroundTasks,
-            staff: StaffUser = Depends(require_role("admin"))) -> EscalationRow:
+            staff: StaffUser = Depends(require_role("owner"))) -> EscalationRow:
     with connection() as conn:
         row = _load(conn, escalation_id)
         if row["status"] != "open":
