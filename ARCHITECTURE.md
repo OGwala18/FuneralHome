@@ -100,6 +100,7 @@ frontend/
     │   └── testimonials.json  Testimonials
     │
     └── lib/
+        ├── analytics.ts       Plausible visitor counts and click events (live site only)
         ├── contact.ts         ★ Phone numbers, email, socials. Change them ONLY here.
         ├── i18n.ts            English / isiZulu strings
         ├── location.ts        ★ Office address, map link and embed URL
@@ -118,6 +119,7 @@ frontend/
 | Page text / translations | `src/lib/i18n.ts` |
 | Add a page | Create in `src/pages/`, then register the route in `src/App.tsx` |
 | Registration form fields | `src/pages/Register.tsx` (stage 1) or `RegisterDetails.tsx` (stage 2) — **and** the API schema and a DB migration |
+| What is counted in Plausible | `src/lib/analytics.ts`. Call, WhatsApp, email and outside-link clicks are counted automatically; never put a name, number or form value in an event |
 
 ---
 
