@@ -11,7 +11,8 @@ from ..db import connection, log_event
 from ..ratelimit import application_limiter, enforce, lead_limiter
 from ..schemas import ApplicationIn, EnquiryOut, LeadIn
 from ..services.email import send_completed_application, send_new_lead
-from ..services.whatsapp import send_registration_confirmation
+from ..services.whatsapp import _plain_body, send_registration_confirmation
+from ..services.whatsapp_line import record_confirmation
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/enquiries", tags=["enquiries"])
@@ -224,3 +225,11 @@ def _send_confirmation(enquiry_id: str, mobile: str, first_name: str, reference:
             )
     except Exception:  # noqa: BLE001
         logger.exception("Could not record WhatsApp outcome for %s", reference)
+    # Also in the line's own record, so the conversation shows it if the
+    # family replies. Separate, so a problem here can't undo the record above.
+    try:
+        with connection() as conn:
+            record_confirmation(conn, enquiry_id=enquiry_id, to_number=mobile,
+                                body=_plain_body(first_name, reference), result=result)
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not store the WhatsApp confirmation for %s", reference)

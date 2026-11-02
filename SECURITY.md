@@ -66,12 +66,12 @@ It currently lists localhost. Set it to `https://induduzo.co.za`. It is already
 an explicit allowlist rather than `*`, which was the important half; this is
 just the deployment value.
 
-### Set `ENVIRONMENT=production`
+### Set `ENVIRONMENT` on every deployment
 
-This is not cosmetic. It is what disables `/docs`, `/redoc` and
-`/openapi.json`, and what turns on HSTS. Verified: with it set, all three doc
-routes return `404` and `Strict-Transport-Security` appears; without it, `/docs`
-returns `200`.
+Any value other than `development` or `test` (so `internal` or `production`)
+disables `/docs`, `/redoc` and `/openapi.json` and turns on HSTS. An internal
+copy on a public Railway address is still public, so it is locked down too.
+Leaving `ENVIRONMENT` unset falls back to `development` and exposes the docs.
 
 ### Set a real `API_DB_PASSWORD`
 
@@ -116,6 +116,10 @@ These are enforced in code and must stay true.
    subject on failure.
 7. **`VITE_*` variables are public** — they are compiled into browser
    JavaScript. Never put a secret in one.
+8. **Supabase's Data API serves nothing.** No table or view grants anything to
+   Supabase's `authenticated` role (migration 0014), and public sign-up is off.
+   The publishable key in the portal bundle is public, so any grant to a
+   signed-in role is a way around the API's staff, role and 2FA checks.
 
 ---
 

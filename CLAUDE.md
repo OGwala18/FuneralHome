@@ -42,12 +42,34 @@ All ten in `ARCHITECTURE.md` §7 apply. The ones most often broken in practice:
 | Consent gating a review request | **`contact_consent`** | 14 Sep 2026 |
 | Scheduler | None yet. Jobs are built as idempotent commands; a clock gets wired at deploy | 14 Sep 2026 |
 | Payments | Delegated to a provider. Never collected or stored here | — |
+| Member book access | Through the API's own `induduzo_api` login, one database, one transaction per enrolment. Not via Supabase's Data API | 14 Oct 2026 |
+| Premium schedule | One row per expected payment (`premium_instalments`), generated forward only; overdue is derived, never stored | 14 Oct 2026 |
+| New policy numbers | Suggest the next AA number; staff may change it; duplicates refused | 14 Oct 2026 |
+| Who can enrol, add dependants, record payments | `admin` and `owner`. `viewer` reads only | 14 Oct 2026 |
+| Who can reply to or send WhatsApps from the portal | `owner` only, for now. Others read escalations | 27 Oct 2026 |
+| Domains | `induduzo.co.za` is the public site; `induduzohome.co.za` is the staff portal at launch (and the production passkey RP ID) | 27 Oct 2026 |
+| Public identity | Name **Induduzo Funeral Home** everywhere (not "Induduzo Care" or "Induduzo Funeral Consultants"); founded **1998**; Instagram `@induduzofuneralhome`; no Facebook page yet. One Google Business Profile per branch: Edendale (verified), 161 Boshoff St Shop 35 (claimed, main phone 033 342 2111), 171 Langalibalele St (created) | 2 Nov 2026 |
 
 ## Things that will bite you
 
-**Migration numbering.** `0001`–`0012` exist. `docs/feature-1-review-loop.md`
-says its new tables go in "migration 0008" — that number is taken. It must be
-**0013**.
+**Migration numbering.** `0001`–`0018` exist. `docs/feature-1-review-loop.md`
+says its new tables go in "migration 0008". That number is taken, and so are
+0013 (enrolment and the premium schedule), 0014 (closing the Data API), 0015
+(the business's own phone numbers), 0016 (staff two-step sign-in), 0017 (the
+WhatsApp line moving to 073 731 0521) and 0018 (WhatsApp conversations and
+escalations). It must be **0019**, or the next free number when it is built.
+
+**Supabase's Data API is closed, and must stay closed.** Since 0014, no table
+or view grants anything to Supabase's `authenticated` role, and public sign-up
+is off in the Supabase dashboard (16 Oct 2026). Every read and write goes
+through the API, which checks the staff list and the role. Never add a policy
+or grant `to authenticated`: anyone with a Supabase login could then read the
+book directly, around every check the API makes.
+
+**The local portal shows the local member book.** Member reads and writes go
+through the API's own database. On a laptop that is Docker, with test data, not
+the 61 real members in Supabase. Never point a local API at production to "see
+the real ones": enrolment and the test suite write rows.
 
 **Supabase tracks migrations separately.** `0008`–`0012` were applied through
 Supabase's own migration system, so `public.schema_migrations` (what
@@ -60,7 +82,14 @@ python db/migrate.py --baseline 0012_foreign_key_indexes.sql
 
 `0005` and `0007` are **not** applied to Supabase — there is no `induduzo_api`
 role and no `staff_users` table there. Every migration from `0008` guards its
-grants with a `pg_roles` check for exactly this reason.
+grants with a `pg_roles` check for exactly this reason. `0013` is not applied
+there either. `0014` (16 Oct 2026) and `0015` (19 Oct 2026) were applied through
+Supabase's own system. `0014` is safe to run again; `0015` creates a table, so
+baseline past it rather than re-running it there. `0016` needs `staff_users`, so
+it cannot run there yet. `0017` only updates the `0015` table and is safe to run
+twice, but Supabase still lists 069 706 0387 until it is applied there. `0018`
+(WhatsApp conversations) is for the API's own database, like `0013`; it is not
+applied to Supabase.
 
 **`config.py` is a stdlib dataclass, not pydantic-settings.** Its fields resolve
 `os.getenv(...)` **once, at import time**. Any new entrypoint must call
@@ -71,6 +100,11 @@ and `db/keepalive.py` sidestep it by reading `DATABASE_URL` directly.
 **`whatsapp_enabled` excludes `TWILIO_CONTENT_SID`.** `/health` will report
 WhatsApp as configured while sends are still falling back to the sandbox path. A
 green health check is not proof that the approved-template path is live.
+
+**Twilio credentials alone send nothing.** `WHATSAPP_OUTBOUND` decides who the
+line may message: `off` (the default when unset), `allowlist` (only
+`WHATSAPP_TEST_RECIPIENTS`) or `on`. Internal uses `allowlist`. Production must
+set `on`, or no family gets a confirmation. `/health` shows the mode.
 
 **The free Supabase tier has no automated backups.** There are 61 real members
 with ID numbers in that database. See the revision note in
@@ -94,9 +128,17 @@ gitignored, and must stay that way.
 cd frontend && npm run lint && npm run typecheck && npm run build
 ```
 
-CI runs those plus `npm audit --audit-level=high`, and `pip-audit --requirement
-requirements.txt --strict` in `backend/`. All must pass. **There are no tests in
-this repo** — CI is the only safety net.
+CI runs those plus `npm audit --omit=dev --audit-level=high` (blocking; the full
+audit also runs but only reports, because Tailwind 3's build tooling carries an
+unpatched `braces` advisory until a Tailwind 4 migration), `pip-audit
+--requirement requirements.txt --strict` in `backend/`, the API behaviour checks in
+`backend/tests/`, and a build of `Dockerfile.backend`. All must pass.
+
+The behaviour checks need a **throwaway** Postgres, connected as `induduzo_api`
+(see `ARCHITECTURE.md` §9). They write test enquiries, so never point them at
+Supabase or Railway. They cover the funnel, `/health` and the staff gate. They
+do not cover the portal or the member-book routes beyond refusing anonymous
+callers.
 
 Branch promotion is always `feature -> Dev -> internal -> main`. `main` deploys
 the live public site.

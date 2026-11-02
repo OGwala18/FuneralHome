@@ -126,6 +126,53 @@ export function Field({
   );
 }
 
+/* --------------------------------------------------------------- Select --- */
+
+/** Field's twin for a fixed list of choices: same label, same reserved hint line. */
+export function Select({
+  label,
+  value,
+  onChange,
+  options,
+  hint,
+  error,
+  id,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  hint?: string;
+  error?: string;
+  id?: string;
+}) {
+  const fieldId = id ?? `field-${++fieldSeq}`;
+  const hintId = `${fieldId}-hint`;
+  const message = error ?? hint ?? "";
+
+  return (
+    <div className={`field${error ? " field-error" : ""}`}>
+      <label htmlFor={fieldId}>{label}</label>
+      <select
+        id={fieldId}
+        value={value}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={message ? hintId : undefined}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <span className="field-hint" id={hintId} role={error ? "alert" : undefined}>
+        {message}
+      </span>
+    </div>
+  );
+}
+
 /* --------------------------------------------------------------- Notice --- */
 
 export function Notice({

@@ -81,18 +81,24 @@ def _present(value: object) -> str:
 
 
 def _build_message(
-    *, subject: str, heading: str, intro: str, rows: list[tuple[str, str]], reference: str
+    *, subject: str, heading: str, intro: str, rows: list[tuple[str, str]], reference: str,
+    sender_name: str = "Induduzo website", footer: str = "sent automatically by the Induduzo website.",
+    urgent: bool = False,
 ) -> EmailMessage:
     settings = get_settings()
 
     message = EmailMessage()
     message["Subject"] = subject
-    message["From"] = formataddr(("Induduzo website", settings.mail_from))
+    message["From"] = formataddr((sender_name, settings.mail_from))
     message["To"] = settings.mail_to
     message["Date"] = formatdate(localtime=True)
     message["Message-ID"] = make_msgid(domain="induduzo.co.za")
     # Lets the office thread stage 1 and stage 2 of the same enquiry together.
     message["X-Induduzo-Reference"] = reference
+    if urgent:
+        # Most mail programs show these as a red exclamation mark.
+        message["X-Priority"] = "1"
+        message["Importance"] = "high"
 
     plain_lines = [heading, "", intro, ""]
     plain_lines += ["%-26s %s" % (label + ":", value) for label, value in rows]
@@ -115,9 +121,10 @@ def _build_message(
         '<p style="color:#526170;margin:0 0 18px">%s</p>'
         '<table style="border-collapse:collapse;font-size:14px">%s</table>'
         '<p style="color:#526170;font-size:12px;margin-top:22px">'
-        "Reference %s &middot; sent automatically by the Induduzo website."
+        "Reference %s &middot; %s"
         "</p></body></html>"
-        % (html.escape(heading), html.escape(intro), escaped, html.escape(reference)),
+        % (html.escape(heading), html.escape(intro), escaped, html.escape(reference),
+           html.escape(footer)),
         subtype="html",
     )
     return message
@@ -198,5 +205,69 @@ def send_completed_application(enquiry: dict) -> EmailResult:
             intro="This person finished the full application and accepted the plan terms.",
             rows=rows,
             reference=reference,
+        )
+    )
+
+
+def send_whatsapp_escalation(escalation: dict, name: str) -> EmailResult:
+    """A family on WhatsApp asked for a person. The only WhatsApp email the
+    office gets: menu answers are never emailed (docs/feature-3-whatsapp-line.md).
+
+    `escalation` is services/whatsapp_line.escalation_details(). The subject
+    carries the family's name, so it is never logged; the reference is the
+    escalation id's first eight characters.
+    """
+    from datetime import timedelta, timezone
+
+    settings = get_settings()
+    reference = "WA-" + str(escalation["id"])[:8].upper()
+    sast = timezone(timedelta(hours=2))
+    number = escalation["other_number"]
+    how = ("Reply to them on WhatsApp from the staff portal"
+           if escalation["channel"] == "whatsapp" else "Phone them")
+
+    link = ""
+    if settings.portal_url:
+        link = "%s/growth/whatsapp/%s" % (settings.portal_url, escalation["id"])
+
+    rows = [
+        ("Name", name),
+        ("WhatsApp number", number),
+        ("They asked for", "A WhatsApp reply" if escalation["channel"] == "whatsapp"
+         else "A phone call"),
+        ("About", escalation["topic_label"]),
+        ("Asked at", escalation["requested_at"].astimezone(sast).strftime("%a %d %b %Y, %H:%M")),
+    ]
+    if escalation.get("out_of_hours") and escalation.get("promised_for"):
+        rows.append(("Promised for", escalation["promised_for"].astimezone(sast)
+                     .strftime("%a %d %b, %H:%M") + " (asked out of hours)"))
+    if escalation.get("enquiry_reference"):
+        rows.append(("Enquiry", escalation["enquiry_reference"]))
+    if escalation.get("member_name"):
+        rows.append(("Member", escalation["member_name"]))
+    if link:
+        rows.append(("Open in the portal", link))
+
+    urgent = bool(escalation.get("urgent"))
+    subject = ("URGENT – someone has passed away. WhatsApp from %s" % name if urgent
+               else "Please respond: WhatsApp from %s" % name)
+    intro = (
+        "Please respond to %s (%s) using the staff portal, or call them. %s." % (name, number, how)
+    )
+    if urgent:
+        intro += " They told the WhatsApp menu that someone has passed away."
+
+    return _send(
+        _build_message(
+            subject=subject,
+            heading="Someone has passed away: please phone now" if urgent
+            else "A family asked to speak to a person",
+            intro=intro,
+            rows=rows,
+            reference=reference,
+            sender_name="Induduzo WhatsApp",
+            footer="sent by the Induduzo WhatsApp line. Menu answers are never emailed, "
+                   "only requests for a person.",
+            urgent=urgent,
         )
     )

@@ -10,7 +10,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -20,7 +20,7 @@ load_dotenv()
 from .config import get_settings  # noqa: E402  (must follow load_dotenv)
 from .db import close_pool, connection, init_pool  # noqa: E402
 from .observability import init_sentry  # noqa: E402
-from .routers import admin, enquiries  # noqa: E402
+from .routers import admin, enquiries, members, payments, whatsapp  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -41,18 +41,22 @@ async def lifespan(_: FastAPI):
 
 settings = get_settings()
 
-_is_production = settings.environment.lower() == "production"
+# Every deployed environment (internal, production) is locked down. Only a
+# developer's own machine and the test suite get the interactive docs and go
+# without HSTS. An internal copy on a public Railway address is still public.
+_LOCAL_ENVIRONMENTS = {"development", "test"}
+_is_deployed = settings.environment.lower() not in _LOCAL_ENVIRONMENTS
 
 app = FastAPI(
     title="Induduzo Funeral Home API",
     version="0.1.0",
     description="Two-stage plan registration capture.",
     lifespan=lifespan,
-    # In production the interactive docs are an inventory of every endpoint and
-    # the full request schema. Useful locally, free reconnaissance in public.
-    docs_url=None if _is_production else "/docs",
-    redoc_url=None if _is_production else "/redoc",
-    openapi_url=None if _is_production else "/openapi.json",
+    # Deployed, the interactive docs are an inventory of every endpoint and the
+    # full request schema. Useful locally, free reconnaissance in public.
+    docs_url=None if _is_deployed else "/docs",
+    redoc_url=None if _is_deployed else "/redoc",
+    openapi_url=None if _is_deployed else "/openapi.json",
 )
 
 app.add_middleware(
@@ -84,14 +88,18 @@ async def security_headers(request: Request, call_next):
     # An API serves no documents and needs no browser features.
     response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    if _is_production:
-        # Only in production: sending HSTS over plain HTTP in dev would pin
+    if _is_deployed:
+        # Only when deployed: sending HSTS over plain HTTP in dev would pin
         # localhost to HTTPS in the browser and break the dev server.
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
 app.include_router(enquiries.router)
 app.include_router(admin.router)
+app.include_router(members.router)
+app.include_router(payments.router)
+app.include_router(whatsapp.router)
+app.include_router(whatsapp.admin_router)
 
 
 @app.exception_handler(RequestValidationError)
@@ -117,8 +125,13 @@ async def validation_handler(_: Request, exc: RequestValidationError) -> JSONRes
 
 
 @app.get("/health", tags=["ops"])
-def health() -> dict:
-    """Liveness plus a real database round-trip."""
+def health(response: Response) -> dict:
+    """Liveness plus a real database round-trip.
+
+    503 when the database is unreachable. Railway's deploy check and any uptime
+    monitor treat every 2xx as healthy, so a 200 here would route traffic to an
+    instance that cannot save a single registration.
+    """
     database_ok = True
     try:
         with connection() as conn:
@@ -127,11 +140,19 @@ def health() -> dict:
         logger.exception("Health check: database unreachable")
         database_ok = False
 
+    if not database_ok:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
     return {
         "status": "ok" if database_ok else "degraded",
         "environment": settings.environment,
         "database": "up" if database_ok else "down",
         "whatsapp": "configured" if settings.whatsapp_enabled else "not_configured",
+        # Who it may send to: off, allowlist or on. Never the numbers.
+        "whatsapp_outbound": settings.whatsapp_outbound,
+        # Twilio's webhooks are checked against the public address. Without it
+        # they only verify when the API is called on its own address.
+        "whatsapp_webhooks": "configured" if settings.public_api_url else "not_configured",
         "email": "configured" if settings.email_enabled else "not_configured",
         "staff_portal": "configured" if settings.staff_portal_enabled else "not_configured",
         "error_tracking": "enabled" if _sentry_enabled else "disabled",
