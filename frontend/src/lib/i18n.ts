@@ -14,7 +14,7 @@ export const translations = {
     
     // Hero
     hero_title: "Dignified care when it matters most",
-    hero_subtitle: "Serving Pietermaritzburg and the KZN Midlands with compassion since the 1980s",
+    hero_subtitle: "Serving Pietermaritzburg and the KZN Midlands with compassion since 1998",
     cta_call: "Call 24/7",
     cta_services: "View Services",
     cta_join: "Join a Plan",
@@ -48,14 +48,14 @@ export const translations = {
     // About
     about_title: "About Induduzo Funeral Home",
     about_intro: "Induduzo Funeral Home is an established and reliable South African funeral services provider that offers affordable, client-centric policies and dignified burial solutions.",
-    about_since: "Partnering with families at their time of need since the 1980s",
+    about_since: "Partnering with families at their time of need since 1998",
     our_vision: "Our Vision",
     vision_text: "We give you a dignified last journey",
     our_mission: "Our Mission",
     mission_text: "To be the most preferred funeral service provider",
     our_values: "Our Values",
     story_title: "Our Story & Vision",
-    story_text: "Induduzo Care was founded to serve families with dignity, respect, and cultural understanding. Our vision lives in daily actions, from careful planning to the warmth we extend to every family we meet.",
+    story_text: "Induduzo Funeral Home was founded to serve families with dignity, respect, and cultural understanding. Our vision lives in daily actions, from careful planning to the warmth we extend to every family we meet.",
     founder_link_prefix: "Learn more about our founder's journey on the",
     founder_link: "Founder page",
     value_customer: "Customer First",
@@ -159,7 +159,7 @@ export const translations = {
     
     // Hero
     hero_title: "Ukunakekelwa ngenhlonipho lapho kudingeka khona kakhulu",
-    hero_subtitle: "Sikhonza ePietermaritzburg nase-KZN Midlands ngomusa kusukela eminyakeni yawo-1980",
+    hero_subtitle: "Sikhonza ePietermaritzburg nase-KZN Midlands ngomusa kusukela ngo-1998",
     cta_call: "Shayela 24/7",
     cta_services: "Buka Izinsizakalo",
     cta_join: "Joyina Uhlelo",
@@ -193,14 +193,14 @@ export const translations = {
     // About
     about_title: "Mayelana Ne-Induduzo Funeral Home",
     about_intro: "I-Induduzo Funeral Home ingumhlinzeki wezinsizakalo zomngcwabo waseNingizimu Afrika osethembekile futhi onikeza izinqubomgomo ezingabizi futhi ezibhekiswe kumakhasimende kanye nezixazululo zokungcwaba ezinesihlonipho.",
-    about_since: "Sibambisene nemindeni ngesikhathi yedinga kusukela eminyakeni yawo-1980",
+    about_since: "Sibambisene nemindeni ngesikhathi yedinga kusukela ngo-1998",
     our_vision: "Umbono Wethu",
     vision_text: "Sininika uhambo lokugcina olunesihlonipho",
     our_mission: "Umsebenzi Wethu",
     mission_text: "Ukuba ngumhlinzeki wezinsizakalo zomngcwabo othandwa kakhulu",
     our_values: "Izimiso Zethu",
     story_title: "Indaba Nombono Wethu",
-    story_text: "I-Induduzo Care yasungulwa ukuze isize imindeni ngesithunzi, ngenhlonipho nangokuqonda amasiko. Umbono wethu ubonakala ezenzweni zansuku zonke, kusukela ekuhleleni ngokucophelela kuya emfudumalo esiyinikeza yonke imindeni esihlangana nayo.",
+    story_text: "I-Induduzo Funeral Home yasungulwa ukuze isize imindeni ngesithunzi, ngenhlonipho nangokuqonda amasiko. Umbono wethu ubonakala ezenzweni zansuku zonke, kusukela ekuhleleni ngokucophelela kuya emfudumalo esiyinikeza yonke imindeni esihlangana nayo.",
     founder_link_prefix: "Funda kabanzi ngohambo lomsunguli wethu ekhasini elithi",
     founder_link: "Umsunguli",
     value_customer: "Ikhasimende Lokuqala",

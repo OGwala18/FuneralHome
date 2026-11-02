@@ -46,6 +46,5 @@ export const CONTACT_EMAIL_LINK = `mailto:${CONTACT_EMAIL}`;
  * A blank URL means "we have the icon but not the page yet" — call sites render
  * the icon without a link rather than sending a visitor nowhere.
  */
-export const INSTAGRAM_URL =
-  "https://www.instagram.com/induduzofuneralhome?stkn=dzl3dGkzOXI5dnBv";
+export const INSTAGRAM_URL = "https://www.instagram.com/induduzofuneralhome/";
 export const FACEBOOK_URL = "";
