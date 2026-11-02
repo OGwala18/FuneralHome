@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Field, StepIndicator } from "@/components/form/Field";
 import { CheckCircle2, Loader2, MessageCircle, Phone, ShieldCheck } from "lucide-react";
 import { CONTACT_PHONE_LINK, WHATSAPP_URL } from "@/lib/contact";
+import { trackEvent } from "@/lib/analytics";
 import { PLANS } from "@/data/plans";
 import {
   RegistrationError,
@@ -206,6 +207,7 @@ export default function RegisterDetails() {
     try {
       const result = await submitApplication(handle.id, payload);
       clearEnquiry();
+      trackEvent("Application sent", { plan: form.plan_selected || "unsure" });
       setDone(result);
       window.scrollTo({ top: 0 });
     } catch (error) {
