@@ -48,6 +48,7 @@ All ten in `ARCHITECTURE.md` §7 apply. The ones most often broken in practice:
 | Who can enrol, add dependants, record payments | `admin` and `owner`. `viewer` reads only | 14 Oct 2026 |
 | Who can reply to or send WhatsApps from the portal | `owner` only, for now. Others read escalations | 27 Oct 2026 |
 | Domains | `induduzo.co.za` is the public site; `induduzohome.co.za` is the staff portal at launch (and the production passkey RP ID) | 27 Oct 2026 |
+| Public identity | Name **Induduzo Funeral Home** everywhere (not "Induduzo Care" or "Induduzo Funeral Consultants"); founded **1998**; Instagram `@induduzofuneralhome`; no Facebook page yet. One Google Business Profile per branch: Edendale (verified), 161 Boshoff St Shop 35 (claimed, main phone 033 342 2111), 171 Langalibalele St (created) | 2 Nov 2026 |
 
 ## Things that will bite you
 
