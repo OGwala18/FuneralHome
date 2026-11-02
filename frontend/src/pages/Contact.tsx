@@ -9,6 +9,7 @@ import { Phone, Mail, MapPin, MessageCircle } from "lucide-react";
 import { OfficeMap } from "@/components/OfficeMap";
 import { OFFICE_ADDRESS_LINES, OFFICE_MAP_LINK } from "@/lib/location";
 import { CONTACT_EMAIL, CONTACT_EMAIL_LINK, CONTACT_PHONES } from "@/lib/contact";
+import { trackEvent } from "@/lib/analytics";
 
 export default function Contact() {
   const { language, t } = useLanguage();
@@ -42,6 +43,7 @@ export default function Contact() {
       ].join("\n"),
     );
 
+    trackEvent("Contact form");
     window.location.href = `${CONTACT_EMAIL_LINK}?subject=${subject}&body=${body}`;
   };
 

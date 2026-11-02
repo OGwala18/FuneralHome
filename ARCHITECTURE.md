@@ -45,10 +45,12 @@ FuneralHome/
 ├── docs/                      Business and operational documents
 │
 ├── docker-compose.yml         Local Postgres + Adminer + pgAdmin
+├── Dockerfile.backend         The API image Railway deploys
+├── .dockerignore              Deny-by-default: what may reach that image
 ├── start.ps1 / induduzo.cmd   One-command start/stop for the whole stack
 ├── netlify.toml               Production hosting config + security headers
 ├── .env.example               Infrastructure settings template
-└── .github/workflows/         CI: lint, typecheck, build, audit
+└── .github/workflows/         CI: lint, typecheck, build, audit, API checks
 ```
 
 **Rule:** the repo root holds only entry points and configuration. Business
@@ -98,6 +100,7 @@ frontend/
     │   └── testimonials.json  Testimonials
     │
     └── lib/
+        ├── analytics.ts       Plausible visitor counts and click events (live site only)
         ├── contact.ts         ★ Phone numbers, email, socials. Change them ONLY here.
         ├── i18n.ts            English / isiZulu strings
         ├── location.ts        ★ Office address, map link and embed URL
@@ -116,6 +119,7 @@ frontend/
 | Page text / translations | `src/lib/i18n.ts` |
 | Add a page | Create in `src/pages/`, then register the route in `src/App.tsx` |
 | Registration form fields | `src/pages/Register.tsx` (stage 1) or `RegisterDetails.tsx` (stage 2) — **and** the API schema and a DB migration |
+| What is counted in Plausible | `src/lib/analytics.ts`. Call, WhatsApp, email and outside-link clicks are counted automatically; never put a name, number or form value in an event |
 
 ---
 
@@ -124,26 +128,61 @@ frontend/
 ```
 backend/
 ├── requirements.txt           Pinned dependencies
+├── requirements-dev.txt       Test-only dependencies (pytest, httpx)
 ├── .env.example               Settings template (copy to .env)
+├── tests/                     Behaviour checks, run against a real Postgres
 └── app/
     ├── main.py                App setup, CORS, /health, error shaping
     ├── config.py              ★ ALL settings read from environment. No secrets in code.
     ├── db.py                  Connection pool + append-only event logging
     ├── schemas.py             ★ Request validation. The security boundary.
     ├── routers/
-    │   └── enquiries.py       The two funnel endpoints
-    └── services/
-        ├── email.py           Office notification (both stages)
-        └── whatsapp.py        Applicant confirmation (Twilio)
+    │   ├── enquiries.py       The two funnel endpoints (public)
+    │   ├── admin.py           Staff: enquiries, who am I, staff management
+    │   ├── members.py         Staff: the member book, enrolment, dependants
+    │   ├── payments.py        Staff: premiums overdue / due, record a payment
+    │   └── whatsapp.py        Twilio's signed webhooks, and the staff WhatsApp screen
+    ├── services/
+    │   ├── email.py           Office notification (both stages, WhatsApp escalations)
+    │   ├── whatsapp.py        Twilio sends: confirmation, menu and staff replies
+    │   ├── whatsapp_content.py  ★ Every word the WhatsApp menu says, and office hours
+    │   ├── whatsapp_menu.py   The menu engine. Pure: state + message in, reply out
+    │   ├── whatsapp_line.py   Stores messages, runs the menu, opens escalations
+    │   ├── enrolment.py       Enquiry -> person, policy, lives. One transaction.
+    │   └── instalments.py     The premium schedule: generate, pay, waive
+    └── jobs/
+        ├── schedule_instalments.py  Roll every live schedule forward. Idempotent.
+        └── whatsapp_backfill.py     Re-send failed escalation emails; store missed messages.
 ```
 
 ### Endpoints
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/health` | Liveness + a real database round-trip |
+| `GET` | `/health` | Liveness + a real database round-trip. **503** when the database is down |
 | `POST` | `/api/enquiries` | **Stage 1.** Creates the lead, emails the office |
 | `PATCH` | `/api/enquiries/{id}/application` | **Stage 2.** Promotes to full application |
+| `POST` | `/api/whatsapp/inbound` | Twilio: a family's WhatsApp message. Signature-checked; stored, answered by the menu |
+| `POST` | `/api/whatsapp/status` | Twilio: sent, delivered, read or failed. Signature-checked |
+
+Staff routes all sit under `/api/admin`, behind `require_staff`; every write
+also needs `require_role("admin")`. The ones that touch the book of business:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/admin/enquiries/{id}` | One enquiry in full, for its page and for pre-filling an enrolment |
+| `GET` | `/api/admin/members`, `/members/{id}` | The member book |
+| `POST` | `/api/admin/members` | **Enrol.** Person, policy, main member, payment arrangement, 12 instalments; links the enquiry |
+| `GET` | `/api/admin/policies`, `/policies/{id}` | Policies; one policy with its lives and schedule |
+| `GET` | `/api/admin/policies/next-number` | The next free AA number, as a suggestion |
+| `POST` | `/api/admin/policies/{id}/members` | Add a spouse, child, extended family member or beneficiary |
+| `GET` | `/api/admin/instalments?view=overdue\|upcoming` | Premiums owed, from `instalments_outstanding` |
+| `POST` | `/api/admin/instalments/{id}/payment`, `/waive` | Record a premium paid (the first one activates the policy) or waived |
+| `GET` | `/api/admin/whatsapp/escalations`, `/escalations/{id}` | WhatsApp families who asked for a person, and one conversation |
+| `GET` | `/api/admin/whatsapp/escalations/summary` | Counts for the nav badge. Not audited: it is polled |
+| `POST` | `/api/admin/whatsapp/escalations/{id}/reply`, `/resolve` | Reply from the line's number (open, within 24 h), or close it |
+| `GET` | `/api/admin/whatsapp/messages/{id}/media/{n}` | A photo a family sent, fetched from Twilio. Escalated conversations only |
+| `GET` | `/api/admin/whatsapp/stats` | Growth: usage, topics and ratings. No numbers |
 
 Interactive docs run at `/docs` in development.
 
@@ -164,8 +203,9 @@ portal/
     ├── index.css              Plain CSS; no Tailwind toolchain to maintain.
     │                          Holds the design tokens. See docs/DESIGN.md.
     ├── components/
-    │   ├── PortalNav.tsx      The one navigation. Five destinations.
-    │   └── ui.tsx             Button, Badge, Field, Notice, Fact, Skeleton, Empty.
+    │   ├── PortalNav.tsx      The one navigation. Growth shows how many WhatsApp families wait.
+    │   ├── PaymentForm.tsx    Record or waive one instalment. No bank fields, ever.
+    │   └── ui.tsx             Button, Badge, Field, Select, Notice, Fact, Skeleton, Empty.
     ├── lib/
     │   ├── supabase.ts        Auth client. AUTHENTICATION ONLY, no data.
     │   ├── api.ts             Calls our API with the staff token attached.
@@ -176,9 +216,16 @@ portal/
         ├── Login.tsx          Email + password. No sign-up link, deliberately.
         ├── Today.tsx          Call desk: prioritised queue and the next person.
         ├── People.tsx         Searchable, sortable, paginated directory.
-        ├── Person.tsx         One family's record.
+        ├── Person.tsx         One enquiry. "Add as member" starts enrolment from it.
+        ├── Members.tsx        The member book. "New member" for walk-ins.
+        ├── Member.tsx         One person and the policies they are on.
+        ├── Enrol.tsx          Enrol a main member, pre-filled from an enquiry.
+        ├── Policies.tsx       Every policy.
+        ├── Policy.tsx         Lives covered, add dependants, the premium schedule.
+        ├── Payments.tsx       Overdue, and due in the next 7 days.
         ├── Applications.tsx   Enquiries that reached stage 'application'.
-        ├── Growth.tsx         Counts derived from the loaded enquiries.
+        ├── Growth.tsx         Counts derived from the loaded enquiries, and the WhatsApp line.
+        ├── WhatsApp.tsx       /growth/whatsapp: families who asked for a person; reply, resolve.
         ├── Settings.tsx       Your account, plus team and access for owners.
         └── Staff.tsx          Staff table and invite form. Owners only.
 ```
@@ -194,7 +241,6 @@ them and a control that silently does nothing is worse than no control:
 | Recording a call outcome | `POST /api/admin/enquiries/{id}/outcome` |
 | Editing an enquiry | An update route on the admin router |
 | Call history on a record | `enquiry_events` exposed through the admin API |
-| Fetching one person directly | `GET /api/admin/enquiries/{id}`. Person.tsx currently finds its row inside a page of the list endpoint. |
 | Office details, integrations | Nothing in the schema or API supports them |
 
 Growth counts what it loaded and says so on screen, rather than presenting a
@@ -223,20 +269,31 @@ Employee ─▶ Portal ─▶ Supabase Auth        (issues a signed ES256 token)
                                   STAFF_EMAILS ──▶ Postgres
 ```
 
-Supabase stores no client data. It only proves who someone is. Client records
-stay in our own Postgres.
+Supabase Auth proves who someone is; it holds no say over what they may do.
+Enquiries, staff, and the member and policy book all live in **one database**,
+reached only by the API through its restricted `induduzo_api` login. So a role
+check happens before any row is read or written, an enrolment is a single
+transaction, and the links between an enquiry and the policy it became are real
+foreign keys. The API records each read and write in `staff_events`.
+
+Locally that database is Docker's, holding test data, so the portal on a laptop
+shows the local book, not the real one. Which database production uses
+(Supabase, where the imported 61 members are today, or Railway Postgres) is
+chosen at deploy; see `docs/railway-backend-deployment.md`.
 
 **Two gates, because one is not enough.** A valid Supabase token only proves
 somebody signed up somewhere; it does not prove they work here. So the API
 additionally looks the person up in `staff_users` and requires an active row.
-Public sign-up should also be turned off in the Supabase dashboard.
+Public sign-up is turned off in the Supabase dashboard (16 Oct 2026). Since
+migration 0014, Supabase's own Data API serves no table to a signed-in account,
+so the API is the only way to the data. Never add a policy `to authenticated`.
 
 ### Roles
 
 | Role | May do |
 |---|---|
-| `viewer` | View enquiries |
-| `admin` | View and edit enquiries |
+| `viewer` | View enquiries, members and policies |
+| `admin` | View enquiries, members and policies; manage permitted staff tasks |
 | `owner` | Everything, plus add staff and change roles |
 
 Roles live in **our** `staff_users` table, not in Supabase user metadata, so a
@@ -273,6 +330,9 @@ key we never hold; we verify with the public key from its JWKS endpoint.
 
 ```
 db/
+├── migrate.py                 Applies pending migrations to any Postgres
+├── provision_api_role.py      Production: migrate, then let induduzo_api log in
+├── keepalive.py               Stops the free Supabase project pausing
 ├── migrations/                ★ THE SCHEMA SOURCE OF TRUTH. Applied in filename order.
 │   ├── 0001_extensions_and_roles.sql
 │   ├── 0002_enums.sql
@@ -285,7 +345,13 @@ db/
 │   ├── 0009_people_and_contacts.sql
 │   ├── 0010_policies.sql
 │   ├── 0011_data_quality_and_enquiry_link.sql
-│   └── 0012_foreign_key_indexes.sql
+│   ├── 0012_foreign_key_indexes.sql
+│   ├── 0013_enrolment_and_premium_schedule.sql
+│   ├── 0014_close_data_api_to_signed_in_accounts.sql
+│   ├── 0015_business_phone_numbers.sql
+│   ├── 0016_staff_two_step_sign_in.sql
+│   ├── 0017_whatsapp_line_moves_to_073.sql
+│   └── 0018_whatsapp_conversations.sql
 ├── seed/                      Import tooling. Scripts tracked, their data is NOT.
 │   ├── import_policy_template.py       spreadsheet  → SQL
 │   ├── export_phone_capture_sheet.sql  database     → blank capture sheet
@@ -345,6 +411,35 @@ between environments needs no id remapping: `ref_member_types`,
 - **`policy_overview`** — a `security_invoker` view with the main member and
   their primary phone already joined, so screens do not each rewrite that join.
 
+*Premiums (0013)* —
+
+- **`premium_instalments`** — one row per expected payment: due date, amount
+  in cents, `due | paid | waived | cancelled`, and the office's record of the
+  payment (date, amount, method, who recorded it). Generated twelve months
+  ahead, **forward only**: it never back-fills arrears for an imported policy
+  with no payment history. Unique on `(policy_id, due_date)`, so generating
+  twice is harmless. **Overdue is never stored**; it is a due row whose date
+  has passed. No bank or card fields, by the same rule as `policy_payments`.
+- **`payment_reminders`** — what was sent about an instalment, unique per
+  `(instalment, kind)` once sent, so a family is reminded once. Empty until
+  WhatsApp reminders are approved (they need their own Utility template).
+- **`instalments_outstanding`** — every due row on a live policy with the main
+  member and primary phone, and `days_overdue`. The Payments screen reads it;
+  the reminder job will too.
+
+*The WhatsApp line (0018)* — docs/feature-3-whatsapp-line.md.
+
+- **`whatsapp_conversations`** — one row per family number: where it is in the
+  automatic menu, and the enquiry or member the number matched.
+- **`whatsapp_messages`** — every message both ways, the registration
+  confirmation included. Keyed by Twilio's MessageSid, so a webhook delivered
+  twice is stored once. Any run of 13 or more digits (an ID or card number) is
+  removed before a row is written, and Twilio's copy is deleted.
+- **`whatsapp_escalations`** — a family asked for a person. **The only WhatsApp
+  conversations the office is emailed about or shown.** One open per
+  conversation.
+- **`whatsapp_feedback`** — 1-5 ratings and the comments that came with them.
+
 `plan_enquiries.person_id` is the seam between the two halves: null until a
 lead has been matched to a person.
 
@@ -360,7 +455,9 @@ from scratch.
 > — or it will try to re-run everything and fail on the first `create type`.
 > Note that 0005 and 0007 have **not** been applied to Supabase: there is no
 > `induduzo_api` role and no `staff_users` table there yet. Every migration from
-> 0008 on guards its grants with a `pg_roles` check for exactly this reason.
+> 0008 on guards its grants with a `pg_roles` check for exactly this reason, and
+> 0013 re-asserts the API role's grants on every 0008–0012 table, so once 0005
+> lands on Supabase a single run of 0013 brings the role level.
 
 ---
 
@@ -447,7 +544,19 @@ npm run build
 ```
 
 All three must exit `0`. CI (`.github/workflows/quality-checks.yml`) runs the
-same, plus `npm audit`.
+same, plus `npm audit`, `pip-audit`, the backend behaviour checks and an image
+build.
+
+If you touched `backend/` or `db/`, run the behaviour checks against a
+throwaway database, connected as `induduzo_api` the way production connects:
+
+```powershell
+cd backend
+$env:DATABASE_URL = "postgresql://induduzo_api:<password>@localhost:<port>/<db>"
+.venv\Scripts\python.exe -m pytest
+```
+
+Never point them at Supabase or Railway: they write test enquiries.
 
 If you touched the schema, also confirm a clean rebuild works:
 

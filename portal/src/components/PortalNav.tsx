@@ -1,22 +1,62 @@
-import type { MouseEvent } from "react";
-import type { StaffIdentity } from "@/lib/api";
+import { useEffect, useState, type MouseEvent } from "react";
+import { fetchWhatsAppSummary, type StaffIdentity, type WhatsAppSummary } from "@/lib/api";
 import { hrefFor, navigate, type Route } from "@/lib/router";
 import { Button } from "./ui";
 
 /**
- * The portal's one navigation. Four destinations plus Settings, which is the
- * whole application (Hick: the choice is small enough to read at a glance).
+ * The portal's one navigation, shared by all signed-in screens.
  *
  * Rendered on every signed-in screen so the frame never moves between pages.
  */
 
 const DESTINATIONS: { label: string; route: Route }[] = [
   { label: "Today", route: { name: "today" } },
-  { label: "People", route: { name: "people" } },
+  { label: "Members", route: { name: "members" } },
+  { label: "Policies", route: { name: "policies" } },
+  { label: "Payments", route: { name: "payments" } },
+  { label: "Enquiries", route: { name: "people" } },
   { label: "Applications", route: { name: "applications" } },
   { label: "Growth", route: { name: "growth" } },
   { label: "Settings", route: { name: "settings" } },
 ];
+
+/** A detail page lights up the list it belongs to. */
+const PARENT: Partial<Record<Route["name"], Route["name"]>> = {
+  member: "members",
+  enrol: "members",
+  person: "people",
+  policy: "policies",
+  whatsapp: "growth",
+};
+
+// How often the nav asks whether a WhatsApp family is waiting for a person.
+const WHATSAPP_POLL_MS = 60_000;
+
+/** Families waiting for a person on WhatsApp. Counts only, so polling it
+ *  writes nothing to the audit trail. A failure just hides the badge. */
+function useWhatsAppWaiting(): WhatsAppSummary | null {
+  const [summary, setSummary] = useState<WhatsAppSummary | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      if (document.visibilityState === "hidden") return;
+      fetchWhatsAppSummary()
+        .then((next) => { if (!cancelled) setSummary(next); })
+        .catch(() => { if (!cancelled) setSummary(null); });
+    };
+    load();
+    const timer = window.setInterval(load, WHATSAPP_POLL_MS);
+    document.addEventListener("visibilitychange", load);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", load);
+    };
+  }, []);
+
+  return summary;
+}
 
 const LeafMark = () => (
   <svg
@@ -69,6 +109,7 @@ export default function PortalNav({
   onSignOut: () => void;
 }) {
   const initials = me.email.slice(0, 2).toUpperCase();
+  const waiting = useWhatsAppWaiting();
 
   return (
     <header className="portal-nav">
@@ -86,23 +127,32 @@ export default function PortalNav({
             key={label}
             className="nav-link"
             href={hrefFor(route)}
-            aria-current={active === route.name ? "page" : undefined}
+            aria-current={active === route.name || PARENT[active] === route.name ? "page" : undefined}
             onClick={(e) => go(e, route)}
           >
             {label}
+            {route.name === "growth" && waiting && waiting.open > 0 && (
+              <span
+                className={`nav-badge${waiting.urgent > 0 ? " nav-badge-urgent" : ""}`}
+                aria-label={`${waiting.open} WhatsApp ${waiting.open === 1 ? "family" : "families"} waiting for a person`}
+                title="WhatsApp: families waiting for a person"
+              >
+                {waiting.open}
+              </span>
+            )}
           </a>
         ))}
       </nav>
 
-      {/* Search lives in People. Sending it there rather than duplicating a
+      {/* Search lives in Members. Sending it there rather than duplicating a
           second search box keeps one way to do the job. */}
       <a
         className="nav-search"
-        href={hrefFor({ name: "people" })}
-        onClick={(e) => go(e, { name: "people" })}
+        href={hrefFor({ name: "members" })}
+        onClick={(e) => go(e, { name: "members" })}
       >
         <SearchMark />
-        <span>Find a person or number</span>
+        <span>Find a member</span>
       </a>
 
       <div className="nav-me">

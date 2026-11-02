@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import date
 from typing import Annotated, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -132,7 +134,7 @@ def list_enquiries(
             params,
         ).fetchall()
 
-    logger.info("Staff listing served to %s (%d rows)", staff.email, len(rows))
+    logger.info("Enquiry list served to staff %s (%d rows)", staff.staff_id, len(rows))
 
     return EnquiryPage(
         rows=[
@@ -156,6 +158,60 @@ def list_enquiries(
         total=total,
         limit=limit,
         offset=offset,
+    )
+
+
+class EnquiryDetail(EnquiryRow):
+    """One enquiry in full, for its own page and for pre-filling an enrolment.
+
+    Wider than EnquiryRow on purpose: enrolling someone needs their ID number,
+    address and payment preference. Fetching it is audited.
+    """
+
+    province: str | None
+    language_preference: str
+    id_number: str | None
+    date_of_birth: date | None
+    address_line1: str | None
+    address_line2: str | None
+    postal_code: str | None
+    premium_amount_cents: int | None
+    payment_frequency: str | None
+    payment_preference: str | None
+    number_of_dependants: int | None
+    beneficiary_name: str | None
+    beneficiary_relationship: str | None
+    # Set once the enquiry has been enrolled as a member.
+    person_id: str | None
+
+
+@router.get("/enquiries/{enquiry_id}", response_model=EnquiryDetail)
+def get_enquiry(enquiry_id: UUID, staff: StaffUser = Depends(require_staff)) -> EnquiryDetail:
+    with connection() as conn:
+        row = conn.execute(
+            """
+            select id, reference, stage::text as stage, status::text as status,
+                   first_name, surname, mobile_number, email, city, suburb_or_town, province,
+                   language_preference::text as language_preference,
+                   plan_interest::text as plan_interest, plan_selected::text as plan_selected,
+                   id_number, date_of_birth, address_line1, address_line2, postal_code,
+                   premium_amount_cents, payment_frequency::text as payment_frequency,
+                   payment_preference::text as payment_preference, number_of_dependants,
+                   beneficiary_name, beneficiary_relationship, person_id, created_at
+              from plan_enquiries
+             where id = %s and archived_at is null
+            """,
+            (enquiry_id,),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such enquiry.")
+        # The reference identifies the record without repeating personal data.
+        log_staff_event(conn, staff.email, "enquiry_viewed", row["reference"])
+
+    return EnquiryDetail(
+        **{**row, "id": str(row["id"]),
+           "person_id": str(row["person_id"]) if row["person_id"] else None,
+           "created_at": row["created_at"].isoformat()},
     )
 
 
@@ -189,6 +245,13 @@ class StaffMember(BaseModel):
     invited_by: str | None
     last_seen_at: str | None
     created_at: str
+
+
+class StaffAdded(StaffMember):
+    # Whether Supabase emailed them an invitation. False whenever the server
+    # has no service-role key, which is the normal case: the owner then creates
+    # the sign-in by hand, and the portal has to say so.
+    invite_sent: bool
 
 
 class InviteStaff(BaseModel):
@@ -238,10 +301,10 @@ def get_staff(staff: StaffUser = Depends(require_role("owner"))) -> list[StaffMe
         return [_to_member(r) for r in list_staff(conn)]
 
 
-@router.post("/staff", response_model=StaffMember, status_code=status.HTTP_201_CREATED)
+@router.post("/staff", response_model=StaffAdded, status_code=status.HTTP_201_CREATED)
 def invite_staff(
     payload: InviteStaff, staff: StaffUser = Depends(require_role("owner"))
-) -> StaffMember:
+) -> StaffAdded:
     """Grant someone access.
 
     This creates the AUTHORISATION record. The person still needs a Supabase
@@ -271,9 +334,13 @@ def invite_staff(
         log_staff_event(conn, staff.email, "staff_invited", email, {"role": payload.role})
 
     invited = invite_supabase_user(email)
-    logger.info("Staff invited by %s (supabase invite: %s)", staff.email, invited.sent)
+    # Row ids, not addresses: no personal data in logs (ARCHITECTURE.md rule 9).
+    logger.info(
+        "Staff member %s added by %s as %s (invitation email sent: %s)",
+        row["id"], staff.staff_id, payload.role, invited.sent,
+    )
 
-    return _to_member(row)
+    return StaffAdded(**_to_member(row).model_dump(), invite_sent=invited.sent)
 
 
 @router.patch("/staff/{staff_id}/role", response_model=StaffMember)
