@@ -150,6 +150,7 @@ export default function PortalNav({
           second search box keeps one way to do the job. */}
       <a
         className="nav-search"
+        title="Find a member"
         href={hrefFor({ name: "members" })}
         onClick={(e) => go(e, { name: "members" })}
       >
@@ -158,7 +159,9 @@ export default function PortalNav({
       </a>
 
       <div className="nav-me">
-        <span className="avatar" aria-hidden="true">
+        {/* On narrower screens the name and role below are hidden; the
+            tooltip keeps who is signed in one hover away. */}
+        <span className="avatar" aria-hidden="true" title={`${me.email} · ${me.role}`}>
           {initials}
         </span>
         <span className="nav-me-text">
