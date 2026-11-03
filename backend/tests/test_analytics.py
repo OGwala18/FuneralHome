@@ -9,6 +9,7 @@ from __future__ import annotations
 import dataclasses
 import io
 import urllib.error
+from datetime import date
 
 import pytest
 
@@ -84,7 +85,21 @@ def test_plausibles_answers_become_the_pages_figures(client, staff_as, connected
     assert stats["clicks_by_place"][1] == {"goal": "Call", "where": "(not set)", "events": 4}
     assert [(s["label"], s["visitors"]) for s in stats["path"][:3]] == [
         ("Visited the site", 40), ("Looked at the plans", 18), ("Opened the register form", 0)]
-    assert {body["date_range"] for body in asked} == {"7d"}
+    # Seven days ENDING TODAY: Plausible's own "7d" stops at yesterday.
+    ranges = {tuple(body["date_range"]) for body in asked}
+    assert len(ranges) == 1
+    start, end = ranges.pop()
+    assert (date.fromisoformat(end) - date.fromisoformat(start)).days == 6
+
+
+@pytest.mark.parametrize("period, expected", [
+    ("day", "day"),
+    ("7d", ["2026-10-28", "2026-11-03"]),
+    ("28d", ["2026-10-07", "2026-11-03"]),
+    ("91d", ["2026-08-05", "2026-11-03"]),
+])
+def test_every_period_runs_up_to_and_including_today(period, expected):
+    assert plausible._date_range(period, today=date(2026, 11, 3)) == expected
 
 
 def test_a_second_look_within_five_minutes_does_not_ask_plausible_again(

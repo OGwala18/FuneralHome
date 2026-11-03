@@ -23,14 +23,29 @@ import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from ..config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# The periods the page offers, in Plausible's own names.
-PERIODS = ("day", "7d", "28d", "91d")
+# The periods the page offers. "day" is today; the rest are that many days
+# ENDING TODAY. Plausible's own "7d", "28d" and "91d" end yesterday, so on the
+# site's first day "28 days" read zero while "Today" had visitors.
+PERIODS = {"day": 1, "7d": 7, "28d": 28, "91d": 91}
+
+# South Africa keeps one offset all year, so "today" needs no tz database. It
+# matches the site's reporting timezone in Plausible, Africa/Johannesburg.
+_SAST = timezone(timedelta(hours=2))
+
+
+def _date_range(period: str, today: date | None = None) -> str | list[str]:
+    """Plausible's date_range for a period: today, or N days up to today."""
+    if period == "day":
+        return "day"
+    today = today or datetime.now(_SAST).date()
+    return [(today - timedelta(days=PERIODS[period] - 1)).isoformat(), today.isoformat()]
 
 # Plausible allows 600 queries an hour per key and one page load costs ten.
 # Five minutes is fresh enough for a dashboard and keeps an owner who keeps
@@ -103,19 +118,20 @@ def _post(body: dict[str, Any]) -> dict:
 def _queries(period: str) -> dict[str, dict]:
     """Every query the page needs, by name. Run together, read separately."""
     clicks = [["is", "event:goal", CLICK_GOALS]]
+    span = _date_range(period)
 
     def top(metrics: list[str], dimensions: list[str], limit: int, **extra: Any) -> dict:
-        return {"metrics": metrics, "date_range": period, "dimensions": dimensions,
+        return {"metrics": metrics, "date_range": span, "dimensions": dimensions,
                 "order_by": [[metrics[0], "desc"]], "pagination": {"limit": limit}, **extra}
 
     return {
         "totals": {"metrics": ["visitors", "visits", "pageviews", "bounce_rate",
                                "visit_duration", "views_per_visit"],
-                   "date_range": period},
-        "series": {"metrics": ["visitors", "pageviews"], "date_range": period,
+                   "date_range": span},
+        "series": {"metrics": ["visitors", "pageviews"], "date_range": span,
                    "dimensions": ["time:hour" if period == "day" else "time:day"],
                    "include": {"time_labels": True}},
-        "goals": {"metrics": ["visitors", "events", "conversion_rate"], "date_range": period,
+        "goals": {"metrics": ["visitors", "events", "conversion_rate"], "date_range": span,
                   "dimensions": ["event:goal"]},
         "by_place": top(["events"], ["event:goal", "event:props:place"], 30, filters=clicks),
         "by_page": top(["events"], ["event:goal", "event:page"], 30, filters=clicks),
@@ -190,8 +206,11 @@ def site_stats(period: str) -> dict:
     if period not in PERIODS:
         raise PlausibleError("Unknown period.", status=422)
 
+    # Keyed by the dates too, so a figure cached just before midnight is not
+    # served as the next day's.
+    key = "%s:%s" % (period, _date_range(period))
     with _cache_lock:
-        hit = _cache.get(period)
+        hit = _cache.get(key)
         if hit and time.monotonic() - hit[0] < _CACHE_SECONDS:
             return hit[1]
 
@@ -202,7 +221,7 @@ def site_stats(period: str) -> dict:
     shaped = _shape(period, answers)
     shaped["fetched_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     with _cache_lock:
-        _cache[period] = (time.monotonic(), shaped)
+        _cache[key] = (time.monotonic(), shaped)
     return shaped
 
 
