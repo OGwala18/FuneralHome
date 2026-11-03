@@ -116,6 +116,21 @@ class Settings:
     # the exact code that produced it. Railway and Netlify both expose this.
     release: str = os.getenv("RELEASE") or os.getenv("RAILWAY_GIT_COMMIT_SHA") or "dev"
 
+    # --- Website analytics --------------------------------------------------
+    # Plausible counts visits to the LIVE public site (induduzo.co.za) on every
+    # environment: internal and local read the same real numbers, read-only.
+    # The site itself only reports from its live hosts, so a test click on
+    # site-internal never reaches these figures.
+
+    # SEALED. A Plausible Stats API key: read-only, but it reads every site on
+    # the account. Kept out of repr(). Absent -> the owner's Analytics page says
+    # Plausible isn't connected, and nothing else changes.
+    plausible_api_key: str | None = field(
+        default=os.getenv("PLAUSIBLE_API_KEY") or None, repr=False
+    )
+    plausible_site_id: str = os.getenv("PLAUSIBLE_SITE_ID") or "induduzo.co.za"
+    plausible_api_url: str = (os.getenv("PLAUSIBLE_API_URL") or "https://plausible.io").rstrip("/")
+
     # --- Staff portal authentication ----------------------------------------
     # Supabase Auth issues the tokens; we only verify them against its public
     # JWKS. There is no shared secret here by design.
@@ -234,6 +249,10 @@ class Settings:
             and self.twilio_auth_token
             and self.twilio_whatsapp_from
         )
+
+    @property
+    def analytics_enabled(self) -> bool:
+        return bool(self.plausible_api_key)
 
     @property
     def email_enabled(self) -> bool:

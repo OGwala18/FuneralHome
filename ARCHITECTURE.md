@@ -141,6 +141,7 @@ backend/
     │   ├── admin.py           Staff: enquiries, who am I, staff management
     │   ├── members.py         Staff: the member book, enrolment, dependants
     │   ├── payments.py        Staff: premiums overdue / due, record a payment
+    │   ├── analytics.py       Owner: the live site's Plausible figures
     │   └── whatsapp.py        Twilio's signed webhooks, and the staff WhatsApp screen
     ├── services/
     │   ├── email.py           Office notification (both stages, WhatsApp escalations)
@@ -148,6 +149,7 @@ backend/
     │   ├── whatsapp_content.py  ★ Every word the WhatsApp menu says, and office hours
     │   ├── whatsapp_menu.py   The menu engine. Pure: state + message in, reply out
     │   ├── whatsapp_line.py   Stores messages, runs the menu, opens escalations
+    │   ├── plausible.py       Reads the live site's counts from Plausible's Stats API
     │   ├── enrolment.py       Enquiry -> person, policy, lives. One transaction.
     │   └── instalments.py     The premium schedule: generate, pay, waive
     └── jobs/
@@ -183,6 +185,7 @@ also needs `require_role("admin")`. The ones that touch the book of business:
 | `POST` | `/api/admin/whatsapp/escalations/{id}/reply`, `/resolve` | Reply from the line's number (open, within 24 h), or close it |
 | `GET` | `/api/admin/whatsapp/messages/{id}/media/{n}` | A photo a family sent, fetched from Twilio. Escalated conversations only |
 | `GET` | `/api/admin/whatsapp/stats` | Growth: usage, topics and ratings. No numbers |
+| `GET` | `/api/admin/analytics?period=day\|7d\|28d\|91d` | **Owner only.** The LIVE site's Plausible figures, on every environment. Cached 5 min; needs `PLAUSIBLE_API_KEY` |
 
 Interactive docs run at `/docs` in development.
 
@@ -226,6 +229,7 @@ portal/
         ├── Applications.tsx   Enquiries that reached stage 'application'.
         ├── Growth.tsx         Counts derived from the loaded enquiries, and the WhatsApp line.
         ├── WhatsApp.tsx       /growth/whatsapp: families who asked for a person; reply, resolve.
+        ├── Analytics.tsx      /analytics, owner only: the live website's visitors and clicks.
         ├── Settings.tsx       Your account, plus team and access for owners.
         └── Staff.tsx          Staff table and invite form. Owners only.
 ```
