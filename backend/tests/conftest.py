@@ -40,6 +40,7 @@ for _name in (
     "SUPABASE_URL",
     "SUPABASE_SERVICE_ROLE_KEY",
     "STAFF_EMAILS",
+    "PLAUSIBLE_API_KEY",
 ):
     os.environ[_name] = ""
 os.environ["ENVIRONMENT"] = "test"
