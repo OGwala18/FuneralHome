@@ -9,7 +9,7 @@ import { Button } from "./ui";
  * Rendered on every signed-in screen so the frame never moves between pages.
  */
 
-const DESTINATIONS: { label: string; route: Route }[] = [
+const DESTINATIONS: { label: string; route: Route; ownerOnly?: boolean }[] = [
   { label: "Today", route: { name: "today" } },
   { label: "Members", route: { name: "members" } },
   { label: "Policies", route: { name: "policies" } },
@@ -17,6 +17,8 @@ const DESTINATIONS: { label: string; route: Route }[] = [
   { label: "Enquiries", route: { name: "people" } },
   { label: "Applications", route: { name: "applications" } },
   { label: "Growth", route: { name: "growth" } },
+  // Hidden from everyone else as a courtesy; the API refuses them anyway.
+  { label: "Analytics", route: { name: "analytics" }, ownerOnly: true },
   { label: "Settings", route: { name: "settings" } },
 ];
 
@@ -122,7 +124,7 @@ export default function PortalNav({
       </a>
 
       <nav className="nav-links" aria-label="Portal">
-        {DESTINATIONS.map(({ label, route }) => (
+        {DESTINATIONS.filter((d) => !d.ownerOnly || me.role === "owner").map(({ label, route }) => (
           <a
             key={label}
             className="nav-link"

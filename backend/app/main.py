@@ -20,7 +20,7 @@ load_dotenv()
 from .config import get_settings  # noqa: E402  (must follow load_dotenv)
 from .db import close_pool, connection, init_pool  # noqa: E402
 from .observability import init_sentry  # noqa: E402
-from .routers import admin, enquiries, members, payments, whatsapp  # noqa: E402
+from .routers import admin, analytics, enquiries, members, payments, whatsapp  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -100,6 +100,7 @@ app.include_router(members.router)
 app.include_router(payments.router)
 app.include_router(whatsapp.router)
 app.include_router(whatsapp.admin_router)
+app.include_router(analytics.router)
 
 
 @app.exception_handler(RequestValidationError)
@@ -155,6 +156,7 @@ def health(response: Response) -> dict:
         "whatsapp_webhooks": "configured" if settings.public_api_url else "not_configured",
         "email": "configured" if settings.email_enabled else "not_configured",
         "staff_portal": "configured" if settings.staff_portal_enabled else "not_configured",
+        "analytics": "configured" if settings.analytics_enabled else "not_configured",
         "error_tracking": "enabled" if _sentry_enabled else "disabled",
         "release": settings.release,
     }

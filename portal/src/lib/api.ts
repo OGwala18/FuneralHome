@@ -487,6 +487,43 @@ export const resolveEscalation = (id: string, body: { note?: string; ask_rating:
 export const fetchWhatsAppStats = (days = 30) =>
   request<WhatsAppStats>("/api/admin/whatsapp/stats", new URLSearchParams({ days: String(days) }));
 
+/* ------------------------------------------------------------ Analytics --- */
+/* The LIVE public site's Plausible figures, owner only. Counts, no people. */
+
+export type AnalyticsPeriod = "day" | "7d" | "28d" | "91d";
+
+export interface SiteStats {
+  period: AnalyticsPeriod;
+  site: string;
+  fetched_at: string;
+  totals: {
+    visitors: number;
+    visits: number;
+    pageviews: number;
+    /** Percent of visits that saw one page and left. */
+    bounce_rate: number;
+    /** Seconds. */
+    visit_duration: number;
+    views_per_visit: number;
+  };
+  /** Hourly for "day", daily otherwise. Every bucket, zeros included. */
+  series: { bucket: string; visitors: number; pageviews: number }[];
+  actions: { goal: string; visitors: number; events: number; conversion_rate: number }[];
+  /** Call, WhatsApp and Email clicks, by where on the page they were. */
+  clicks_by_place: { goal: string; where: string; events: number }[];
+  /** The same clicks, by which page they were on. */
+  clicks_by_page: { goal: string; where: string; events: number }[];
+  outbound: { url: string; events: number }[];
+  pages: { page: string; visitors: number; pageviews: number }[];
+  sources: { label: string; visitors: number }[];
+  devices: { label: string; visitors: number }[];
+  cities: { label: string; visitors: number }[];
+  path: { label: string; goal: string | null; visitors: number }[];
+}
+
+export const fetchSiteStats = (period: AnalyticsPeriod) =>
+  request<SiteStats>("/api/admin/analytics", new URLSearchParams({ period }));
+
 /** A photo or document a family sent. The API fetches it from Twilio, so the
  *  browser never sees a Twilio address; an <img> can't send the staff token,
  *  so it comes back as a Blob for an object URL. */
