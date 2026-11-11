@@ -8,7 +8,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Phone, Mail, MapPin, MessageCircle } from "lucide-react";
 import { OfficeMap } from "@/components/OfficeMap";
 import { OFFICE_ADDRESS_LINES, OFFICE_MAP_LINK } from "@/lib/location";
-import { CONTACT_EMAIL, CONTACT_EMAIL_LINK, CONTACT_PHONES } from "@/lib/contact";
+import {
+  CONTACT_EMAIL, CONTACT_EMAIL_LINK, CONTACT_PHONES, TWENTY_FOUR_HOUR_LINE, WHATSAPP_LINE,
+  WHATSAPP_URL,
+} from "@/lib/contact";
 import { trackEvent } from "@/lib/analytics";
 
 export default function Contact() {
@@ -80,6 +83,10 @@ export default function Contact() {
                     </a>
                   ))}
                 </div>
+                <a href={TWENTY_FOUR_HOUR_LINE.link}
+                  className="mt-2 block text-sm font-semibold text-primary hover:underline">
+                  24 hours: {TWENTY_FOUR_HOUR_LINE.display}
+                </a>
                 <p className="text-sm text-muted-foreground mt-2">{t("cta_call")}</p>
               </CardContent>
             </Card>
@@ -91,17 +98,14 @@ export default function Contact() {
                 </div>
                 <h3 className="mb-3 text-xl">{t("contact_whatsapp")}</h3>
                 <div className="space-y-1">
-                  {CONTACT_PHONES.map((p) => (
-                    <a
-                      key={p.e164}
-                      href={p.whatsapp}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block text-lg font-semibold text-[#25D366] hover:underline"
-                    >
-                      {p.display}
-                    </a>
-                  ))}
+                  <a
+                    href={WHATSAPP_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-lg font-semibold text-[#25D366] hover:underline"
+                  >
+                    {WHATSAPP_LINE.display}
+                  </a>
                 </div>
                 <p className="text-sm text-muted-foreground mt-2">{t("contact_instant_messaging")}</p>
               </CardContent>
