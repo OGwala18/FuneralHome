@@ -180,10 +180,13 @@ JobRole = Literal[
 ]
 SourceOfFunds = Literal["employment", "inheritance", "allowance", "pension", "other"]
 
-# The days a debit order may run. Fewer choices, as the owner asked, so that
-# families pick the day their money is actually in the bank. 31 is the last day
-# of the month: the schedule clamps it to the 28th, 29th or 30th.
-DEBIT_DAYS = (1, 2, 3, 15, 20, 25, 31)
+# The day of the month a family pays, whatever the method (EFT, deposit, cash,
+# later debit order). The owner, 11 Nov 2026: the 1st, the 25th or the 30th.
+# The WhatsApp reminder goes out on that day, and a second one the day after if
+# it is still unpaid (app/jobs/payment_reminders.py). Stored in
+# policy_payments.debit_day. The 30th falls on the 28th or 29th in February.
+PAYMENT_DAYS = (1, 25, 30)
+DEBIT_DAYS = PAYMENT_DAYS  # the old name, kept for anything that imports it
 
 
 class _PersonIn(BaseModel):
@@ -287,10 +290,20 @@ class EnrolmentIn(_PersonIn):
     # list for the plan, option and age (0020, 0021). Sending either is a 422.
 
     payment_method: PaymentMethod = "undecided"
-    debit_day: int | None = None
     frequency: Frequency = "monthly"
+    # The payment day (1st, 25th or 30th) for every method, not only debit
+    # orders. Required unless the plan is paid once-off. After `frequency`, so
+    # its check can see it.
+    debit_day: int | None = Field(default=None, validate_default=True)
 
     beneficiary: BeneficiaryIn
+
+    @field_validator("debit_day")
+    @classmethod
+    def _payment_day_needed(cls, value: int | None, info: ValidationInfo) -> int | None:
+        if value is None and info.data.get("frequency", "monthly") != "once_off":
+            raise ValueError("Choose the payment day: the 1st, 25th or 30th")
+        return value
 
     @field_validator("country_of_birth", "citizenship")
     @classmethod
@@ -340,8 +353,8 @@ class EnrolmentIn(_PersonIn):
     @field_validator("debit_day")
     @classmethod
     def _debit_day(cls, value: int | None) -> int | None:
-        if value is not None and value not in DEBIT_DAYS:
-            raise ValueError("Choose the 1st, 2nd, 3rd, 15th, 20th, 25th or last day of the month")
+        if value is not None and value not in PAYMENT_DAYS:
+            raise ValueError("Choose the 1st, 25th or 30th of the month")
         return value
 
     @field_validator("email")

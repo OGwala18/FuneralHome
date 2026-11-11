@@ -68,6 +68,12 @@ class Settings:
     twilio_auth_token: str | None = os.getenv("TWILIO_AUTH_TOKEN")
     twilio_whatsapp_from: str | None = os.getenv("TWILIO_WHATSAPP_FROM")
     twilio_content_sid: str | None = os.getenv("TWILIO_CONTENT_SID")
+    # Approved WhatsApp templates for the payment reminders (app/services/
+    # payment_reminders.py). Variables: {{1}} first name, {{2}} amount,
+    # {{3}} policy number. Absent -> the plain text goes out instead, which
+    # only reaches sandbox numbers or a conversation open in the last 24 hours.
+    twilio_payment_due_sid: str | None = os.getenv("TWILIO_PAYMENT_DUE_SID") or None
+    twilio_payment_missed_sid: str | None = os.getenv("TWILIO_PAYMENT_MISSED_SID") or None
 
     # Who a WhatsApp from the line may go to: "off" (nobody), "allowlist" (only
     # WHATSAPP_TEST_RECIPIENTS) or "on" (anyone). docs/feature-3-whatsapp-line.md
