@@ -340,7 +340,7 @@ def test_menu_answers_alone_are_never_emailed(client, line, family, db):
 
 def test_out_of_hours_the_escalation_promises_the_next_opening(client, line, family, db):
     line.clock.at(CLOSED)
-    walk(client, family, "hi", "3", "5", "3")
+    walk(client, family, "hi", "3", "6", "3")  # 6: None of these
 
     [escalation] = _escalations(db, family)
     assert escalation["out_of_hours"]
@@ -383,7 +383,7 @@ def test_menu_during_an_escalation_goes_back_without_closing_it(client, line, fa
     assert content.GREETING in line.twilio.to(family)[-1]
 
     # Asking again updates the open escalation; the office isn't emailed twice.
-    walk(client, family, "3", "5", "3")
+    walk(client, family, "3", "6", "3")  # 6: None of these
     [escalation] = _escalations(db, family)
     assert escalation["channel"] == "call" and escalation["topic"] == "pay"
     assert len(line.mailbox) == 1

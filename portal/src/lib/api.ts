@@ -217,6 +217,18 @@ export interface MemberDetail extends MemberRow {
   id_number: string | null;
   date_of_birth: string | null;
   source: string;
+  /** Compliance answers from enrolment. Null for dependants and the imported book. */
+  country_of_birth: string | null;
+  citizenship: string | null;
+  passport_number: string | null;
+  employment_status: string | null;
+  employer_name: string | null;
+  industry: string | null;
+  occupation: string | null;
+  job_role: string | null;
+  source_of_funds: string | null;
+  source_of_funds_other: string | null;
+  salary_day: number | null;
   phones: { number: string; phone_type: string; is_primary: boolean }[];
   policies: MemberPolicy[];
 }
@@ -291,6 +303,29 @@ interface PersonIn {
   language_preference?: string;
 }
 
+export type Frequency = "monthly" | "quarterly" | "annually" | "once_off";
+
+/** The three branches a family can pay at, cash or card in person (0023). */
+export type PayBranch = "edendale" | "boshoff" | "langalibalele";
+export const PAY_BRANCHES: { value: PayBranch; label: string }[] = [
+  { value: "edendale", label: "Edendale Main Road (Head Office)" },
+  { value: "boshoff", label: "161 Boshoff Street" },
+  { value: "langalibalele", label: "171 Langalibalele Street" },
+];
+
+/** A beneficiary who is not one of the policy's lives: full details. */
+export interface BeneficiaryIn extends PersonIn {
+  email?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  suburb?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postal_code?: string | null;
+  relationship?: string | null;
+  share_percent?: number | null;
+}
+
 export interface EnrolmentIn extends PersonIn {
   enquiry_id?: string | null;
   initials?: string | null;
@@ -301,22 +336,58 @@ export interface EnrolmentIn extends PersonIn {
   city?: string | null;
   province?: string | null;
   postal_code?: string | null;
+  country_of_birth: string;
+  citizenship: string;
+  passport_number?: string | null;
+  employment_status: string;
+  employer_name?: string | null;
+  industry?: string | null;
+  occupation?: string | null;
+  job_role?: string | null;
+  source_of_funds: string;
+  source_of_funds_other?: string | null;
+  salary_day?: number | null;
   policy_number: string;
-  plan_code?: string | null;
+  plan_code: string;
+  /** Which price of the plan. The API reads the premium from the price list. */
+  plan_option?: string | null;
   entry_date?: string | null;
-  premium_cents: number;
-  cover_cents?: number | null;
+  // No premium and no cover: the API reads both from the price list.
   payment_method: PaymentMethod;
+  /** Required for cash or card in person. */
+  pay_branch_code?: PayBranch | null;
+  /** 1, 25 or 31 (the last day of the month). */
   debit_day?: number | null;
-  frequency: "monthly" | "once_off";
+  frequency: Frequency;
+  /** Null: choose on the next page, e.g. one of the dependants. */
+  beneficiary: BeneficiaryIn | null;
 }
 
 export interface EnrolmentOut {
   person_id: string;
   policy_id: string;
   policy_number: string;
+  premium_cents: number;
+  cover_cents: number | null;
   instalments_scheduled: number;
 }
+
+/** One line of the price list (migration 0018). */
+export interface PlanPrice {
+  plan_code: string;
+  option_code: string;
+  option_label: string;
+  min_age: number | null;
+  max_age: number | null;
+  /** Per month when billing is monthly; the whole amount when once-off. */
+  premium_cents: number;
+  /** The cover a policy on this line gets. Null until the owner gives it. */
+  cover_cents: number | null;
+  currency: string;
+  billing: "monthly" | "once_off";
+}
+
+export const fetchPlanPrices = () => request<PlanPrice[]>("/api/admin/plans/prices");
 
 export interface DependantIn extends PersonIn {
   member_type: DependantType;
@@ -331,6 +402,25 @@ export const enrolMember = (body: EnrolmentIn) =>
 export const addDependant = (policyId: string, body: DependantIn) =>
   mutate<{ person_id: string; policy_member_id: string; existing_person: boolean }>(
     `/api/admin/policies/${encodeURIComponent(policyId)}/members`, "POST", body);
+
+/** Make one of the policy's lives the beneficiary (personId), or add someone new. */
+export const addBeneficiary = (
+  policyId: string,
+  body: { person_id?: string; person?: BeneficiaryIn; relationship?: string | null },
+) =>
+  mutate<{ beneficiary_id: string; person_id: string; covered_life: boolean }>(
+    `/api/admin/policies/${encodeURIComponent(policyId)}/beneficiaries`, "POST", body);
+
+export const removeBeneficiary = async (policyId: string, beneficiaryId: string) => {
+  const token = await getAccessToken();
+  if (!token) throw new ApiError("Your session has ended. Please sign in again.", 401);
+  const response = await fetch(
+    `${API_BASE}/api/admin/policies/${encodeURIComponent(policyId)}/beneficiaries/` +
+      `${encodeURIComponent(beneficiaryId)}/remove`,
+    { method: "POST", headers: authHeaders(token) },
+  );
+  if (!response.ok) throw await readError(response, "Could not remove the beneficiary.");
+};
 
 /* ---------------------------------------------- Policy and premiums --- */
 
@@ -361,12 +451,25 @@ export interface PolicyLife {
   joined_at: string | null;
 }
 
+export interface PolicyBeneficiary {
+  beneficiary_id: string;
+  person_id: string;
+  surname: string;
+  first_names: string;
+  id_number: string | null;
+  relationship: string | null;
+  share_percent: number | null;
+  /** Also one of the lives the policy covers. */
+  covered_life: boolean;
+}
+
 export interface PolicyDetail {
   policy_id: string;
   policy_number: string;
   status_code: string;
   status_label: string;
   plan_code: string | null;
+  plan_option: string | null;
   branch_code: string | null;
   entry_date: string | null;
   premium_cents: number | null;
@@ -376,7 +479,14 @@ export interface PolicyDetail {
   enquiry_reference: string | null;
   dependants_expected: number | null;
   lives: PolicyLife[];
-  payment: { method: string; debit_day: number | null; frequency: string } | null;
+  beneficiaries: PolicyBeneficiary[];
+  payment: {
+    method: string;
+    debit_day: number | null;
+    frequency: string;
+    pay_branch_code: string | null;
+    pay_branch_label: string | null;
+  } | null;
   instalments: Instalment[];
 }
 

@@ -326,3 +326,59 @@ def test_the_form_header_passes_the_cors_preflight(client):
     )
     assert response.status_code == 200
     assert "idempotency-key" in response.headers["access-control-allow-headers"].lower()
+
+
+# --- The plan sets the premium (0020) ----------------------------------------------
+
+def test_the_form_cannot_set_its_own_premium(client, db):
+    enquiry_id = client.post("/api/enquiries", json=_lead()).json()["id"]
+    body = {"id_number": _synthetic_id_number(), "plan_selected": "plan_a",
+            "terms_accepted": True, "premium_amount_cents": 1}
+
+    response = client.patch(f"/api/enquiries/{enquiry_id}/application", json=body)
+
+    assert response.status_code == 422
+    assert "premium_amount_cents" in response.json()["field_errors"]
+
+
+@pytest.mark.parametrize("plan, premium", [("plan_a", 35000), ("plan_b", 25000),
+                                           ("dome_plan", 40000), ("plan_c", None)])
+def test_the_premium_on_an_application_comes_from_the_plan(client, db, plan, premium):
+    enquiry_id = client.post("/api/enquiries", json=_lead()).json()["id"]
+    body = {"id_number": _synthetic_id_number(), "plan_selected": plan, "terms_accepted": True}
+
+    assert client.patch(f"/api/enquiries/{enquiry_id}/application", json=body).status_code == 200
+    assert db.execute("select premium_amount_cents from plan_enquiries where id = %s",
+                      (enquiry_id,)).fetchone()[0] == premium
+
+
+# --- The applicant's own email ------------------------------------------------------
+
+def test_an_applicant_with_an_email_is_sent_their_reference(client, monkeypatch):
+    from app.routers import enquiries
+    from app.services.email import EmailResult
+
+    sent = []
+    monkeypatch.setattr(enquiries, "send_application_received",
+                        lambda **kwargs: sent.append(kwargs) or EmailResult(sent=True))
+    lead = client.post("/api/enquiries", json=_lead(email="applicant@example.test")).json()
+
+    response = client.patch(f"/api/enquiries/{lead['id']}/application", json={
+        "id_number": _synthetic_id_number(), "plan_selected": "plan_a", "terms_accepted": True})
+
+    assert response.status_code == 200
+    assert sent == [{"to_email": "applicant@example.test", "first_name": "Test",
+                     "reference": lead["reference"]}]
+
+
+def test_an_applicant_without_an_email_is_not(client, monkeypatch):
+    from app.routers import enquiries
+
+    sent = []
+    monkeypatch.setattr(enquiries, "send_application_received",
+                        lambda **kwargs: sent.append(kwargs))
+    lead = client.post("/api/enquiries", json=_lead()).json()
+    client.patch(f"/api/enquiries/{lead['id']}/application", json={
+        "id_number": _synthetic_id_number(), "plan_selected": "plan_a", "terms_accepted": True})
+
+    assert sent == []

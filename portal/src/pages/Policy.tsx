@@ -1,7 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
-  ApiError, addDependant, fetchPolicy, type DependantType, type Instalment, type PolicyDetail,
+  ApiError, addBeneficiary, addDependant, fetchPolicy, removeBeneficiary,
+  type DependantType, type Instalment, type PolicyDetail,
 } from "@/lib/api";
+import { dayLabel } from "@/lib/compliance";
 import { formatDate, formatMoney, planLabel } from "@/lib/derive";
 import { navigate } from "@/lib/router";
 import PaymentForm, { PAYMENT_METHODS, today } from "@/components/PaymentForm";
@@ -18,8 +20,15 @@ const DEPENDANT_TYPES: { value: DependantType; label: string }[] = [
   { value: "spouse", label: "Spouse" },
   { value: "child", label: "Child" },
   { value: "extended", label: "Extended family" },
-  { value: "beneficiary", label: "Beneficiary" },
 ];
+
+// Someone the policy pays out to who isn't one of its lives, e.g. a brother with
+// his own funeral cover. As many details as the main member: the office has to
+// be able to find and pay them.
+const BLANK_BENEFICIARY = {
+  first_names: "", surname: "", relationship: "", id_number: "", date_of_birth: "",
+  mobile: "", email: "", address_line1: "", suburb: "", city: "", postal_code: "",
+};
 
 const BLANK_DEPENDANT = {
   first_names: "", surname: "", member_type: "child" as DependantType,
@@ -28,6 +37,10 @@ const BLANK_DEPENDANT = {
 
 const methodLabel = (code: string) =>
   PAYMENT_METHODS.find((m) => m.value === code)?.label ?? code;
+
+const FREQUENCY_LABELS: Record<string, string> = {
+  monthly: "Monthly", quarterly: "Quarterly", annually: "Annually", once_off: "Once-off",
+};
 
 const instalmentBadge = (row: Instalment) => {
   if (row.status === "paid") return <Badge tone="success">Paid</Badge>;
@@ -51,6 +64,82 @@ export default function Policy({ id, canEdit, addLives }:
   const [added, setAdded] = useState<string | null>(null);
 
   const [paying, setPaying] = useState<string | null>(null);
+
+  const [naming, setNaming] = useState(false);
+  const [beneficiary, setBeneficiary] = useState(BLANK_BENEFICIARY);
+  const [benBusy, setBenBusy] = useState(false);
+  const [benError, setBenError] = useState<string | null>(null);
+  const [benErrors, setBenErrors] = useState<Record<string, string>>({});
+
+  const setBen = (key: keyof typeof BLANK_BENEFICIARY) => (value: string) =>
+    setBeneficiary((b) => ({ ...b, [key]: value }));
+  const orNull = (value: string) => value.trim() || null;
+
+  const benFailed = (err: unknown) => {
+    if (err instanceof ApiError) {
+      setBenError(err.message);
+      setBenErrors(err.fieldErrors);
+    } else {
+      setBenError("Could not save. Try again.");
+    }
+  };
+
+  const makeBeneficiary = async (personId: string) => {
+    setBenError(null);
+    setBenBusy(true);
+    try {
+      await addBeneficiary(id, { person_id: personId });
+      setReload((n) => n + 1);
+    } catch (err) {
+      benFailed(err);
+    } finally {
+      setBenBusy(false);
+    }
+  };
+
+  const submitBeneficiary = async (event: FormEvent) => {
+    event.preventDefault();
+    setBenError(null);
+    setBenErrors({});
+    setBenBusy(true);
+    try {
+      await addBeneficiary(id, {
+        person: {
+          first_names: beneficiary.first_names.trim(),
+          surname: beneficiary.surname.trim(),
+          relationship: orNull(beneficiary.relationship),
+          id_number: orNull(beneficiary.id_number),
+          date_of_birth: beneficiary.date_of_birth || null,
+          mobile: orNull(beneficiary.mobile),
+          email: orNull(beneficiary.email),
+          address_line1: orNull(beneficiary.address_line1),
+          suburb: orNull(beneficiary.suburb),
+          city: orNull(beneficiary.city),
+          postal_code: orNull(beneficiary.postal_code),
+        },
+      });
+      setBeneficiary(BLANK_BENEFICIARY);
+      setNaming(false);
+      setReload((n) => n + 1);
+    } catch (err) {
+      benFailed(err);
+    } finally {
+      setBenBusy(false);
+    }
+  };
+
+  const unname = async (beneficiaryId: string) => {
+    setBenError(null);
+    setBenBusy(true);
+    try {
+      await removeBeneficiary(id, beneficiaryId);
+      setReload((n) => n + 1);
+    } catch (err) {
+      benFailed(err);
+    } finally {
+      setBenBusy(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -113,6 +202,7 @@ export default function Policy({ id, canEdit, addLives }:
   }
 
   const main = policy.lives.find((life) => life.member_type === "main_member");
+  const beneficiaryIds = new Set(policy.beneficiaries.map((b) => b.person_id));
   const dependants = policy.lives.length - (main ? 1 : 0);
   const due = policy.instalments.filter((row) => row.status === "due");
   const overdue = due.filter((row) => row.due_date < today());
@@ -196,7 +286,7 @@ export default function Policy({ id, canEdit, addLives }:
             </div>
             {policy.lives.length === 0 ? <Empty title="Nobody on this policy yet" /> : (
               <div className="table-wrap"><table>
-                <thead><tr><th>Name</th><th>Role</th><th>ID number</th><th>Date of birth</th><th>Entry age</th></tr></thead>
+                <thead><tr><th>Name</th><th>Role</th><th>ID number</th><th>Date of birth</th><th>Entry age</th><th /></tr></thead>
                 <tbody>{policy.lives.map((life) => (
                   <tr key={life.policy_member_id} className="clickable"
                     onClick={() => navigate({ name: "member", id: life.person_id })}>
@@ -205,9 +295,99 @@ export default function Policy({ id, canEdit, addLives }:
                     <td className="ref">{life.id_number ?? <span className="muted">None</span>}</td>
                     <td>{life.date_of_birth ? formatDate(life.date_of_birth) : <span className="muted">Not recorded</span>}</td>
                     <td>{life.entry_age ?? "—"}</td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {beneficiaryIds.has(life.person_id)
+                        ? <Badge tone="success">Beneficiary</Badge>
+                        : canEdit && (
+                          <Button small disabled={benBusy}
+                            onClick={() => void makeBeneficiary(life.person_id)}>
+                            Make beneficiary
+                          </Button>
+                        )}
+                    </td>
                   </tr>
                 ))}</tbody>
               </table></div>
+            )}
+          </section>
+
+          <section className="card">
+            <div className="card-head">
+              <h2 className="t-section">Beneficiary</h2>
+              {canEdit && !naming && (
+                <Button small onClick={() => { setNaming(true); setBenError(null); }}>
+                  Add someone not on the policy
+                </Button>
+              )}
+            </div>
+            <p className="t-small muted" style={{ marginTop: 0 }}>
+              Who receives the payout. Choose <strong>Make beneficiary</strong> on one of the lives
+              above, or add someone who isn&rsquo;t covered by this policy.
+            </p>
+            {benError && <div style={{ marginBottom: "var(--s16)" }}>
+              <Notice tone="error" title="Not saved." detail={benError} /></div>}
+            {policy.beneficiaries.length === 0 && !naming && (
+              <Notice tone="warn" title="No beneficiary yet."
+                detail="Every policy needs someone to receive the payout." />
+            )}
+            {policy.beneficiaries.length > 0 && (
+              <div className="table-wrap"><table>
+                <thead><tr><th>Name</th><th>Relationship</th><th>ID number</th><th>On the policy</th><th /></tr></thead>
+                <tbody>{policy.beneficiaries.map((b) => (
+                  <tr key={b.beneficiary_id}>
+                    <td className="cell-name">{b.first_names} {b.surname}</td>
+                    <td>{b.relationship ?? <span className="muted">Not recorded</span>}</td>
+                    <td className="ref">{b.id_number ?? <span className="muted">None</span>}</td>
+                    <td>{b.covered_life ? "Covered life" : "Not covered"}</td>
+                    <td>{canEdit && (
+                      <Button small variant="ghost" disabled={benBusy}
+                        onClick={() => void unname(b.beneficiary_id)}>Remove</Button>
+                    )}</td>
+                  </tr>
+                ))}</tbody>
+              </table></div>
+            )}
+            {naming && (
+              <form className="stack-8" onSubmit={submitBeneficiary} noValidate
+                style={{ marginTop: "var(--s16)" }}>
+                <div className="form-grid">
+                  <Field label="First names" value={beneficiary.first_names}
+                    onChange={setBen("first_names")} required
+                    error={benErrors["person.first_names"]} autoComplete="off" />
+                  <Field label="Surname" value={beneficiary.surname} onChange={setBen("surname")}
+                    required error={benErrors["person.surname"]} autoComplete="off" />
+                  <Field label="Relationship" value={beneficiary.relationship}
+                    onChange={setBen("relationship")} hint="To the main member, e.g. Brother"
+                    error={benErrors["person.relationship"]} autoComplete="off" />
+                  <Field label="ID number" value={beneficiary.id_number}
+                    onChange={setBen("id_number")} hint="Date of birth is read from it"
+                    error={benErrors["person.id_number"]} autoComplete="off" />
+                  <Field label="Date of birth" type="date" value={beneficiary.date_of_birth}
+                    onChange={setBen("date_of_birth")} hint="Needed when there is no ID number"
+                    error={benErrors["person.date_of_birth"]} />
+                  <Field label="Mobile" type="tel" value={beneficiary.mobile}
+                    onChange={setBen("mobile")} error={benErrors["person.mobile"]} autoComplete="off" />
+                  <Field label="Email" type="email" value={beneficiary.email}
+                    onChange={setBen("email")} hint="Optional" error={benErrors["person.email"]}
+                    autoComplete="off" />
+                  <Field label="Street address" value={beneficiary.address_line1}
+                    onChange={setBen("address_line1")} error={benErrors["person.address_line1"]}
+                    autoComplete="off" />
+                  <Field label="Suburb or area" value={beneficiary.suburb}
+                    onChange={setBen("suburb")} error={benErrors["person.suburb"]} autoComplete="off" />
+                  <Field label="City or town" value={beneficiary.city} onChange={setBen("city")}
+                    error={benErrors["person.city"]} autoComplete="off" />
+                  <Field label="Postal code" value={beneficiary.postal_code}
+                    onChange={setBen("postal_code")} error={benErrors["person.postal_code"]}
+                    autoComplete="off" />
+                </div>
+                <div className="row">
+                  <Button variant="primary" type="submit" loading={benBusy} loadingLabel="Saving…">
+                    Add beneficiary
+                  </Button>
+                  <Button variant="ghost" onClick={() => setNaming(false)}>Cancel</Button>
+                </div>
+              </form>
             )}
           </section>
 
@@ -261,8 +441,13 @@ export default function Policy({ id, canEdit, addLives }:
               <hr className="divider" />
               {policy.payment ? <>
                 <Fact label="Method">{methodLabel(policy.payment.method)}</Fact>
-                <Fact label="Debit day">{policy.payment.debit_day ?? "No fixed day"}</Fact>
-                <Fact label="Frequency">{policy.payment.frequency === "once_off" ? "Once-off" : "Monthly"}</Fact>
+                <Fact label="Payment day">{policy.payment.debit_day
+                  ? dayLabel(policy.payment.debit_day) : "No fixed day"}</Fact>
+                {policy.payment.pay_branch_label && (
+                  <Fact label="Pays at">{policy.payment.pay_branch_label}</Fact>
+                )}
+                <Fact label="Frequency">{FREQUENCY_LABELS[policy.payment.frequency]
+                  ?? policy.payment.frequency}</Fact>
               </> : <p className="t-small muted" style={{ margin: 0 }}>No payment arrangement recorded.</p>}
             </div>
           </section>

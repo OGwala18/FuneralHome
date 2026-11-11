@@ -13,13 +13,14 @@ from datetime import date
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from ..auth import StaffUser, require_role, require_staff
 from ..db import connection
 from ..schemas import _MOBILE_RE, LanguageCode, normalise_mobile, valid_sa_id
-from ..services import enrolment
+from ..services import enrolment, welcome
 from ..services.staff import log_staff_event
 from .payments import Instalment, PaymentMethod
 
@@ -83,6 +84,17 @@ class MemberDetail(BaseModel):
     date_of_birth: date | None = None
     email: str | None = None
     source: str
+    country_of_birth: str | None = None
+    citizenship: str | None = None
+    passport_number: str | None = None
+    employment_status: str | None = None
+    employer_name: str | None = None
+    industry: str | None = None
+    occupation: str | None = None
+    job_role: str | None = None
+    source_of_funds: str | None = None
+    source_of_funds_other: str | None = None
+    salary_day: int | None = None
     phones: list[MemberPhone]
     policies: list[MemberPolicy]
 
@@ -121,6 +133,20 @@ class PolicyPayment(BaseModel):
     method: str
     debit_day: int | None = None
     frequency: str
+    pay_branch_code: str | None = None
+    pay_branch_label: str | None = None
+
+
+class PolicyBeneficiary(BaseModel):
+    beneficiary_id: UUID
+    person_id: UUID
+    surname: str
+    first_names: str
+    id_number: str | None = None
+    relationship: str | None = None
+    share_percent: int | None = None
+    # True when they are also one of the lives the policy covers.
+    covered_life: bool
 
 
 class PolicyDetail(BaseModel):
@@ -129,6 +155,7 @@ class PolicyDetail(BaseModel):
     status_code: str
     status_label: str
     plan_code: str | None = None
+    plan_option: str | None = None
     branch_code: str | None = None
     entry_date: date | None = None
     premium_cents: int | None = None
@@ -140,6 +167,7 @@ class PolicyDetail(BaseModel):
     # for staff adding them, not a limit.
     dependants_expected: int | None = None
     lives: list[PolicyLife]
+    beneficiaries: list[PolicyBeneficiary] = []
     payment: PolicyPayment | None = None
     instalments: list[Instalment]
 
@@ -149,8 +177,35 @@ class PolicyDetail(BaseModel):
 # ---------------------------------------------------------------------------
 
 Gender = Literal["male", "female", "unspecified"]
+# Where a family pays cash or by card in person (migration 0023).
+PayBranch = Literal["edendale", "boshoff", "langalibalele"]
+IN_PERSON_METHODS = ("cash", "card")
 BookPlan = Literal["plan_a", "plan_b", "plan_c", "dome_plan"]
 DependantType = Literal["spouse", "child", "extended", "beneficiary"]
+Frequency = Literal["monthly", "quarterly", "annually", "once_off"]
+
+# The compliance questions asked of a main member (migration 0018).
+EmploymentStatus = Literal["full_time", "part_time", "pensioner", "self_employed", "unemployed"]
+WORKING = ("full_time", "part_time", "self_employed")
+Industry = Literal[
+    "agriculture", "construction", "domestic_work", "education", "finance", "government",
+    "health", "hospitality", "informal_trade", "manufacturing", "mining", "retail",
+    "security", "transport", "other",
+]
+JobRole = Literal[
+    "manager", "supervisor", "admin", "professional", "skilled", "general_worker",
+    "owner", "other",
+]
+SourceOfFunds = Literal["employment", "inheritance", "allowance", "pension", "other"]
+
+# The day of the month a family pays, whatever the method (EFT, deposit, cash,
+# later debit order). The owner, 11 Nov 2026: the 1st, the 25th or the LAST DAY
+# of the month. 31 means the last day: the schedule clamps it to the 28th, 29th
+# or 30th. The WhatsApp reminder goes out on that day, and a second one the day
+# after if it is still unpaid (app/jobs/payment_reminders.py), so a last-day
+# payer hears again on the 1st. Stored in policy_payments.debit_day.
+PAYMENT_DAYS = (1, 25, 31)
+DEBIT_DAYS = PAYMENT_DAYS  # the old name, kept for anything that imports it
 
 
 class _PersonIn(BaseModel):
@@ -201,6 +256,31 @@ class _PersonIn(BaseModel):
         return normalised
 
 
+class BeneficiaryIn(_PersonIn):
+    """Someone the policy pays out to who is NOT one of its lives: e.g. a brother
+    with his own funeral cover. As many details as the main member, because the
+    office must be able to find and pay them. The ID number is optional; the
+    date of birth is not, though a valid ID number supplies it."""
+
+    date_of_birth: date | None = Field(default=None, validate_default=True)
+    email: str | None = Field(default=None, max_length=255)
+    address_line1: str | None = Field(default=None, max_length=200)
+    address_line2: str | None = Field(default=None, max_length=200)
+    suburb: str | None = Field(default=None, max_length=100)
+    city: str | None = Field(default=None, max_length=100)
+    province: str | None = Field(default=None, max_length=50)
+    postal_code: str | None = Field(default=None, max_length=10)
+    relationship: str | None = Field(default=None, max_length=60)
+    share_percent: int | None = Field(default=None, ge=1, le=100)
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def _born(cls, value: date | None, info: ValidationInfo) -> date | None:
+        if value is None and not info.data.get("id_number"):
+            raise ValueError("Enter the date of birth, or a valid ID number")
+        return value
+
+
 class EnrolmentIn(_PersonIn):
     enquiry_id: UUID | None = None
     initials: str | None = Field(default=None, max_length=10)
@@ -213,17 +293,110 @@ class EnrolmentIn(_PersonIn):
     province: str | None = Field(default=None, max_length=120)
     postal_code: str | None = None
 
+    # Compliance. ISO 3166 two-letter country codes; 'ZA' is South Africa.
+    country_of_birth: str
+    citizenship: str
+    passport_number: str | None = Field(default=None, validate_default=True)
+    employment_status: EmploymentStatus
+    employer_name: str | None = Field(default=None, max_length=150, validate_default=True)
+    industry: Industry | None = Field(default=None, validate_default=True)
+    occupation: str | None = Field(default=None, max_length=100, validate_default=True)
+    job_role: JobRole | None = Field(default=None, validate_default=True)
+    source_of_funds: SourceOfFunds
+    source_of_funds_other: str | None = Field(default=None, max_length=150,
+                                              validate_default=True)
+    salary_day: int | None = Field(default=None, ge=1, le=31)
+
     policy_number: str
-    plan_code: BookPlan | None = None
+    plan_code: BookPlan
+    # Which price of the plan, e.g. 'single_casket' on Plan C. May be left out
+    # for a plan with only one. The premium itself is read from the price list.
+    plan_option: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{1,39}$")
     # One branch is in the reference table today. More arrive with their codes.
     branch_code: Literal["pmburg"] = "pmburg"
     entry_date: date | None = None
-    premium_cents: int = Field(ge=0, le=100_000_000)
-    cover_cents: int | None = Field(default=None, ge=0, le=10_000_000_000)
+    # No premium and no cover here, on purpose: both are read from the price
+    # list for the plan, option and age (0020, 0021). Sending either is a 422.
 
     payment_method: PaymentMethod = "undecided"
-    debit_day: int | None = Field(default=None, ge=1, le=31)
-    frequency: Literal["monthly", "once_off"] = "monthly"
+    # The branch, for cash or card in person. Required for those, refused
+    # otherwise. After payment_method, so its check can see it.
+    pay_branch_code: PayBranch | None = Field(default=None, validate_default=True)
+    frequency: Frequency = "monthly"
+    # The payment day (1st, 25th or 30th) for every method, not only debit
+    # orders. Required unless the plan is paid once-off. After `frequency`, so
+    # its check can see it.
+    debit_day: int | None = Field(default=None, validate_default=True)
+
+    # None: choose on the next page, e.g. one of the dependants.
+    beneficiary: BeneficiaryIn | None = None
+
+    @field_validator("pay_branch_code")
+    @classmethod
+    def _pay_branch(cls, value: str | None, info: ValidationInfo) -> str | None:
+        in_person = info.data.get("payment_method") in IN_PERSON_METHODS
+        if in_person and value is None:
+            raise ValueError("Choose the branch they will pay at")
+        return value if in_person else None
+
+    @field_validator("debit_day")
+    @classmethod
+    def _payment_day_needed(cls, value: int | None, info: ValidationInfo) -> int | None:
+        if value is None and info.data.get("frequency", "monthly") != "once_off":
+            raise ValueError("Choose the payment day: the 1st, the 25th or the last day")
+        return value
+
+    @field_validator("country_of_birth", "citizenship")
+    @classmethod
+    def _country(cls, value: str) -> str:
+        code = value.upper()
+        if not re.fullmatch(r"[A-Z]{2}", code):
+            raise ValueError("Choose a country")
+        return code
+
+    @field_validator("passport_number")
+    @classmethod
+    def _passport_number(cls, value: str | None, info: ValidationInfo) -> str | None:
+        citizenship = info.data.get("citizenship")
+        if citizenship == "ZA":
+            if value:
+                raise ValueError("Only for people who are not South African citizens")
+            return None
+        if not value:
+            if citizenship and not info.data.get("id_number"):
+                raise ValueError("Needed for someone who is not a South African citizen "
+                                 "and has no SA ID number")
+            return None
+        normalised = re.sub(r"\s", "", value).upper()
+        if not re.fullmatch(r"[A-Z0-9]{5,20}", normalised):
+            raise ValueError("A passport number is 5 to 20 letters and digits")
+        return normalised
+
+    @field_validator("employer_name", "industry", "occupation", "job_role")
+    @classmethod
+    def _work(cls, value: str | None, info: ValidationInfo) -> str | None:
+        # Only asked of someone who works. Anything sent for anyone else is dropped.
+        if info.data.get("employment_status") not in WORKING:
+            return None
+        if not value:
+            raise ValueError("Needed for someone who works")
+        return value
+
+    @field_validator("source_of_funds_other")
+    @classmethod
+    def _funds_other(cls, value: str | None, info: ValidationInfo) -> str | None:
+        if info.data.get("source_of_funds") != "other":
+            return None
+        if not value:
+            raise ValueError("Say where the money comes from")
+        return value
+
+    @field_validator("debit_day")
+    @classmethod
+    def _debit_day(cls, value: int | None) -> int | None:
+        if value is not None and value not in PAYMENT_DAYS:
+            raise ValueError("Choose the 1st, the 25th or the last day of the month")
+        return value
 
     @field_validator("email")
     @classmethod
@@ -256,12 +429,60 @@ class EnrolmentIn(_PersonIn):
 class DependantIn(_PersonIn):
     member_type: DependantType
 
+    @field_validator("member_type")
+    @classmethod
+    def _beneficiary_born(cls, value: str, info: ValidationInfo) -> str:
+        # As on the enrolment form: a beneficiary always has a date of birth.
+        if value == "beneficiary" and not info.data.get("date_of_birth") \
+                and not info.data.get("id_number"):
+            raise ValueError("A beneficiary needs a date of birth or a valid ID number")
+        return value
+
 
 class EnrolmentOut(BaseModel):
     person_id: UUID
     policy_id: UUID
     policy_number: str
+    premium_cents: int
+    cover_cents: int | None
     instalments_scheduled: int
+
+
+class PlanPrice(BaseModel):
+    plan_code: str
+    option_code: str
+    option_label: str
+    min_age: int | None = None
+    max_age: int | None = None
+    premium_cents: int
+    # None until the owner gives the cover for this line (0021).
+    cover_cents: int | None = None
+    currency: str
+    billing: Literal["monthly", "once_off"]
+
+
+class BeneficiaryChoiceIn(BaseModel):
+    """Either one of the policy's lives (person_id) or someone new (person)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    person_id: UUID | None = None
+    person: BeneficiaryIn | None = Field(default=None, validate_default=True)
+    relationship: str | None = Field(default=None, max_length=60)
+    share_percent: int | None = Field(default=None, ge=1, le=100)
+
+    @field_validator("person")
+    @classmethod
+    def _one_of(cls, value: "BeneficiaryIn | None", info: ValidationInfo):
+        if (value is None) == (info.data.get("person_id") is None):
+            raise ValueError("Choose one of the lives on the policy, or enter someone new")
+        return value
+
+
+class BeneficiaryOut(BaseModel):
+    beneficiary_id: UUID
+    person_id: UUID
+    covered_life: bool
 
 
 class DependantOut(BaseModel):
@@ -275,6 +496,10 @@ class PolicyNumber(BaseModel):
 
 
 def _raise_for(exc: Exception) -> None:
+    if isinstance(exc, enrolment.Invalid):
+        # The same {field: message} shape as any other validation error.
+        raise RequestValidationError([{"loc": ("body", *exc.field.split(".")),
+                                       "msg": str(exc), "type": "value_error"}]) from exc
     if isinstance(exc, enrolment.Conflict):
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     if isinstance(exc, enrolment.NotFound):
@@ -323,14 +548,19 @@ def list_members(staff: StaffUser = Depends(require_staff),
 
 
 @router.post("/members", response_model=EnrolmentOut, status_code=status.HTTP_201_CREATED)
-def enrol_member(payload: EnrolmentIn,
+def enrol_member(payload: EnrolmentIn, background: BackgroundTasks,
                  staff: StaffUser = Depends(require_role("admin"))) -> EnrolmentOut:
-    """Enrol a main member: person, policy, payment arrangement and schedule."""
+    """Enrol a main member: person, policy, payment arrangement and schedule.
+
+    After it commits, the new member is welcomed on WhatsApp and by email, in
+    the background, so a messaging outage never costs an enrolment.
+    """
     try:
         with connection() as conn:
             result = enrolment.enrol(conn, payload, staff_email=staff.email)
-    except (enrolment.Conflict, enrolment.NotFound) as exc:
+    except (enrolment.Conflict, enrolment.NotFound, enrolment.Invalid) as exc:
         _raise_for(exc)
+    background.add_task(welcome.send, str(result["policy_id"]), staff.email)
     return EnrolmentOut(**result)
 
 
@@ -340,7 +570,10 @@ def get_member(member_id: UUID, staff: StaffUser = Depends(require_staff)) -> Me
         person = conn.execute(
             """
             select id, surname, first_names, initials, id_number,
-                   id_number_status::text as id_number_status, date_of_birth, email, source
+                   id_number_status::text as id_number_status, date_of_birth, email, source,
+                   country_of_birth, citizenship, passport_number, employment_status,
+                   employer_name, industry, occupation, job_role, source_of_funds,
+                   source_of_funds_other, salary_day
               from people
              where id = %s and archived_at is null
             """,
@@ -408,14 +641,22 @@ def next_policy_number() -> PolicyNumber:
         return PolicyNumber(policy_number=enrolment.suggest_policy_number(conn))
 
 
+@router.get("/plans/prices", response_model=list[PlanPrice])
+def plan_prices() -> list[PlanPrice]:
+    """The price list, so the enrolment form shows the premium before saving.
+    The API prices the policy again from the same rows when it is saved."""
+    with connection() as conn:
+        return [PlanPrice(**r) for r in enrolment.price_list(conn)]
+
+
 @router.get("/policies/{policy_id}", response_model=PolicyDetail)
 def get_policy(policy_id: UUID, staff: StaffUser = Depends(require_staff)) -> PolicyDetail:
     with connection() as conn:
         policy = conn.execute(
             """
             select p.id as policy_id, p.policy_number, p.status_code, s.label as status_label,
-                   p.plan_code, p.branch_code, p.entry_date, p.premium_cents, p.cover_cents,
-                   p.currency, p.enquiry_id, e.reference as enquiry_reference,
+                   p.plan_code, p.plan_option, p.branch_code, p.entry_date, p.premium_cents,
+                   p.cover_cents, p.currency, p.enquiry_id, e.reference as enquiry_reference,
                    e.number_of_dependants as dependants_expected
               from policies p
               join ref_policy_statuses s on s.code = p.status_code
@@ -442,12 +683,29 @@ def get_policy(policy_id: UUID, staff: StaffUser = Depends(require_staff)) -> Po
         ).fetchall()
         payment = conn.execute(
             """
-            select method, debit_day, frequency::text as frequency
-              from policy_payments
-             where policy_id = %s and is_active and archived_at is null
+            select pp.method, pp.debit_day, pp.frequency::text as frequency,
+                   pp.pay_branch_code, b.label as pay_branch_label
+              from policy_payments pp
+              left join ref_branches b on b.code = pp.pay_branch_code
+             where pp.policy_id = %s and pp.is_active and pp.archived_at is null
             """,
             (policy_id,),
         ).fetchone()
+        beneficiaries = conn.execute(
+            """
+            select pb.id as beneficiary_id, pe.id as person_id, pe.surname, pe.first_names,
+                   pe.id_number, pb.relationship, pb.share_percent,
+                   exists (select 1 from policy_members pm
+                            where pm.policy_id = pb.policy_id and pm.person_id = pb.person_id
+                              and pm.archived_at is null and pm.left_at is null
+                              and pm.member_type <> 'beneficiary') as covered_life
+              from policy_beneficiaries pb
+              join people pe on pe.id = pb.person_id
+             where pb.policy_id = %s and pb.archived_at is null
+             order by pb.created_at
+            """,
+            (policy_id,),
+        ).fetchall()
         schedule = conn.execute(
             """
             select id, policy_id, due_date, amount_cents, currency, status, paid_at,
@@ -463,6 +721,7 @@ def get_policy(policy_id: UUID, staff: StaffUser = Depends(require_staff)) -> Po
     return PolicyDetail(
         **policy,
         lives=[PolicyLife(**r) for r in lives],
+        beneficiaries=[PolicyBeneficiary(**r) for r in beneficiaries],
         payment=PolicyPayment(**payment) if payment else None,
         instalments=[Instalment(**r) for r in schedule],
     )
@@ -480,3 +739,32 @@ def add_dependant(policy_id: UUID, payload: DependantIn,
     except (enrolment.Conflict, enrolment.NotFound) as exc:
         _raise_for(exc)
     return DependantOut(**result)
+
+
+@router.post("/policies/{policy_id}/beneficiaries", response_model=BeneficiaryOut,
+             status_code=status.HTTP_201_CREATED)
+def add_beneficiary(policy_id: UUID, payload: BeneficiaryChoiceIn,
+                    staff: StaffUser = Depends(require_role("admin"))) -> BeneficiaryOut:
+    """Make one of the policy's lives the beneficiary, or add someone who isn't covered."""
+    try:
+        with connection() as conn:
+            result = enrolment.add_beneficiary(
+                conn, str(policy_id), staff_email=staff.email,
+                person_id=str(payload.person_id) if payload.person_id else None,
+                person=payload.person, relationship=payload.relationship,
+                share_percent=payload.share_percent)
+    except (enrolment.Conflict, enrolment.NotFound, enrolment.Invalid) as exc:
+        _raise_for(exc)
+    return BeneficiaryOut(**result)
+
+
+@router.post("/policies/{policy_id}/beneficiaries/{beneficiary_id}/remove",
+             status_code=status.HTTP_204_NO_CONTENT)
+def remove_beneficiary(policy_id: UUID, beneficiary_id: UUID,
+                       staff: StaffUser = Depends(require_role("admin"))) -> None:
+    try:
+        with connection() as conn:
+            enrolment.remove_beneficiary(conn, str(policy_id), str(beneficiary_id),
+                                         staff_email=staff.email)
+    except enrolment.NotFound as exc:
+        _raise_for(exc)
