@@ -173,6 +173,8 @@ def submit_application(
     data = payload.model_dump()
     data["application_fingerprint"] = fingerprint(data)
     data["enquiry_id"] = enquiry_id
+    # The same plan code again, as plain text, to look up its price.
+    data["plan_for_price"] = payload.plan_selected
 
     with connection() as conn:
         unchanged = conn.execute(
@@ -203,7 +205,15 @@ def submit_application(
                     plan_selected            = %(plan_selected)s,
                     coffin_choice            = %(coffin_choice)s,
                     age_band                 = %(age_band)s,
-                    premium_amount_cents     = %(premium_amount_cents)s,
+                    -- Set by the plan, never by the browser: the price of a
+                    -- plan with exactly one price (A, B, Dome). Plan C depends
+                    -- on single or couple and age, which staff confirm at
+                    -- enrolment, so it stays empty here.
+                    premium_amount_cents     = (
+                        select min(premium_cents) from ref_plan_prices
+                         where plan_code = %(plan_for_price)s and is_active
+                        having count(*) = 1
+                    ),
                     payment_frequency        = %(payment_frequency)s,
                     payment_preference       = %(payment_preference)s,
                     number_of_dependants     = %(number_of_dependants)s,

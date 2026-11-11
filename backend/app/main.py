@@ -6,6 +6,7 @@ only to this; it never holds a database credential.
 
 from __future__ import annotations
 
+import itertools
 import logging
 from contextlib import asynccontextmanager
 
@@ -129,8 +130,13 @@ async def validation_handler(_: Request, exc: RequestValidationError) -> JSONRes
     field_errors: dict[str, str] = {}
     for error in exc.errors():
         location = [part for part in error["loc"] if part != "body"]
+        # A nested form section reads "beneficiary.date_of_birth". Pydantic's
+        # union tags such as "literal['a']" are not field names, so they stop it.
+        names = list(itertools.takewhile(
+            lambda part: isinstance(part, str) and part.isidentifier(), location))
         if location:
-            field_errors[str(location[0])] = error["msg"].replace("Value error, ", "")
+            key = ".".join(names) if names else str(location[0])
+            field_errors[key] = error["msg"].replace("Value error, ", "")
 
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
