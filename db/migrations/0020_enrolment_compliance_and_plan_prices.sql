@@ -1,4 +1,4 @@
--- 0018 - Enrolment: compliance questions, the plan price list, and quarterly
+-- 0020 - Enrolment: compliance questions, the plan price list, and quarterly
 -- and annual premiums.
 --
 -- WHY THIS EXISTS
@@ -16,7 +16,7 @@
 --   4. Which price a policy was sold on (Plan C has several), so the premium on
 --      the policy can always be traced back to a line in the price list.
 --
--- 0017 is taken by the WhatsApp line move on its own branch; this is 0018.
+-- Written as 0018 on a local branch; 0017-0019 were taken on Dev first, so it is 0020.
 --
 -- NOT HERE, ON PURPOSE
 -- No bank account, branch code or card. The enrolment form shows where debit
