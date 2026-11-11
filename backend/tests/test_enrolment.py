@@ -248,8 +248,9 @@ def _premium(db, policy_id: str) -> tuple:
         ({"plan_code": "plan_b", "frequency": "annually"}, 300000, "standard"),
         # Born 1980: 46 to 59 in the years this suite runs, so R180 a month.
         ({"plan_code": "plan_c", "plan_option": "single_casket"}, 18000, "single_casket"),
-        ({"plan_code": "dome_plan", "frequency": "once_off", "debit_day": None},
-         40000, "once_off"),
+        # The flyer (0024): Dome is monthly, R500 a couple or R750 a family.
+        ({"plan_code": "dome_plan", "plan_option": "husband_wife"}, 50000, "husband_wife"),
+        ({"plan_code": "dome_plan", "plan_option": "family"}, 75000, "family"),
     ],
 )
 def test_the_premium_comes_from_the_price_list(client, db, staff_as, change, premium, option):
@@ -441,12 +442,13 @@ def test_the_cover_comes_from_the_price_list(client, db, staff_as, monkeypatch):
                 response.json()["policy_id"]) == (1500000,)
 
 
-def test_a_line_with_no_cover_on_record_enrols_with_none(client, db, staff_as):
+def test_the_flyer_payout_is_the_cover(client, db, staff_as):
+    # The owner's flyer (0024): R2,000 for a main member, who is always 21+.
     staff_as("admin")
     response = client.post("/api/admin/members", json=_enrolment(plan_code="plan_a"))
 
     assert response.status_code == 201, response.text
-    assert response.json()["cover_cents"] is None
+    assert response.json()["cover_cents"] == 200000
 
 
 def test_the_price_list_shows_each_lines_cover(client, staff_as):

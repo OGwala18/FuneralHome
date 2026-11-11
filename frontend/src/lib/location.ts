@@ -16,6 +16,12 @@ export const OFFICE_ADDRESS = "Edendale Main Road Kwadaya, Pietermaritzburg 3201
 /** Shown to a reader, one line per array entry. */
 export const OFFICE_ADDRESS_LINES = ["Edendale Main Road Kwadaya,", "Pietermaritzburg 3201"];
 
+/** The other branches, as printed on the owner's flyer (12 Nov 2026). */
+export const BRANCHES = [
+  "161 Boshoff Street, Pietermaritzburg, 3201",
+  "171 Langalibalele Street, Pietermaritzburg, 3201",
+];
+
 /**
  * Exact premises coordinates, "lat,lng". Blank falls back to searching for the
  * address, which drops a pin on every match along Edendale Main Road rather
