@@ -12,7 +12,11 @@ from ..db import connection, log_event
 from ..idempotency import fingerprint, idempotency_key, mark_replayed, refuse_mismatch
 from ..ratelimit import application_limiter, enforce, lead_limiter
 from ..schemas import ApplicationIn, EnquiryOut, LeadIn
-from ..services.email import send_completed_application, send_new_lead
+from ..services.email import (
+    send_application_received,
+    send_completed_application,
+    send_new_lead,
+)
 from ..services.whatsapp import _plain_body, send_registration_confirmation
 from ..services.whatsapp_line import record_confirmation
 
@@ -276,9 +280,18 @@ def submit_application(
         _send_confirmation, str(row["id"]), row["mobile_number"], row["first_name"], row["reference"]
     )
     background.add_task(_notify_completed_application, dict(row))
+    if row.get("email"):
+        background.add_task(_confirm_to_applicant, dict(row))
 
     logger.info("Application submitted: %s", row["reference"])
     return _to_out(row)
+
+
+def _confirm_to_applicant(row: dict) -> None:
+    """Email the applicant their reference, as the WhatsApp confirmation does."""
+    result = send_application_received(to_email=row["email"], first_name=row["first_name"],
+                                       reference=row["reference"])
+    _record_email_outcome(row["id"], "applicant_email", result)
 
 
 def _notify_completed_application(row: dict) -> None:
