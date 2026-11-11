@@ -7,7 +7,7 @@ import {
   COUNTRIES, EMPLOYMENT_STATUSES, INDUSTRIES, JOB_ROLES, SALARY_DAYS, SOURCES_OF_FUNDS,
   SOUTH_AFRICA, WORKING, dayLabel,
 } from "@/lib/compliance";
-import { ageOn, decodeSaId, formatMoney, fullName, toCents } from "@/lib/derive";
+import { ageOn, decodeSaId, formatMoney, fullName } from "@/lib/derive";
 import { navigate } from "@/lib/router";
 import { PAYMENT_METHODS, today } from "@/components/PaymentForm";
 import { Badge, Button, Field, Notice, Select, Skeleton } from "@/components/ui";
@@ -82,7 +82,7 @@ const BLANK = {
   country_of_birth: SOUTH_AFRICA, citizenship: SOUTH_AFRICA, passport_number: "",
   employment_status: "", employer_name: "", industry: "", occupation: "", job_role: "",
   source_of_funds: "", source_of_funds_other: "", salary_day: "",
-  policy_number: "", plan_code: "", plan_option: "", entry_date: today(), cover: "",
+  policy_number: "", plan_code: "", plan_option: "", entry_date: today(),
   frequency: "monthly" as Frequency,
   payment_method: "undecided",
   ben_first_names: "", ben_surname: "", ben_id_number: "", ben_date_of_birth: "",
@@ -131,7 +131,9 @@ const fromEnquiry = (e: EnquiryDetail, form: Form): Form => {
 
 const orNull = (value: string) => (value.trim() ? value.trim() : null);
 
-type Quote = { cents: number; detail: string } | { problem: string };
+type Quote =
+  | { cents: number; detail: string; cover: number | null; currency: string }
+  | { problem: string };
 
 /**
  * The premium for the chosen plan, option, age and frequency, read from the
@@ -160,11 +162,15 @@ const quote = (prices: PlanPrice[], form: Form, dob: string): Quote => {
     }
   }
 
+  const cover = match.cover_cents;
+  const currency = match.currency;
   if (match.billing === "once_off") {
-    return { cents: match.premium_cents, detail: "Paid once" };
+    return { cents: match.premium_cents, detail: "Paid once", cover, currency };
   }
   const months = MONTHS[form.frequency];
   return {
+    cover,
+    currency,
     cents: match.premium_cents * months,
     detail: months === 1
       ? match.option_label
@@ -242,13 +248,11 @@ export default function Enrol({ enquiryId }: { enquiryId?: string }) {
     event.preventDefault();
     setError(null);
 
-    const cover = form.cover.trim() ? toCents(form.cover) : null;
     const local: Record<string, string> = {};
     if (!form.plan_code) local.plan_code = "Choose a plan";
     if (form.payment_method === "debit_order") {
       local.payment_method = "Debit orders are not switched on yet. Choose another method";
     }
-    if (form.cover.trim() && cover === null) local.cover_cents = "Enter the cover in rand, e.g. 10000";
     if (!benDob) local["beneficiary.date_of_birth"] = "Enter the date of birth, or a valid ID number";
     if (Object.keys(local).length) {
       setErrors(local);
@@ -294,7 +298,6 @@ export default function Enrol({ enquiryId }: { enquiryId?: string }) {
         plan_code: form.plan_code,
         plan_option: orNull(form.plan_option),
         entry_date: orNull(form.entry_date),
-        cover_cents: cover,
         payment_method: form.payment_method as PaymentMethod,
         // Debit orders are not switched on yet, so there is no debit day.
         debit_day: null,
@@ -490,8 +493,17 @@ export default function Enrol({ enquiryId }: { enquiryId?: string }) {
               </div>
               <span className="field-hint">Set by the plan. It cannot be typed in.</span>
             </div>
-            <Field label="Cover (R)" value={form.cover} onChange={set("cover")}
-              hint="Optional, e.g. 10000" error={err("cover_cents")} autoComplete="off" />
+            <div className="field">
+              <span className="field-label">Cover</span>
+              <div className="premium-readout" aria-live="polite">
+                {"cents" in premium ? (
+                  premium.cover !== null
+                    ? <strong>{formatMoney(premium.cover, premium.currency)}</strong>
+                    : <span className="t-small muted">Not on the price list yet</span>
+                ) : <span className="t-small muted">{premium.problem}</span>}
+              </div>
+              <span className="field-hint">Set by the plan. It cannot be typed in.</span>
+            </div>
           </div>
         </section>
 

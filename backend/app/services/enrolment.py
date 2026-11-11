@@ -104,7 +104,7 @@ def price_list(conn: Any) -> list[dict]:
     return conn.execute(
         """
         select plan_code, option_code, option_label, min_age, max_age,
-               premium_cents, currency, billing
+               premium_cents, cover_cents, currency, billing
           from ref_plan_prices
          where is_active
          order by sort_order, min_age nulls first
@@ -113,12 +113,14 @@ def price_list(conn: Any) -> list[dict]:
 
 
 def price(conn: Any, *, plan_code: str, plan_option: str | None, born: date | None,
-          on: date, frequency: str) -> tuple[int, str]:
-    """(premium per payment in cents, price option) from the price list.
+          on: date, frequency: str) -> tuple[int, str, int | None]:
+    """(premium per payment, price option, cover) in cents, from the price list.
 
-    The premium is never typed in: two families on the same plan, option and
-    age band pay the same. A monthly price is multiplied up for quarterly and
-    annual payment; a once-off plan must be paid once-off.
+    Neither the premium nor the cover is typed in: two families on the same
+    plan, option and age band pay the same and are covered for the same. A
+    monthly price is multiplied up for quarterly and annual payment; a once-off
+    plan must be paid once-off. Cover is None while the owner has not yet given
+    the amount for that line (0021).
     """
     rows = [r for r in price_list(conn) if r["plan_code"] == plan_code]
     if not rows:
@@ -149,10 +151,11 @@ def price(conn: Any, *, plan_code: str, plan_option: str | None, born: date | No
     if match["billing"] == "once_off":
         if frequency != "once_off":
             raise Invalid("frequency", "This plan is paid once-off.")
-        return match["premium_cents"], plan_option
+        return match["premium_cents"], plan_option, match["cover_cents"]
     if frequency == "once_off":
         raise Invalid("frequency", "This plan is paid monthly, quarterly or annually.")
-    return match["premium_cents"] * instalments.STEP_MONTHS[frequency], plan_option
+    return (match["premium_cents"] * instalments.STEP_MONTHS[frequency], plan_option,
+            match["cover_cents"])
 
 
 # ---------------------------------------------------------------------------
@@ -286,7 +289,7 @@ def enrol(conn: Any, data: Any, *, staff_email: str, today: date | None = None) 
             raise Conflict("This enquiry has already been enrolled as a member.")
 
     identity = _identity(data, today)
-    premium_cents, plan_option = price(
+    premium_cents, plan_option, cover_cents = price(
         conn, plan_code=data.plan_code, plan_option=data.plan_option,
         born=identity["date_of_birth"], on=entry_date, frequency=data.frequency)
 
@@ -316,7 +319,7 @@ def enrol(conn: Any, data: Any, *, staff_email: str, today: date | None = None) 
             returning id
             """,
             (data.policy_number, data.policy_number, data.plan_code, plan_option,
-             data.branch_code, entry_date, premium_cents, data.cover_cents,
+             data.branch_code, entry_date, premium_cents, cover_cents,
              data.enquiry_id if enquiry else None),
         ).fetchone()["id"])
 
@@ -371,6 +374,7 @@ def enrol(conn: Any, data: Any, *, staff_email: str, today: date | None = None) 
         "policy_id": policy_id,
         "policy_number": data.policy_number,
         "premium_cents": premium_cents,
+        "cover_cents": cover_cents,
         "instalments_scheduled": scheduled,
     }
 

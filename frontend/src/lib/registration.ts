@@ -63,7 +63,6 @@ export interface ApplicationPayload {
   plan_selected?: PlanCode;
   coffin_choice?: CoffinOption;
   age_band?: string;
-  premium_amount_cents?: number;
   payment_frequency?: PaymentFrequency;
   payment_preference?: PaymentPreference;
   number_of_dependants?: number;

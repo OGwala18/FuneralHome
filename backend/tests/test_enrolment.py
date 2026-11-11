@@ -57,9 +57,9 @@ def _enrolment(**overrides) -> dict:
         "source_of_funds": "employment",
         "salary_day": 25,
         "policy_number": _policy_number(),
-        # R250 a month on the price list (migration 0018).
+        # R250 a month on the price list (migration 0020). No premium and no
+        # cover: both come from the price list.
         "plan_code": "plan_b",
-        "cover_cents": 1_000_000,
         "payment_method": "debit_order",
         "debit_day": 25,
         "beneficiary": {"surname": "Testperson", "first_names": "Nandi",
@@ -180,6 +180,7 @@ def test_a_person_already_in_the_book_is_not_enrolled_twice(client, db, staff_as
         ({"mobile": "12345"}, "mobile"),
         ({"postal_code": "32"}, "postal_code"),
         ({"premium_cents": 1}, "premium_cents"),  # set by the plan, never typed in
+        ({"cover_cents": 1_000_000}, "cover_cents"),  # so is the cover (0021)
         ({"account_number": "123"}, "account_number"),  # never accepted
         ({"debit_day": 7}, "debit_day"),
         ({"plan_code": None}, "plan_code"),
@@ -413,3 +414,41 @@ def test_overdue_and_upcoming_lists(client, db, staff_as):
     upcoming = client.get("/api/admin/instalments", params={"view": "upcoming", "days": 40}).json()
     assert any(row["policy_id"] == policy_id and row["days_overdue"] <= 0 for row in upcoming)
     assert all(row["instalment_id"] != overdue_id for row in upcoming)
+
+
+# --- Cover is set by the plan too (0021) -----------------------------------------
+
+def test_the_cover_comes_from_the_price_list(client, db, staff_as, monkeypatch):
+    # The API may only read the price list, so give the read a cover for Plan B
+    # rather than writing one: the amounts are the owner's to set.
+    from app.services import enrolment
+
+    real = enrolment.price_list
+
+    def with_cover(conn):
+        return [{**row, "cover_cents": 1500000} if row["plan_code"] == "plan_b" else row
+                for row in real(conn)]
+
+    monkeypatch.setattr(enrolment, "price_list", with_cover)
+    staff_as("admin")
+
+    response = client.post("/api/admin/members", json=_enrolment())
+
+    assert response.status_code == 201, response.text
+    assert response.json()["cover_cents"] == 1500000
+    assert _one(db, "select cover_cents from policies where id = %s",
+                response.json()["policy_id"]) == (1500000,)
+
+
+def test_a_line_with_no_cover_on_record_enrols_with_none(client, db, staff_as):
+    staff_as("admin")
+    response = client.post("/api/admin/members", json=_enrolment(plan_code="plan_a"))
+
+    assert response.status_code == 201, response.text
+    assert response.json()["cover_cents"] is None
+
+
+def test_the_price_list_shows_each_lines_cover(client, staff_as):
+    staff_as("viewer")
+    rows = client.get("/api/admin/plans/prices").json()
+    assert rows and all("cover_cents" in row for row in rows)
