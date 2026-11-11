@@ -266,6 +266,7 @@ def require_staff(
             conn, identity.staff_id, request.headers.get(DEVICE_HEADER), at
         )
         if device is not None:
+            two_step.touch_device(conn, device["id"], at)
             identity.verified_by = two_step.TRUSTED_DEVICE
             return identity
 
