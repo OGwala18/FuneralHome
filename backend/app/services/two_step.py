@@ -246,3 +246,80 @@ def why_dead(challenge: dict, at: datetime) -> str | None:
     if challenge["replaced_at"] is not None or at >= challenge["expires_at"]:
         return "code_expired"
     return None
+
+
+# --- Trusted computers (Bit 6; plan §5, §9 "Trusted computers") -------------------
+
+TRUST_LIFETIME = timedelta(days=30)
+
+
+def device_label(user_agent: str | None) -> str:
+    """A plain name for a computer, from its browser's User-Agent: "Chrome on Windows".
+
+    Only a label for the person's own list; it decides nothing.
+    """
+    ua = (user_agent or "").lower()
+    browser = next((name for key, name in (
+        ("edg/", "Edge"), ("opr/", "Opera"), ("firefox/", "Firefox"),
+        ("chrome/", "Chrome"), ("safari/", "Safari"),
+    ) if key in ua), "A browser")
+    system = next((name for key, name in (
+        ("windows", "Windows"), ("android", "Android"), ("iphone", "iPhone"),
+        ("ipad", "iPad"), ("mac os", "Mac"), ("linux", "Linux"),
+    ) if key in ua), "an unknown computer")
+    return f"{browser} on {system}"
+
+
+def trust_device(conn: Any, staff_id: str, label: str, at: datetime) -> tuple[str, dict]:
+    """Trust a computer for 30 days from now. Returns (token for the browser, row).
+
+    The token goes to the browser once; only its hash is kept. Thirty days from
+    when it was issued, never extended by use.
+    """
+    from .two_step_crypto import new_device_token
+
+    token = new_device_token()
+    row = conn.execute(
+        """
+        insert into staff_trusted_devices (staff_user_id, token_hash, label, created_at, expires_at)
+        values (%s, %s, %s, %s, %s)
+        returning id, label, created_at, expires_at
+        """,
+        (staff_id, hash_device_token(token), label[:120], at, at + TRUST_LIFETIME),
+    ).fetchone()
+    return token, row
+
+
+def touch_device(conn: Any, device_id: str, at: datetime) -> None:
+    conn.execute(
+        "update staff_trusted_devices set last_used_at = %s where id = %s", (at, device_id)
+    )
+
+
+def list_devices(conn: Any, staff_id: str, at: datetime) -> list[dict]:
+    return conn.execute(
+        """
+        select id, label, created_at, expires_at, last_used_at
+          from staff_trusted_devices
+         where staff_user_id = %s and revoked_at is null and expires_at > %s
+         order by created_at desc
+        """,
+        (staff_id, at),
+    ).fetchall()
+
+
+def revoke_devices(conn: Any, staff_id: str, by: str, at: datetime,
+                   only: str | None = None, keep: str | None = None) -> int:
+    """Forget one of this person's computers (`only`), or all but `keep`."""
+    clauses, params = ["staff_user_id = %s", "revoked_at is null"], [staff_id]
+    if only is not None:
+        clauses.append("id = %s")
+        params.append(only)
+    if keep is not None:
+        clauses.append("id <> %s")
+        params.append(keep)
+    return conn.execute(
+        f"update staff_trusted_devices set revoked_at = %s, revoked_by = %s "
+        f"where {' and '.join(clauses)}",
+        [at, by, *params],
+    ).rowcount
