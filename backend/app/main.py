@@ -69,7 +69,10 @@ app.add_middleware(
     # Authorization is required, not optional: the staff portal sends a bearer
     # token, and a preflight that does not permit this header fails outright —
     # the browser blocks the request before the API ever sees it.
-    allow_headers=["Content-Type", "Authorization"],
+    # Idempotency-Key is sent by the public form; without it here the browser's
+    # preflight fails and every registration is blocked before it leaves.
+    allow_headers=["Content-Type", "Authorization", "Idempotency-Key"],
+    expose_headers=["Idempotent-Replayed", "Retry-After"],
 )
 
 
