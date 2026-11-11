@@ -51,14 +51,39 @@ def _plain_body(first_name: str, reference: str) -> str:
     )
 
 
+def known_number(number: str) -> bool:
+    """Whether a family gave us this number: on the website form (an enquiry)
+    or in the member book (a phone on a person). Never logs the number."""
+    from ..db import connection  # the database is only needed for this mode
+
+    national = number[3:] if number.startswith("+27") else None
+    variants = [number] + (["27" + national, "0" + national] if national else [])
+    try:
+        with connection() as conn:
+            return conn.execute(
+                """
+                select exists (select 1 from plan_enquiries
+                                where archived_at is null and mobile_number = any(%s))
+                    or exists (select 1 from person_phones
+                                where archived_at is null and number = %s) as known
+                """,
+                (variants, number),
+            ).fetchone()["known"]
+    except Exception:  # noqa: BLE001 - unsure means no: never message a stranger
+        logger.warning("Could not check whether a WhatsApp number is known")
+        return False
+
+
 def outbound_refusal(settings: Settings, to_mobile: str) -> str | None:
     """Why WHATSAPP_OUTBOUND forbids a message to `to_mobile`, or None if it
     allows one. Every message the line sends asks this first."""
     if settings.whatsapp_outbound == "on":
         return None
-    if settings.whatsapp_outbound == "allowlist":
+    if settings.whatsapp_outbound in ("allowlist", "known"):
         if to_mobile in settings.whatsapp_test_recipients:
             return None
+        if settings.whatsapp_outbound == "known":
+            return None if known_number(to_mobile) else "whatsapp_unknown_number"
         return "whatsapp_not_allowlisted"
     return "whatsapp_outbound_off"
 

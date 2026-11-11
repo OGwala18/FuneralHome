@@ -18,7 +18,11 @@ from functools import lru_cache
 MIN_PEPPER_BYTES = 32
 
 # Who an outbound WhatsApp may go to: nobody, the test numbers, or anyone.
-WHATSAPP_OUTBOUND_MODES = ("off", "allowlist", "on")
+# off: nothing goes out. allowlist: only WHATSAPP_TEST_RECIPIENTS. known: the
+# allowlist plus any number a family gave us (the website form or the member
+# book), and nobody else; the owner's choice for going live, 11 Nov 2026.
+# on: anyone.
+WHATSAPP_OUTBOUND_MODES = ("off", "allowlist", "known", "on")
 
 _E164_RE = re.compile(r"^\+[1-9][0-9]{7,14}$")
 
@@ -208,7 +212,7 @@ class Settings:
                 "will not start. Set TWO_STEP_ENFORCEMENT=on."
             )
         if self.whatsapp_outbound not in WHATSAPP_OUTBOUND_MODES:
-            raise ValueError("WHATSAPP_OUTBOUND must be 'off', 'allowlist' or 'on'.")
+            raise ValueError("WHATSAPP_OUTBOUND must be 'off', 'allowlist', 'known' or 'on'.")
         # A number in any other form could never match, so the allowlist would
         # quietly send to nobody. The message names the setting, not the
         # numbers, which are personal.

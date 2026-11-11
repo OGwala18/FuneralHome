@@ -330,7 +330,18 @@ def handle_inbound(conn: Any, message: Inbound, now: datetime | None = None) -> 
     open_escalation = _open_escalation(conn, conv["id"])
     turn: menu.Turn | None = None
 
-    if opted_out_at is not None:
+    settings = get_settings()
+    stranger = (settings.whatsapp_outbound == "known"
+                and conv["enquiry_id"] is None and conv["person_id"] is None
+                and message.from_number not in settings.whatsapp_test_recipients)
+
+    if stranger:
+        # Going live (the owner, 11 Nov 2026): only numbers a family gave us on
+        # the website form or in the member book get the menu. Anyone else's
+        # message is kept for staff to see, and gets no automatic reply.
+        turn = menu.Turn(replies=[], state=state, data=data, misses=misses,
+                         node="unknown_number")
+    elif opted_out_at is not None:
         if words == "start":
             opted_out_at = None
             turn = menu.respond(state=menu.IDLE, data={}, misses=0, text=body,
