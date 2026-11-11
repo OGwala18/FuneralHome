@@ -16,6 +16,12 @@ drift apart.
 Facts only. Nothing here promises a payout date or a response time the office
 hasn't committed to, and nothing ever asks for an ID number, a card number or
 banking details: scammers copy exactly those messages.
+
+The one exception that GIVES banking details is "pay.bank": Induduzo's own
+account (app/services/banking.py), with the family's policy number filled in
+by the line (POLICY_REFERENCE). The owner chose this on 11 Nov 2026 so families
+can pay without phoning first. It always ends with the warning not to pay into
+any other account.
 """
 
 from __future__ import annotations
@@ -23,6 +29,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal
+
+from . import banking
 
 # South Africa has no daylight saving, so a fixed offset is exact, and needs no
 # time zone database (Windows has none without the tzdata package).
@@ -116,6 +124,11 @@ BACK = "back"          # the menu the family came from
 class Option:
     label: str
     goto: str
+
+
+# Filled in by whatsapp_line with the family's own policy number(s), or with a
+# line telling them where to find it. Never shown to a family as written.
+POLICY_REFERENCE = "{policy_reference}"
 
 
 @dataclass(frozen=True)
@@ -263,6 +276,7 @@ _add(
             Option("I missed a payment", "pay.missed"),
             Option("Wrong amount or a double deduction", "pay.wrong"),
             Option("Changing or cancelling my debit order", "pay.change"),
+            Option("Pay now: our bank details", "pay.bank"),
             NONE_OF_THESE,
         ),
     ),
@@ -271,9 +285,19 @@ _add(
         text=(
             "You can pay by debit order, stop order, EFT, Easypay or Pay@, or in "
             "cash or by card at our office.\n\n"
-            "We never send banking details on WhatsApp, and we will never ask for "
-            "your card number or PIN. For our account details, phone the office on "
-            "079 751 0648."
+            "To pay by EFT or bank deposit, choose \"Pay now\" in the payment menu "
+            "for our bank details. We will never ask for your card number or PIN."
+        ),
+    ),
+    Node(
+        id="pay.bank", kind="answer", title="Our bank details", parent="pay",
+        text=(
+            "Please pay into our official account:\n\n"
+            + banking.details_block(POLICY_REFERENCE) + "\n\n"
+            f"Send your proof of payment here, or to {banking.PROOF_OF_PAYMENT_EMAIL}, "
+            "and keep a copy for your records.\n\n"
+            "Received different banking details? Don't pay. Contact us first: we "
+            "never change our account by SMS, WhatsApp or email."
         ),
     ),
     Node(

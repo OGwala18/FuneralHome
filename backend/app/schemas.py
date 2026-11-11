@@ -138,7 +138,9 @@ class ApplicationIn(BaseModel):
     plan_selected: PlanCode | None = None
     coffin_choice: CoffinOption | None = None
     age_band: str | None = Field(default=None, max_length=20)
-    premium_amount_cents: int | None = Field(default=None, ge=0)
+    # No premium field, on purpose: the API sets it from the price list for the
+    # chosen plan (enquiries.py). A premium sent by a browser is refused (422),
+    # because anyone can send any number.
     payment_frequency: PaymentFrequency | None = None
     payment_preference: PaymentPreference | None = None
     number_of_dependants: int | None = Field(default=None, ge=0, le=20)

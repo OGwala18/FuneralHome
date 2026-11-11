@@ -80,6 +80,8 @@ interface FieldProps {
   required?: boolean;
   autoComplete?: string;
   id?: string;
+  /** Shown but not editable: worked out from another answer, or not in use yet. */
+  disabled?: boolean;
 }
 
 let fieldSeq = 0;
@@ -100,6 +102,7 @@ export function Field({
   required,
   autoComplete,
   id,
+  disabled,
 }: FieldProps) {
   const fieldId = id ?? `field-${++fieldSeq}`;
   const hintId = `${fieldId}-hint`;
@@ -115,6 +118,7 @@ export function Field({
         placeholder={placeholder}
         required={required}
         autoComplete={autoComplete}
+        disabled={disabled}
         aria-invalid={error ? true : undefined}
         aria-describedby={message ? hintId : undefined}
         onChange={(e) => onChange(e.target.value)}
@@ -137,14 +141,16 @@ export function Select({
   hint,
   error,
   id,
+  disabled,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; disabled?: boolean }[];
   hint?: string;
   error?: string;
   id?: string;
+  disabled?: boolean;
 }) {
   const fieldId = id ?? `field-${++fieldSeq}`;
   const hintId = `${fieldId}-hint`;
@@ -156,12 +162,13 @@ export function Select({
       <select
         id={fieldId}
         value={value}
+        disabled={disabled}
         aria-invalid={error ? true : undefined}
         aria-describedby={message ? hintId : undefined}
         onChange={(e) => onChange(e.target.value)}
       >
         {options.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option key={option.value} value={option.value} disabled={option.disabled}>
             {option.label}
           </option>
         ))}
