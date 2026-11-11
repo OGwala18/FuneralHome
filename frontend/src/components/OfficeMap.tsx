@@ -2,6 +2,7 @@ import { MapPin } from "lucide-react";
 
 import { useLanguage } from "@/lib/i18n";
 import {
+  BRANCHES,
   OFFICE_ADDRESS_LINES,
   OFFICE_MAP_EMBED_SRC,
   OFFICE_MAP_LINK,
@@ -53,6 +54,14 @@ export function OfficeMap({
           </span>
         </a>
       )}
+
+      <p className="text-sm text-muted-foreground">
+        {/* The other branches, from the owner's flyer. */}
+        <span className="block font-medium text-foreground">Branches</span>
+        {BRANCHES.map((branch) => (
+          <span key={branch} className="block">{branch}</span>
+        ))}
+      </p>
 
       <iframe
         title={t("contact_map_label")}
