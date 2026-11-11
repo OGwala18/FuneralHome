@@ -74,6 +74,12 @@ class Settings:
     # only reaches sandbox numbers or a conversation open in the last 24 hours.
     twilio_payment_due_sid: str | None = os.getenv("TWILIO_PAYMENT_DUE_SID") or None
     twilio_payment_missed_sid: str | None = os.getenv("TWILIO_PAYMENT_MISSED_SID") or None
+    # Approved template for the welcome a new member gets (app/services/welcome.py).
+    # Variables: {{1}} first name, {{2}} policy number.
+    twilio_welcome_sid: str | None = os.getenv("TWILIO_WELCOME_SID") or None
+    # Where the welcome asks a new member to leave a Google review. Absent -> the
+    # welcome leaves the review sentence out.
+    google_review_url: str | None = os.getenv("GOOGLE_REVIEW_URL") or None
 
     # Who a WhatsApp from the line may go to: "off" (nobody), "allowlist" (only
     # WHATSAPP_TEST_RECIPIENTS) or "on" (anyone). docs/feature-3-whatsapp-line.md

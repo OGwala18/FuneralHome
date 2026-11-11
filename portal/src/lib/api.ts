@@ -305,6 +305,27 @@ interface PersonIn {
 
 export type Frequency = "monthly" | "quarterly" | "annually" | "once_off";
 
+/** The three branches a family can pay at, cash or card in person (0023). */
+export type PayBranch = "edendale" | "boshoff" | "langalibalele";
+export const PAY_BRANCHES: { value: PayBranch; label: string }[] = [
+  { value: "edendale", label: "Edendale Main Road (Head Office)" },
+  { value: "boshoff", label: "161 Boshoff Street" },
+  { value: "langalibalele", label: "171 Langalibalele Street" },
+];
+
+/** A beneficiary who is not one of the policy's lives: full details. */
+export interface BeneficiaryIn extends PersonIn {
+  email?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  suburb?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postal_code?: string | null;
+  relationship?: string | null;
+  share_percent?: number | null;
+}
+
 export interface EnrolmentIn extends PersonIn {
   enquiry_id?: string | null;
   initials?: string | null;
@@ -333,9 +354,13 @@ export interface EnrolmentIn extends PersonIn {
   entry_date?: string | null;
   // No premium and no cover: the API reads both from the price list.
   payment_method: PaymentMethod;
+  /** Required for cash or card in person. */
+  pay_branch_code?: PayBranch | null;
+  /** 1, 25 or 31 (the last day of the month). */
   debit_day?: number | null;
   frequency: Frequency;
-  beneficiary: PersonIn;
+  /** Null: choose on the next page, e.g. one of the dependants. */
+  beneficiary: BeneficiaryIn | null;
 }
 
 export interface EnrolmentOut {
@@ -343,6 +368,7 @@ export interface EnrolmentOut {
   policy_id: string;
   policy_number: string;
   premium_cents: number;
+  cover_cents: number | null;
   instalments_scheduled: number;
 }
 
@@ -377,6 +403,25 @@ export const addDependant = (policyId: string, body: DependantIn) =>
   mutate<{ person_id: string; policy_member_id: string; existing_person: boolean }>(
     `/api/admin/policies/${encodeURIComponent(policyId)}/members`, "POST", body);
 
+/** Make one of the policy's lives the beneficiary (personId), or add someone new. */
+export const addBeneficiary = (
+  policyId: string,
+  body: { person_id?: string; person?: BeneficiaryIn; relationship?: string | null },
+) =>
+  mutate<{ beneficiary_id: string; person_id: string; covered_life: boolean }>(
+    `/api/admin/policies/${encodeURIComponent(policyId)}/beneficiaries`, "POST", body);
+
+export const removeBeneficiary = async (policyId: string, beneficiaryId: string) => {
+  const token = await getAccessToken();
+  if (!token) throw new ApiError("Your session has ended. Please sign in again.", 401);
+  const response = await fetch(
+    `${API_BASE}/api/admin/policies/${encodeURIComponent(policyId)}/beneficiaries/` +
+      `${encodeURIComponent(beneficiaryId)}/remove`,
+    { method: "POST", headers: authHeaders(token) },
+  );
+  if (!response.ok) throw await readError(response, "Could not remove the beneficiary.");
+};
+
 /* ---------------------------------------------- Policy and premiums --- */
 
 export interface Instalment {
@@ -406,6 +451,18 @@ export interface PolicyLife {
   joined_at: string | null;
 }
 
+export interface PolicyBeneficiary {
+  beneficiary_id: string;
+  person_id: string;
+  surname: string;
+  first_names: string;
+  id_number: string | null;
+  relationship: string | null;
+  share_percent: number | null;
+  /** Also one of the lives the policy covers. */
+  covered_life: boolean;
+}
+
 export interface PolicyDetail {
   policy_id: string;
   policy_number: string;
@@ -422,7 +479,14 @@ export interface PolicyDetail {
   enquiry_reference: string | null;
   dependants_expected: number | null;
   lives: PolicyLife[];
-  payment: { method: string; debit_day: number | null; frequency: string } | null;
+  beneficiaries: PolicyBeneficiary[];
+  payment: {
+    method: string;
+    debit_day: number | null;
+    frequency: string;
+    pay_branch_code: string | null;
+    pay_branch_label: string | null;
+  } | null;
   instalments: Instalment[];
 }
 

@@ -600,3 +600,22 @@ tbody tr.clickable:hover { background: var(--paper); }
   .page-head { flex-direction: column; }
   .bar-row { grid-template-columns: 110px 1fr 44px; }
 }
+
+/* Two-way choices shown as a stacked list of radio buttons (e.g. who the
+   beneficiary is on the enrolment form). */
+.choice-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s8);
+}
+.choice {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s8);
+  cursor: pointer;
+}
+.choice input[type="radio"] {
+  margin: 0;
+  transform: translateY(2px);
+}

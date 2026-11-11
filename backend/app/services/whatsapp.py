@@ -136,6 +136,56 @@ def send_registration_confirmation(
         return WhatsAppResult(sent=False, error=code)
 
 
+def send_welcome(*, to_mobile: str, body: str, first_name: str,
+                 policy_number: str) -> WhatsAppResult:
+    """The welcome a new member gets. Template when configured. Never raises."""
+    return _send_business_message(
+        purpose="welcome", to_mobile=to_mobile, body=body,
+        template=get_settings().twilio_welcome_sid,
+        variables={"1": first_name, "2": policy_number})
+
+
+def _send_business_message(*, purpose: str, to_mobile: str, body: str,
+                           template: str | None, variables: dict) -> WhatsAppResult:
+    """A message the business starts: an approved template when one is set,
+    otherwise `body` (sandbox, or a conversation open in the last 24 hours)."""
+    settings = get_settings()
+    if not settings.whatsapp_enabled:
+        logger.info("WhatsApp not configured; would send a %s message", purpose)
+        return WhatsAppResult(sent=False, error="whatsapp_not_configured")
+    refusal = outbound_refusal(settings, to_mobile)
+    if refusal:
+        logger.info("WhatsApp %s not sent: %s (WHATSAPP_OUTBOUND=%s)",
+                    purpose, refusal, settings.whatsapp_outbound)
+        return WhatsAppResult(sent=False, error=refusal)
+    try:
+        from twilio.rest import Client
+    except ImportError:
+        logger.warning("twilio package not installed; skipping WhatsApp send")
+        return WhatsAppResult(sent=False, error="twilio_sdk_missing")
+    try:
+        import json
+
+        client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
+        params: dict = {"from_": f"whatsapp:{settings.twilio_whatsapp_from}",
+                        "to": f"whatsapp:{to_mobile}"}
+        callback = status_callback_url(settings)
+        if callback:
+            params["status_callback"] = callback
+        if template:
+            params["content_sid"] = template
+            params["content_variables"] = json.dumps(variables)
+        else:
+            params["body"] = body
+        message = client.messages.create(**params)
+        logger.info("WhatsApp %s sent, sid=%s", purpose, message.sid)
+        return WhatsAppResult(sent=True, message_sid=message.sid)
+    except Exception as exc:  # noqa: BLE001 - a send failure must not fail the caller
+        code = _failure_code(exc)
+        logger.warning("WhatsApp %s failed: %s", purpose, code)
+        return WhatsAppResult(sent=False, error=code)
+
+
 def send_payment_reminder(*, kind: str, to_mobile: str, body: str, first_name: str,
                           amount: str, policy_number: str) -> WhatsAppResult:
     """A payment reminder ('due' or 'missed'). Never raises.
