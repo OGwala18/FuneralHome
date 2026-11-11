@@ -111,9 +111,10 @@ def test_enrolling_an_enquiry_writes_the_whole_family_record(client, db, staff_a
     assert _one(db, "select member_type, person_id::text from policy_members "
                     "where policy_id = %s and member_type = 'main_member'",
                 policy_id) == ("main_member", person_id)
-    assert _one(db, "select pe.first_names, pe.date_of_birth from policy_members pm "
-                    "join people pe on pe.id = pm.person_id "
-                    "where pm.policy_id = %s and pm.member_type = 'beneficiary'",
+    # The beneficiary is recorded in policy_beneficiaries (0023), not as a life.
+    assert _one(db, "select pe.first_names, pe.date_of_birth from policy_beneficiaries pb "
+                    "join people pe on pe.id = pb.person_id "
+                    "where pb.policy_id = %s and pb.archived_at is null",
                 policy_id) == ("Nandi", date(1990, 1, 1))
     assert _one(db, "select citizenship, employment_status, source_of_funds, salary_day "
                     "from people where id = %s", person_id) == (
@@ -305,8 +306,8 @@ def test_dependants_join_the_policy_and_a_known_person_is_reused(client, db, sta
     assert spouse.json()["existing_person"] is False
 
     lives = client.get(f"/api/admin/policies/{policy_id}").json()["lives"]
-    assert [life["member_type"] for life in lives] == [
-        "main_member", "spouse", "child", "beneficiary"]
+    # A beneficiary who isn't covered is not one of the lives (0023).
+    assert [life["member_type"] for life in lives] == ["main_member", "spouse", "child"]
     assert lives[2]["entry_age"] == date.today().year - 2015 - (
         (date.today().month, date.today().day) < (3, 10))
 

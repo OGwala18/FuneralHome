@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  ApiError, enrolMember, fetchEnquiry, fetchNextPolicyNumber, fetchPlanPrices,
-  type EnquiryDetail, type Frequency, type PaymentMethod, type PlanPrice,
+  ApiError, PAY_BRANCHES, enrolMember, fetchEnquiry, fetchNextPolicyNumber, fetchPlanPrices,
+  type EnquiryDetail, type Frequency, type PayBranch, type PaymentMethod, type PlanPrice,
 } from "@/lib/api";
 import {
   COUNTRIES, EMPLOYMENT_STATUSES, INDUSTRIES, JOB_ROLES, SALARY_DAYS, SOURCES_OF_FUNDS,
@@ -10,7 +10,7 @@ import {
 import { ageOn, decodeSaId, formatMoney, fullName } from "@/lib/derive";
 import { navigate } from "@/lib/router";
 import { PAYMENT_METHODS, today } from "@/components/PaymentForm";
-import { Badge, Button, Field, Notice, Select, Skeleton } from "@/components/ui";
+import { Button, Field, Notice, Select, Skeleton } from "@/components/ui";
 
 /**
  * Enrol a main member: who they are, the compliance questions, how to reach
@@ -62,17 +62,25 @@ const PER: Record<Frequency, string> = {
 };
 const MONTHS: Record<Frequency, number> = { monthly: 1, quarterly: 3, annually: 12, once_off: 1 };
 
-// The days a debit order may run (the API accepts only these). Few choices on
-// purpose, so families pick a day their money is actually in the bank.
-const DEBIT_DAYS = [
+// The payment day, for every method (the API accepts only these). The owner,
+// 11 Nov 2026: the 1st, the 25th or the LAST DAY of the month (31, which the
+// schedule puts on the 28th, 29th, 30th or 31st). WhatsApp reminds the family on
+// that day, and once more the day after if it is still unpaid.
+const PAYMENT_DAYS = [
   { value: "", label: "Choose a day" },
-  ...[31, 1, 2, 3, 15, 20, 25].map((day) => ({ value: String(day), label: dayLabel(day) })),
+  ...[1, 25, 31].map((day) => ({ value: String(day), label: dayLabel(day) })),
 ];
+
+// Paying in person: which of the three branches.
+const IN_PERSON = new Set(["cash", "card"]);
+const BRANCH_OPTIONS = [{ value: "", label: "Choose a branch" }, ...PAY_BRANCHES];
 
 // Debit orders are built but not switched on. The option is shown so staff and
 // the owner can see where it goes, and cannot be chosen.
 const METHODS = PAYMENT_METHODS.map((m) => m.value === "debit_order"
-  ? { ...m, label: "Debit order (coming soon)", disabled: true } : m);
+  ? { ...m, label: "Debit order (coming soon)", disabled: true }
+  : m.value === "cash" ? { ...m, label: "Cash at a branch" }
+  : m.value === "card" ? { ...m, label: "Card, in person at a branch" } : m);
 
 const BLANK = {
   first_names: "", surname: "", initials: "", id_number: "", date_of_birth: "", gender: "",
@@ -84,8 +92,15 @@ const BLANK = {
   source_of_funds: "", source_of_funds_other: "", salary_day: "",
   policy_number: "", plan_code: "", plan_option: "", entry_date: today(),
   frequency: "monthly" as Frequency,
+  payment_day: "",
   payment_method: "undecided",
+  pay_branch_code: "",
+  // "later": one of the dependants, chosen on the next page once they're added.
+  // "someone": a person not covered by the policy, with full details.
+  ben_mode: "later" as "later" | "someone",
   ben_first_names: "", ben_surname: "", ben_id_number: "", ben_date_of_birth: "",
+  ben_relationship: "", ben_mobile: "", ben_email: "",
+  ben_address_line1: "", ben_suburb: "", ben_city: "", ben_postal_code: "",
 };
 
 type Form = typeof BLANK;
@@ -124,8 +139,12 @@ const fromEnquiry = (e: EnquiryDetail, form: Form): Form => {
     frequency: plan === "dome_plan" ? "once_off" : form.frequency,
     payment_method: e.payment_preference && PAYMENT_PREFERENCES.has(e.payment_preference)
       ? e.payment_preference : form.payment_method,
+    // The website asked who the beneficiary is. Start with that person; staff
+    // switch to a dependant if it turns out to be one of the family.
+    ben_mode: beneficiary.first ? "someone" : form.ben_mode,
     ben_first_names: beneficiary.first,
     ben_surname: beneficiary.last,
+    ben_relationship: e.beneficiary_relationship ?? "",
   };
 };
 
@@ -250,10 +269,18 @@ export default function Enrol({ enquiryId }: { enquiryId?: string }) {
 
     const local: Record<string, string> = {};
     if (!form.plan_code) local.plan_code = "Choose a plan";
+    if (form.frequency !== "once_off" && !form.payment_day) {
+      local.debit_day = "Choose the payment day";
+    }
     if (form.payment_method === "debit_order") {
       local.payment_method = "Debit orders are not switched on yet. Choose another method";
     }
-    if (!benDob) local["beneficiary.date_of_birth"] = "Enter the date of birth, or a valid ID number";
+    if (IN_PERSON.has(form.payment_method) && !form.pay_branch_code) {
+      local.pay_branch_code = "Choose the branch they will pay at";
+    }
+    if (form.ben_mode === "someone" && !benDob) {
+      local["beneficiary.date_of_birth"] = "Enter the date of birth, or a valid ID number";
+    }
     if (Object.keys(local).length) {
       setErrors(local);
       setError("Please check the highlighted fields.");
@@ -299,14 +326,24 @@ export default function Enrol({ enquiryId }: { enquiryId?: string }) {
         plan_option: orNull(form.plan_option),
         entry_date: orNull(form.entry_date),
         payment_method: form.payment_method as PaymentMethod,
-        // Debit orders are not switched on yet, so there is no debit day.
-        debit_day: null,
+        // The payment day, whatever the method. None for a once-off plan.
+        debit_day: form.frequency !== "once_off" && form.payment_day
+          ? Number(form.payment_day) : null,
         frequency: form.frequency,
-        beneficiary: {
+        pay_branch_code: IN_PERSON.has(form.payment_method)
+          ? (form.pay_branch_code as PayBranch) : null,
+        beneficiary: form.ben_mode === "later" ? null : {
           first_names: form.ben_first_names.trim(),
           surname: form.ben_surname.trim(),
           id_number: orNull(form.ben_id_number),
           date_of_birth: benDecoded ? null : orNull(form.ben_date_of_birth),
+          relationship: orNull(form.ben_relationship),
+          mobile: orNull(form.ben_mobile),
+          email: orNull(form.ben_email),
+          address_line1: orNull(form.ben_address_line1),
+          suburb: orNull(form.ben_suburb),
+          city: orNull(form.ben_city),
+          postal_code: orNull(form.ben_postal_code),
         },
       });
       navigate({ name: "policy", id: result.policy_id, addLives: true });
@@ -355,7 +392,7 @@ export default function Enrol({ enquiryId }: { enquiryId?: string }) {
           <p className="muted">
             {enquiry
               ? <>From enquiry <span className="ref">{enquiry.reference}</span>. Check what they typed against the paper application.</>
-              : "For a walk-in or a paper application. Dependants are added on the next page."}
+              : "Follows the paper application form, section by section. Spouse, children and extended family (sections 4–7 on paper) are added on the next page."}
           </p>
         </div>
       </div>
@@ -365,7 +402,25 @@ export default function Enrol({ enquiryId }: { enquiryId?: string }) {
 
       <form className="stack" onSubmit={submit} noValidate>
         <section className="card">
-          <div className="card-head"><h2 className="t-section">The main member</h2></div>
+          <div className="card-head"><h2 className="t-section">1. Plan</h2></div>
+          <div className="form-grid">
+            <Field label="Policy number" value={form.policy_number} onChange={set("policy_number")}
+              required hint="The next free IFH number. Change it to match the paper file."
+              error={err("policy_number")} autoComplete="off" />
+            <Select label="Plan" value={form.plan_code} onChange={choosePlan}
+              options={PLANS} error={err("plan_code")} />
+            {planOptions.length > 1 && (
+              <Select label="Plan option" value={form.plan_option} onChange={set("plan_option")}
+                options={[{ value: "", label: "Choose" }, ...planOptions]}
+                hint="Priced by the main member's age" error={err("plan_option")} />
+            )}
+            <Field label="Start date" type="date" value={form.entry_date} onChange={set("entry_date")}
+              error={err("entry_date")} />
+          </div>
+        </section>
+
+        <section className="card">
+          <div className="card-head"><h2 className="t-section">2. Main member</h2></div>
           <div className="form-grid">
             <Field label="First names" value={form.first_names} onChange={set("first_names")}
               required error={err("first_names")} autoComplete="off" />
@@ -386,10 +441,30 @@ export default function Enrol({ enquiryId }: { enquiryId?: string }) {
             <Select label="Language" value={form.language_preference}
               onChange={set("language_preference")} options={LANGUAGES} />
           </div>
+          <div className="form-grid" style={{ marginTop: "var(--s8)" }}>
+            <Field label="Mobile" type="tel" value={form.mobile} onChange={set("mobile")}
+              hint="Used for WhatsApp payment reminders" error={err("mobile")} autoComplete="off" />
+            <Field label="Email" type="email" value={form.email} onChange={set("email")}
+              hint="Optional" error={err("email")} autoComplete="off" />
+          </div>
+          <div className="form-grid" style={{ marginTop: "var(--s8)" }}>
+            <Field label="Street address" value={form.address_line1} onChange={set("address_line1")}
+              error={err("address_line1")} autoComplete="off" />
+            <Field label="Address line 2" value={form.address_line2} onChange={set("address_line2")}
+              hint="Optional" error={err("address_line2")} autoComplete="off" />
+            <Field label="Suburb or area" value={form.suburb} onChange={set("suburb")}
+              error={err("suburb")} autoComplete="off" />
+            <Field label="City or town" value={form.city} onChange={set("city")}
+              error={err("city")} autoComplete="off" />
+            <Field label="Province" value={form.province} onChange={set("province")}
+              error={err("province")} autoComplete="off" />
+            <Field label="Postal code" value={form.postal_code} onChange={set("postal_code")}
+              error={err("postal_code")} autoComplete="off" />
+          </div>
         </section>
 
         <section className="card">
-          <div className="card-head"><h2 className="t-section">Citizenship and income</h2></div>
+          <div className="card-head"><h2 className="t-section">3. Citizenship and income (FICA)</h2></div>
           <div className="form-grid">
             <Select label="Country of birth" value={form.country_of_birth}
               onChange={set("country_of_birth")} options={COUNTRIES}
@@ -439,48 +514,75 @@ export default function Enrol({ enquiryId }: { enquiryId?: string }) {
           )}
         </section>
 
+
         <section className="card">
-          <div className="card-head"><h2 className="t-section">How to reach them</h2></div>
-          <div className="form-grid">
-            <Field label="Mobile" type="tel" value={form.mobile} onChange={set("mobile")}
-              hint="Used for WhatsApp payment reminders" error={err("mobile")} autoComplete="off" />
-            <Field label="Email" type="email" value={form.email} onChange={set("email")}
-              hint="Optional" error={err("email")} autoComplete="off" />
+          <div className="card-head"><h2 className="t-section">4. Beneficiary</h2></div>
+          <p className="t-small muted" style={{ marginTop: 0 }}>Who receives the payout.</p>
+          <div className="choice-row" role="radiogroup" aria-label="Who is the beneficiary">
+            <label className="choice">
+              <input type="radio" name="ben_mode" checked={form.ben_mode === "later"}
+                onChange={() => setForm((f) => ({ ...f, ben_mode: "later" }))} />
+              One of the dependants
+              <span className="t-small muted"> &middot; choose on the next page, once they&rsquo;re added</span>
+            </label>
+            <label className="choice">
+              <input type="radio" name="ben_mode" checked={form.ben_mode === "someone"}
+                onChange={() => setForm((f) => ({ ...f, ben_mode: "someone" }))} />
+              Someone not on the policy
+              <span className="t-small muted"> &middot; e.g. a brother with his own cover</span>
+            </label>
           </div>
-          <div className="form-grid" style={{ marginTop: "var(--s8)" }}>
-            <Field label="Street address" value={form.address_line1} onChange={set("address_line1")}
-              error={err("address_line1")} autoComplete="off" />
-            <Field label="Address line 2" value={form.address_line2} onChange={set("address_line2")}
-              hint="Optional" error={err("address_line2")} autoComplete="off" />
-            <Field label="Suburb or area" value={form.suburb} onChange={set("suburb")}
-              error={err("suburb")} autoComplete="off" />
-            <Field label="City or town" value={form.city} onChange={set("city")}
-              error={err("city")} autoComplete="off" />
-            <Field label="Province" value={form.province} onChange={set("province")}
-              error={err("province")} autoComplete="off" />
-            <Field label="Postal code" value={form.postal_code} onChange={set("postal_code")}
-              error={err("postal_code")} autoComplete="off" />
-          </div>
+          {form.ben_mode === "someone" && (
+            <div className="form-grid" style={{ marginTop: "var(--s16)" }}>
+              <Field label="First names" value={form.ben_first_names} onChange={set("ben_first_names")}
+                required error={err("beneficiary.first_names")} autoComplete="off" />
+              <Field label="Surname" value={form.ben_surname} onChange={set("ben_surname")}
+                required error={err("beneficiary.surname")} autoComplete="off" />
+              <Field label="Relationship" value={form.ben_relationship}
+                onChange={set("ben_relationship")} hint="To the main member, e.g. Brother"
+                error={err("beneficiary.relationship")} autoComplete="off" />
+              <Field label="ID number" value={form.ben_id_number} onChange={set("ben_id_number")}
+                hint="Date of birth is read from it" error={err("beneficiary.id_number")}
+                autoComplete="off" />
+              <Field label="Date of birth" type="date" value={benDob}
+                onChange={set("ben_date_of_birth")} disabled={!!benDecoded} required
+                hint={benDecoded ? "Read from the ID number" : "Required"}
+                error={err("beneficiary.date_of_birth")} />
+              <Field label="Mobile" type="tel" value={form.ben_mobile} onChange={set("ben_mobile")}
+                error={err("beneficiary.mobile")} autoComplete="off" />
+              <Field label="Email" type="email" value={form.ben_email} onChange={set("ben_email")}
+                hint="Optional" error={err("beneficiary.email")} autoComplete="off" />
+              <Field label="Street address" value={form.ben_address_line1}
+                onChange={set("ben_address_line1")} error={err("beneficiary.address_line1")}
+                autoComplete="off" />
+              <Field label="Suburb or area" value={form.ben_suburb} onChange={set("ben_suburb")}
+                error={err("beneficiary.suburb")} autoComplete="off" />
+              <Field label="City or town" value={form.ben_city} onChange={set("ben_city")}
+                error={err("beneficiary.city")} autoComplete="off" />
+              <Field label="Postal code" value={form.ben_postal_code}
+                onChange={set("ben_postal_code")} error={err("beneficiary.postal_code")}
+                autoComplete="off" />
+            </div>
+          )}
         </section>
 
         <section className="card">
-          <div className="card-head"><h2 className="t-section">The policy</h2></div>
+          <div className="card-head"><h2 className="t-section">5. Payment</h2></div>
           <div className="form-grid">
-            <Field label="Policy number" value={form.policy_number} onChange={set("policy_number")}
-              required hint="The next free IFH number. Change it to match the paper file."
-              error={err("policy_number")} autoComplete="off" />
-            <Select label="Plan" value={form.plan_code} onChange={choosePlan}
-              options={PLANS} error={err("plan_code")} />
-            {planOptions.length > 1 && (
-              <Select label="Plan option" value={form.plan_option} onChange={set("plan_option")}
-                options={[{ value: "", label: "Choose" }, ...planOptions]}
-                hint="Priced by the main member's age" error={err("plan_option")} />
+            <Select label="Method" value={form.payment_method} onChange={set("payment_method")}
+              options={METHODS} error={err("payment_method")} />
+            {IN_PERSON.has(form.payment_method) && (
+              <Select label="Branch" value={form.pay_branch_code}
+                onChange={set("pay_branch_code")} options={BRANCH_OPTIONS}
+                hint="Where they will pay" error={err("pay_branch_code")} />
             )}
-            <Field label="Start date" type="date" value={form.entry_date} onChange={set("entry_date")}
-              error={err("entry_date")} />
             <Select label="Payment frequency" value={form.frequency} onChange={set("frequency")}
               options={onceOff ? ONCE_OFF : FREQUENCIES} disabled={onceOff}
               hint={onceOff ? "This plan is paid once" : undefined} error={err("frequency")} />
+            <Select label="Payment day" value={onceOff ? "" : form.payment_day}
+              onChange={set("payment_day")} options={PAYMENT_DAYS} disabled={onceOff}
+              hint={onceOff ? "Paid once" : "WhatsApp reminds them on this day, and the day after if unpaid"}
+              error={err("debit_day")} />
             <div className="field">
               <span className="field-label">Premium</span>
               <div className="premium-readout" aria-live="polite">
@@ -505,57 +607,10 @@ export default function Enrol({ enquiryId }: { enquiryId?: string }) {
               <span className="field-hint">Set by the plan. It cannot be typed in.</span>
             </div>
           </div>
-        </section>
-
-        <section className="card">
-          <div className="card-head"><h2 className="t-section">Beneficiary</h2></div>
-          <p className="t-small muted" style={{ marginTop: 0 }}>Who the policy pays out to.</p>
-          <div className="form-grid">
-            <Field label="First names" value={form.ben_first_names} onChange={set("ben_first_names")}
-              required error={err("beneficiary.first_names")} autoComplete="off" />
-            <Field label="Surname" value={form.ben_surname} onChange={set("ben_surname")}
-              required error={err("beneficiary.surname")} autoComplete="off" />
-            <Field label="ID number" value={form.ben_id_number} onChange={set("ben_id_number")}
-              hint="Optional" error={err("beneficiary.id_number")} autoComplete="off" />
-            <Field label="Date of birth" type="date" value={benDob}
-              onChange={set("ben_date_of_birth")} disabled={!!benDecoded} required
-              hint={benDecoded ? "Read from the ID number" : "Required"}
-              error={err("beneficiary.date_of_birth")} />
-          </div>
-        </section>
-
-        <section className="card">
-          <div className="card-head"><h2 className="t-section">How it is paid</h2></div>
-          <div className="form-grid">
-            <Select label="Method" value={form.payment_method} onChange={set("payment_method")}
-              options={METHODS} error={err("payment_method")} />
-          </div>
-
-          <div className="coming-soon" aria-disabled="true">
-            <div className="row coming-soon-head">
-              <h3 className="t-section" style={{ margin: 0 }}>Debit order</h3>
-              <Badge>Coming soon</Badge>
-            </div>
-            <p className="t-small muted" style={{ marginTop: 0 }}>
-              Debit orders are not switched on yet. This shows how they will work; nothing
-              here is saved. When they go live, the bank details are taken by the payment
-              provider, never stored in this system.
-            </p>
-            <div className="form-grid">
-              <Select label="Debit order date" value="" onChange={() => {}} disabled
-                options={DEBIT_DAYS} hint="1st, 2nd, 3rd, 15th, 20th, 25th or last day" />
-            </div>
-            <div className="form-grid" style={{ marginTop: "var(--s8)" }}>
-              <Field label="Bank" value="" onChange={() => {}} disabled
-                placeholder="Captured by the payment provider" />
-              <Field label="Account holder" value="" onChange={() => {}} disabled
-                placeholder="Captured by the payment provider" />
-              <Field label="Account type" value="" onChange={() => {}} disabled
-                placeholder="Captured by the payment provider" />
-              <Field label="Account number" value="" onChange={() => {}} disabled
-                placeholder="Captured by the payment provider" />
-            </div>
-          </div>
+          <p className="t-small muted" style={{ marginBottom: 0 }}>
+            Debit orders are coming soon. Bank account details are never captured here:
+            when debit orders go live, the payment provider takes them.
+          </p>
         </section>
 
         <div className="page-foot">

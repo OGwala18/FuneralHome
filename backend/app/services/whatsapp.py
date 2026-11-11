@@ -51,14 +51,39 @@ def _plain_body(first_name: str, reference: str) -> str:
     )
 
 
+def known_number(number: str) -> bool:
+    """Whether a family gave us this number: on the website form (an enquiry)
+    or in the member book (a phone on a person). Never logs the number."""
+    from ..db import connection  # the database is only needed for this mode
+
+    national = number[3:] if number.startswith("+27") else None
+    variants = [number] + (["27" + national, "0" + national] if national else [])
+    try:
+        with connection() as conn:
+            return conn.execute(
+                """
+                select exists (select 1 from plan_enquiries
+                                where archived_at is null and mobile_number = any(%s))
+                    or exists (select 1 from person_phones
+                                where archived_at is null and number = %s) as known
+                """,
+                (variants, number),
+            ).fetchone()["known"]
+    except Exception:  # noqa: BLE001 - unsure means no: never message a stranger
+        logger.warning("Could not check whether a WhatsApp number is known")
+        return False
+
+
 def outbound_refusal(settings: Settings, to_mobile: str) -> str | None:
     """Why WHATSAPP_OUTBOUND forbids a message to `to_mobile`, or None if it
     allows one. Every message the line sends asks this first."""
     if settings.whatsapp_outbound == "on":
         return None
-    if settings.whatsapp_outbound == "allowlist":
+    if settings.whatsapp_outbound in ("allowlist", "known"):
         if to_mobile in settings.whatsapp_test_recipients:
             return None
+        if settings.whatsapp_outbound == "known":
+            return None if known_number(to_mobile) else "whatsapp_unknown_number"
         return "whatsapp_not_allowlisted"
     return "whatsapp_outbound_off"
 
@@ -133,6 +158,109 @@ def send_registration_confirmation(
     except Exception as exc:  # noqa: BLE001 - a send failure must not fail the request
         code = _failure_code(exc)
         logger.warning("WhatsApp send failed for reference %s: %s", reference, code)
+        return WhatsAppResult(sent=False, error=code)
+
+
+def send_welcome(*, to_mobile: str, body: str, first_name: str,
+                 policy_number: str) -> WhatsAppResult:
+    """The welcome a new member gets. Template when configured. Never raises."""
+    return _send_business_message(
+        purpose="welcome", to_mobile=to_mobile, body=body,
+        template=get_settings().twilio_welcome_sid,
+        variables={"1": first_name, "2": policy_number})
+
+
+def _send_business_message(*, purpose: str, to_mobile: str, body: str,
+                           template: str | None, variables: dict) -> WhatsAppResult:
+    """A message the business starts: an approved template when one is set,
+    otherwise `body` (sandbox, or a conversation open in the last 24 hours)."""
+    settings = get_settings()
+    if not settings.whatsapp_enabled:
+        logger.info("WhatsApp not configured; would send a %s message", purpose)
+        return WhatsAppResult(sent=False, error="whatsapp_not_configured")
+    refusal = outbound_refusal(settings, to_mobile)
+    if refusal:
+        logger.info("WhatsApp %s not sent: %s (WHATSAPP_OUTBOUND=%s)",
+                    purpose, refusal, settings.whatsapp_outbound)
+        return WhatsAppResult(sent=False, error=refusal)
+    try:
+        from twilio.rest import Client
+    except ImportError:
+        logger.warning("twilio package not installed; skipping WhatsApp send")
+        return WhatsAppResult(sent=False, error="twilio_sdk_missing")
+    try:
+        import json
+
+        client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
+        params: dict = {"from_": f"whatsapp:{settings.twilio_whatsapp_from}",
+                        "to": f"whatsapp:{to_mobile}"}
+        callback = status_callback_url(settings)
+        if callback:
+            params["status_callback"] = callback
+        if template:
+            params["content_sid"] = template
+            params["content_variables"] = json.dumps(variables)
+        else:
+            params["body"] = body
+        message = client.messages.create(**params)
+        logger.info("WhatsApp %s sent, sid=%s", purpose, message.sid)
+        return WhatsAppResult(sent=True, message_sid=message.sid)
+    except Exception as exc:  # noqa: BLE001 - a send failure must not fail the caller
+        code = _failure_code(exc)
+        logger.warning("WhatsApp %s failed: %s", purpose, code)
+        return WhatsAppResult(sent=False, error=code)
+
+
+def send_payment_reminder(*, kind: str, to_mobile: str, body: str, first_name: str,
+                          amount: str, policy_number: str) -> WhatsAppResult:
+    """A payment reminder ('due' or 'missed'). Never raises.
+
+    Uses the approved template for `kind` when one is configured, because a
+    business-initiated WhatsApp outside a 24-hour conversation must be one.
+    Otherwise sends `body` as plain text (sandbox, or an open conversation).
+    """
+    settings = get_settings()
+    if not settings.whatsapp_enabled:
+        logger.info("WhatsApp not configured; would send a %s payment reminder", kind)
+        return WhatsAppResult(sent=False, error="whatsapp_not_configured")
+
+    refusal = outbound_refusal(settings, to_mobile)
+    if refusal:
+        logger.info("Payment reminder not sent: %s (WHATSAPP_OUTBOUND=%s)",
+                    refusal, settings.whatsapp_outbound)
+        return WhatsAppResult(sent=False, error=refusal)
+
+    try:
+        from twilio.rest import Client
+    except ImportError:
+        logger.warning("twilio package not installed; skipping WhatsApp send")
+        return WhatsAppResult(sent=False, error="twilio_sdk_missing")
+
+    template = (settings.twilio_payment_due_sid if kind == "due"
+                else settings.twilio_payment_missed_sid)
+    try:
+        import json
+
+        client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
+        params: dict = {
+            "from_": f"whatsapp:{settings.twilio_whatsapp_from}",
+            "to": f"whatsapp:{to_mobile}",
+        }
+        callback = status_callback_url(settings)
+        if callback:
+            params["status_callback"] = callback
+        if template:
+            params["content_sid"] = template
+            params["content_variables"] = json.dumps(
+                {"1": first_name, "2": amount, "3": policy_number})
+        else:
+            params["body"] = body
+        message = client.messages.create(**params)
+        logger.info("Payment reminder (%s) sent, sid=%s", kind, message.sid)
+        return WhatsAppResult(sent=True, message_sid=message.sid)
+    except Exception as exc:  # noqa: BLE001 - one failed send must not stop the run
+        code = _failure_code(exc)
+        logger.warning("Payment reminder (%s) failed: %s", kind, code)
         return WhatsAppResult(sent=False, error=code)
 
 
