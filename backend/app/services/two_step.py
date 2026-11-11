@@ -114,3 +114,135 @@ def is_recent(method: str | None, verified_at: datetime | None, at: datetime) ->
     if method is None or method == TRUSTED_DEVICE or verified_at is None:
         return False
     return at - verified_at <= RECENT_WINDOW
+
+
+# --- Emailed code (Bit 5; plan §5 "the code's life", §9) --------------------------
+
+CODE_LIFETIME = timedelta(minutes=5)
+RESEND_GAP = timedelta(seconds=60)
+SENDS_PER_HOUR = 5
+ATTEMPTS_PER_CODE = 5
+
+# Across every method: this many wrong answers inside the window locks the
+# person out of the second step until the window has passed (plan §8).
+LOCK_FAILURES = 10
+LOCK_WINDOW = timedelta(minutes=15)
+
+
+def log_event(conn: Any, actor_email: str, event_type: str, subject: str,
+              at: datetime, payload: dict | None = None) -> None:
+    """A staff_events row stamped from the two-step clock.
+
+    Payloads never hold a code, a secret, a device token or an IP address
+    (ARCHITECTURE.md rule 9); only the method and a reason word.
+    """
+    import json
+
+    conn.execute(
+        """
+        insert into staff_events (actor_email, event_type, subject, payload, created_at)
+        values (%s, %s, %s, %s::jsonb, %s)
+        """,
+        (actor_email, event_type, subject, json.dumps(payload or {}), at),
+    )
+
+
+def locked_for(conn: Any, email: str, at: datetime) -> int:
+    """Seconds until this person may try the second step again; 0 if not locked.
+
+    Counted from staff_events, so there is no lockout flag to get stuck.
+    """
+    rows = conn.execute(
+        """
+        select created_at from staff_events
+         where subject = %s
+           and event_type = '2fa_failed'
+           and created_at > %s
+           and created_at <= %s
+         order by created_at desc
+         limit %s
+        """,
+        (email, at - LOCK_WINDOW, at, LOCK_FAILURES),
+    ).fetchall()
+    if len(rows) < LOCK_FAILURES:
+        return 0
+    # Locked until the oldest of the last ten failures leaves the window.
+    oldest = rows[-1]["created_at"]
+    return max(int((oldest + LOCK_WINDOW - at).total_seconds()) + 1, 1)
+
+
+def record_failure(conn: Any, email: str, method: str, reason: str, at: datetime) -> bool:
+    """Log a wrong answer. Returns True when this failure is the one that locks."""
+    log_event(conn, email, "2fa_failed", email, at, {"method": method, "reason": reason})
+    if locked_for(conn, email, at):
+        log_event(conn, email, "2fa_locked", email, at, {"minutes": 15})
+        return True
+    return False
+
+
+def resend_wait(conn: Any, staff_id: str, at: datetime) -> int:
+    """Seconds before another code may be sent; 0 if one may go now."""
+    rows = conn.execute(
+        """
+        select created_at from staff_mfa_challenges
+         where staff_user_id = %s
+           and kind = 'email_code'
+           and created_at > %s
+           and created_at <= %s
+         order by created_at desc
+        """,
+        (staff_id, at - timedelta(hours=1), at),
+    ).fetchall()
+    if not rows:
+        return 0
+    waits = [int((rows[0]["created_at"] + RESEND_GAP - at).total_seconds()) + 1]
+    if len(rows) >= SENDS_PER_HOUR:
+        waits.append(int((rows[SENDS_PER_HOUR - 1]["created_at"] + timedelta(hours=1) - at)
+                         .total_seconds()) + 1)
+    wait = max(waits)
+    return wait if wait > 0 else 0
+
+
+def issue_email_code(conn: Any, staff_id: str, session_id: str, code_hash_for, at: datetime
+                     ) -> tuple[str, datetime]:
+    """Replace any live code with a new one. Returns (challenge_id, expires_at).
+
+    `code_hash_for(challenge_id)` hashes the new code against its own id, so the
+    same six digits never hash the same way twice.
+    """
+    import uuid as _uuid
+
+    conn.execute(
+        """
+        update staff_mfa_challenges
+           set replaced_at = %s
+         where staff_user_id = %s
+           and kind = 'email_code'
+           and used_at is null
+           and replaced_at is null
+        """,
+        (at, staff_id),
+    )
+    challenge_id = str(_uuid.uuid4())
+    expires_at = at + CODE_LIFETIME
+    conn.execute(
+        """
+        insert into staff_mfa_challenges
+            (id, staff_user_id, session_id, kind, code_hash, created_at, expires_at)
+        values (%s, %s, %s, 'email_code', %s, %s, %s)
+        """,
+        (challenge_id, staff_id, session_id, code_hash_for(challenge_id), at, expires_at),
+    )
+    return challenge_id, expires_at
+
+
+def why_dead(challenge: dict, at: datetime) -> str | None:
+    """None if the code can still be tried, else the error code to give.
+
+    Worked out from the clock and the row every time; nothing stores "expired".
+    """
+    if challenge["used_at"] is not None or challenge["attempts"] >= ATTEMPTS_PER_CODE:
+        return "code_used_up"
+    if challenge["replaced_at"] is not None or at >= challenge["expires_at"]:
+        return "code_expired"
+    return None

@@ -782,7 +782,7 @@ Each bit's pull request updates its own row.
 | 2 | Prove the office email sends on internal | — | ~2M | Not started |
 | 3 | Database tables, settings and crypto helpers | 0 | ~8M | Done (#14) |
 | 4 | Enforcement core and the guard test (enforcement off) | 3 | ~10M | Done (#37) |
-| 5 | Emailed code (API) | 2, 4 | ~10M | Not started |
+| 5 | Emailed code (API) | 2, 4 | ~10M | Done (this PR) |
 | 6 | Trusted computers and the "Confirm it's you" screen; enforcement on for internal | 1, 5 | ~15M | Not started |
 | 7 | Authenticator app | 6 | ~10M | Not started |
 | 8 | Passkeys (API) | 6 | ~12M | Not started |
