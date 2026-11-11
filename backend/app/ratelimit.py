@@ -16,6 +16,7 @@ Redis rather than raising the limits.
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from collections import defaultdict, deque
@@ -57,18 +58,25 @@ class SlidingWindowLimiter:
             return True, 0
 
 
-def client_key(request: Request) -> str:
-    """Identify the caller.
+# How many proxies sit between the internet and this process. Each one APPENDS
+# the address it saw to X-Forwarded-For, so the trustworthy entry is counted
+# from the right; anything to its left was written by the caller. Railway's edge
+# is one hop. Put Cloudflare's proxy in front as well and this becomes 2.
+TRUSTED_PROXY_HOPS = max(int(os.getenv("TRUSTED_PROXY_HOPS", "1") or 1), 1)
 
-    Behind a reverse proxy the socket address is the proxy, so the first hop in
-    X-Forwarded-For is used when present. That header is caller-controlled and
-    trivially spoofed, so this is a courtesy for honest clients and a speed bump
-    for others — it is NOT an identity control. Only trust it because the only
-    thing gated by it is a request count.
+
+def client_key(request: Request) -> str:
+    """Identify the caller for counting purposes.
+
+    The LEFT end of X-Forwarded-For is whatever the caller chose to send, so
+    reading it let a script dodge every limit by inventing a new address per
+    request. The entry added by our own proxy is the one counted from the right.
+    This is still only a request counter, never an identity control.
     """
-    forwarded = request.headers.get("x-forwarded-for", "")
+    forwarded = [hop.strip() for hop in request.headers.get("x-forwarded-for", "").split(",")]
+    forwarded = [hop for hop in forwarded if hop]
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        return forwarded[-min(TRUSTED_PROXY_HOPS, len(forwarded))]
     return request.client.host if request.client else "unknown"
 
 

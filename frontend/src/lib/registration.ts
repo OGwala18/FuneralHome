@@ -212,11 +212,31 @@ const request = async <T,>(path: string, init: RequestInit): Promise<T> => {
   return (await response.json()) as T;
 };
 
-export const submitLead = (payload: LeadPayload) =>
-  request<EnquiryHandle>("/api/enquiries", {
+/**
+ * One Idempotency-Key per set of details. A retry of the same details (a double
+ * tap, a timeout the server actually survived) reuses the key, so the API hands
+ * back the enquiry it already saved instead of making a second one. Changing any
+ * field makes a fresh key, because that is a different submission.
+ */
+let leadAttempt: { body: string; key: string | null } | null = null;
+
+// Every browser that can run this site over HTTPS has randomUUID. One that
+// doesn't simply sends no key; the API treats the header as optional.
+const newKey = () =>
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : null;
+
+export const submitLead = async (payload: LeadPayload) => {
+  const body = JSON.stringify(payload);
+  if (leadAttempt?.body !== body) leadAttempt = { body, key: newKey() };
+
+  const handle = await request<EnquiryHandle>("/api/enquiries", {
     method: "POST",
-    body: JSON.stringify(payload),
+    headers: leadAttempt.key ? { "Idempotency-Key": leadAttempt.key } : {},
+    body,
   });
+  leadAttempt = null;
+  return handle;
+};
 
 export const submitApplication = (enquiryId: string, payload: ApplicationPayload) =>
   request<EnquiryHandle>(`/api/enquiries/${enquiryId}/application`, {
