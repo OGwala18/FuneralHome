@@ -160,14 +160,14 @@ def _send(message: EmailMessage) -> EmailResult:
                 server.login(settings.smtp_username, settings.smtp_password)
             server.send_message(message)
 
-        logger.info("Admin email sent for %s", message["X-Induduzo-Reference"])
+        logger.info("Email sent for %s", message["X-Induduzo-Reference"])
         return EmailResult(sent=True)
 
     except Exception as exc:  # noqa: BLE001 - a mail failure must not fail the request
         # Deliberately logging neither the body nor the subject: the body is full
         # of personal data and the subject carries the applicant's name.
         logger.warning(
-            "Admin email failed for %s: %s", message["X-Induduzo-Reference"], exc
+            "Email failed for %s: %s", message["X-Induduzo-Reference"], exc
         )
         return EmailResult(sent=False, error=str(exc)[:200])
 
