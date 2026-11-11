@@ -23,7 +23,13 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, ConfigDict
 
-from ..auth import DEVICE_HEADER, StaffGateError, StaffUser, require_staff_identity
+from ..auth import (
+    DEVICE_HEADER,
+    StaffGateError,
+    StaffUser,
+    require_staff,
+    require_staff_identity,
+)
 from ..config import get_settings
 from ..db import connection
 from ..services import two_step
@@ -103,6 +109,10 @@ class VerifiedOut(BaseModel):
     verified: bool
     verified_by: str
     verified_until: datetime
+    # Only when "Trust this computer" was ticked. Shown to the browser once; the
+    # portal keeps it and sends it as X-Induduzo-Device. We keep only its hash.
+    device_token: str | None = None
+    trusted_until: datetime | None = None
 
 
 _SIX_DIGITS = re.compile(r"^\d{6}$")
@@ -189,7 +199,7 @@ def email_send(staff: StaffUser = Depends(require_staff_identity)) -> EmailSendO
 
 @router.post("/email/verify", response_model=VerifiedOut)
 def email_verify(
-    body: EmailVerifyIn, staff: StaffUser = Depends(require_staff_identity)
+    body: EmailVerifyIn, request: Request, staff: StaffUser = Depends(require_staff_identity)
 ) -> VerifiedOut:
     """Check an emailed code. Right code, in time, same session: this session passes."""
     session_id = _needs_session(staff)
@@ -199,6 +209,7 @@ def email_verify(
     challenge_id = _as_uuid(body.challenge_id)
 
     passed = None
+    device_token = device = None
     with connection() as conn:
         locked = two_step.locked_for(conn, staff.email, at)
         if locked:
@@ -234,6 +245,13 @@ def email_verify(
                     )
                     two_step.log_event(conn, staff.email, "2fa_passed", staff.email,
                                        at, {"method": "email_code"})
+                    if body.trust_device:
+                        device_token, device = two_step.trust_device(
+                            conn, staff.staff_id,
+                            two_step.device_label(request.headers.get("user-agent")), at,
+                        )
+                        two_step.log_event(conn, staff.email, "2fa_device_trusted",
+                                           staff.email, at, {"label": device["label"]})
                     outcome = "passed"
                 else:
                     conn.execute(
@@ -250,7 +268,73 @@ def email_verify(
 
     if outcome == "passed":
         return VerifiedOut(verified=True, verified_by="email_code",
-                           verified_until=passed["expires_at"])
+                           verified_until=passed["expires_at"],
+                           device_token=device_token,
+                           trusted_until=device["expires_at"] if device else None)
     if locked:
         raise _locked(locked)
     raise StaffGateError(status.HTTP_400_BAD_REQUEST, outcome, _CODE_MESSAGES[outcome])
+
+
+# --- Trusted computers (strict: the second step must already be done) ---------------
+
+class DeviceOut(BaseModel):
+    id: str
+    label: str
+    trusted_since: datetime
+    trusted_until: datetime
+    last_used_at: datetime | None
+    # The computer this request came from.
+    this_computer: bool
+
+
+class ForgotOut(BaseModel):
+    forgotten: int
+
+
+def _current_device_id(conn, request: Request, staff: StaffUser, at) -> str | None:
+    device = two_step.find_trusted_device(
+        conn, staff.staff_id, request.headers.get(DEVICE_HEADER), at
+    )
+    return str(device["id"]) if device else None
+
+
+@router.get("/devices", response_model=list[DeviceOut])
+def devices(request: Request, staff: StaffUser = Depends(require_staff)) -> list[DeviceOut]:
+    at = two_step.now()
+    with connection() as conn:
+        current = _current_device_id(conn, request, staff, at)
+        rows = two_step.list_devices(conn, staff.staff_id, at)
+    return [
+        DeviceOut(id=str(r["id"]), label=r["label"], trusted_since=r["created_at"],
+                  trusted_until=r["expires_at"], last_used_at=r["last_used_at"],
+                  this_computer=str(r["id"]) == current)
+        for r in rows
+    ]
+
+
+@router.post("/devices/{device_id}/forget", response_model=ForgotOut)
+def forget_device(device_id: uuid.UUID, staff: StaffUser = Depends(require_staff)) -> ForgotOut:
+    """Stop trusting one of your own computers. Someone else's id matches nothing."""
+    at = two_step.now()
+    with connection() as conn:
+        count = two_step.revoke_devices(conn, staff.staff_id, staff.email, at,
+                                        only=str(device_id))
+        if count:
+            two_step.log_event(conn, staff.email, "2fa_device_revoked", staff.email, at,
+                               {"count": count})
+    return ForgotOut(forgotten=count)
+
+
+@router.post("/devices/forget-others", response_model=ForgotOut)
+def forget_other_devices(request: Request,
+                         staff: StaffUser = Depends(require_staff)) -> ForgotOut:
+    """Stop trusting every computer except the one making this request."""
+    at = two_step.now()
+    with connection() as conn:
+        keep = _current_device_id(conn, request, staff, at)
+        count = two_step.revoke_devices(conn, staff.staff_id, staff.email, at, keep=keep)
+        if count:
+            two_step.log_event(conn, staff.email, "2fa_device_revoked", staff.email, at,
+                               {"count": count})
+    return ForgotOut(forgotten=count)
