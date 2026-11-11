@@ -28,7 +28,7 @@ COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --requirement backend/requirements.txt
 
 COPY backend/app backend/app
-COPY db/migrate.py db/provision_api_role.py db/
+COPY db/migrate.py db/provision_api_role.py db/backup.py db/
 COPY db/migrations db/migrations
 
 # Not root. Nothing here needs to write to the filesystem.
