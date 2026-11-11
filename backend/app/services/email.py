@@ -274,6 +274,57 @@ def send_whatsapp_escalation(escalation: dict, name: str) -> EmailResult:
     )
 
 
+# --- A new member's welcome --------------------------------------------------------
+
+def send_member_welcome(*, to_email: str, first_name: str, policy_number: str,
+                        review_url: str | None) -> EmailResult:
+    """Welcome a newly enrolled member by email. A notification: never raises.
+
+    Goes to the member, not the office. The policy number is the reference
+    _send logs; the address and name never reach a log.
+    """
+    settings = get_settings()
+    name = (first_name or "").split(" ")[0] or "there"
+    message = EmailMessage()
+    message["Subject"] = "Welcome to the Induduzo family"
+    message["From"] = formataddr(("Induduzo Funeral Home", settings.mail_from))
+    message["To"] = to_email
+    message["Date"] = formatdate(localtime=True)
+    message["Message-ID"] = make_msgid(domain="induduzo.co.za")
+    message["X-Induduzo-Reference"] = policy_number
+
+    review_plain = (f"\nIf you have a moment, we'd be grateful for a Google review:\n"
+                    f"{review_url}\n") if review_url else ""
+    message.set_content(
+        f"Hello {name},\n\n"
+        "You've been successfully added to the Induduzo family, and it's great to have you.\n\n"
+        f"Your policy number is {policy_number}. Please use it as the reference whenever "
+        "you pay, and keep it somewhere safe.\n\n"
+        "Your cover starts once your first premium is received, and a 3-month waiting "
+        "period applies to natural causes.\n"
+        f"{review_plain}\n"
+        "Induduzo Funeral Home - Siyazazi Izingxaki Zakho\n"
+        "WhatsApp 073 731 0521 | 082 954 9241 | info@induduzo.co.za\n"
+    )
+    review_html = (f'<p><a href="{html.escape(review_url)}">Leave us a Google review</a>'
+                   "</p>") if review_url else ""
+    message.add_alternative(
+        '<html><body style="font-family:Segoe UI,Arial,sans-serif;color:#171C21">'
+        f"<p>Hello {html.escape(name)},</p>"
+        "<p><strong>You've been successfully added to the Induduzo family</strong>, and "
+        "it's great to have you.</p>"
+        f"<p>Your policy number is <strong>{html.escape(policy_number)}</strong>. Please use "
+        "it as the reference whenever you pay, and keep it somewhere safe.</p>"
+        "<p style=\"color:#526170\">Your cover starts once your first premium is received, "
+        "and a 3-month waiting period applies to natural causes.</p>"
+        f"{review_html}"
+        '<p style="color:#526170;font-size:12px">Induduzo Funeral Home &middot; '
+        "Siyazazi Izingxaki Zakho &middot; WhatsApp 073 731 0521</p></body></html>",
+        subtype="html",
+    )
+    return _send(message)
+
+
 # --- Staff sign-in code (2FA Bit 5; plan §9 "Emailed code") ------------------------
 
 # South Africa has no daylight saving, so a fixed offset is exact all year.

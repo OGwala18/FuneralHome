@@ -1,11 +1,11 @@
 """WhatsApp payment reminders: on the payment day, and the day after if unpaid.
 
-The owner, 11 Nov 2026. A family pays on the 1st, the 25th or the 30th (their
-payment day, policy_payments.debit_day). On that day every premium still unpaid
-gets a reminder with our bank details and the policy number as the reference;
-the day after, one still unpaid gets one more ("we haven't received it"). So
-the 1st -> the 2nd, the 25th -> the 26th, the 30th -> the 31st (or the 1st of
-the next month when the month has 30 days).
+The owner, 11 Nov 2026. A family pays on the 1st, the 25th or the last day of
+the month (their payment day, policy_payments.debit_day; 31 = the last day). On
+that day every premium still unpaid gets a reminder with our bank details and
+the policy number as the reference; the day after, one still unpaid gets one
+more ("we haven't received it"). So the 1st -> the 2nd, the 25th -> the 26th,
+the last day -> the 1st of the next month.
 
 RULES
 - Once each: a payment_reminders row is written as 'pending' BEFORE sending,

@@ -125,13 +125,13 @@ def test_the_line_fills_in_the_reference(client, staff_as, api_conn):
 
 # --- Payment day ------------------------------------------------------------------
 
-@pytest.mark.parametrize("day", [1, 25, 30])
-def test_the_payment_days_are_the_1st_25th_and_30th(client, staff_as, day):
+@pytest.mark.parametrize("day", [1, 25, 31])
+def test_the_payment_days_are_the_1st_25th_and_last(client, staff_as, day):
     enrolled, _ = _enrol(client, staff_as, debit_day=day)
     assert enrolled["instalments_scheduled"] > 0
 
 
-@pytest.mark.parametrize("day", [2, 15, 31])
+@pytest.mark.parametrize("day", [2, 15, 30])
 def test_other_payment_days_are_refused(client, staff_as, day):
     staff_as("admin")
     response = client.post("/api/admin/members", json=_enrolment(debit_day=day))
@@ -215,7 +215,7 @@ def test_a_paid_premium_gets_no_missed_reminder(client, staff_as, api_conn):
 
 
 def test_someone_who_said_stop_gets_nothing(client, staff_as, api_conn):
-    enrolled, phone = _enrol(client, staff_as, debit_day=30)
+    enrolled, phone = _enrol(client, staff_as, debit_day=31)
     stop = whatsapp_line.Inbound(sid="SM" + "%032x" % random.getrandbits(128), account_sid="ACtest",
                                  from_number=phone, to_number="+27737310521", body="STOP",
                                  profile_name=None, media=[])

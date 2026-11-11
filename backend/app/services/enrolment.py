@@ -299,16 +299,7 @@ def enrol(conn: Any, data: Any, *, staff_email: str, today: date | None = None) 
         if data.mobile:
             _add_phone(conn, person_id, data.mobile)
 
-        if data.address_line1:
-            conn.execute(
-                """
-                insert into addresses (person_id, address_type, line1, line2, suburb,
-                                       city, province, postal_code, is_primary)
-                values (%s, 'residential', %s, %s, %s, %s, %s, %s, true)
-                """,
-                (person_id, data.address_line1, data.address_line2, data.suburb,
-                 data.city, data.province, data.postal_code),
-            )
+        _add_address(conn, person_id, data)
 
         policy_id = str(conn.execute(
             """
@@ -333,15 +324,21 @@ def enrol(conn: Any, data: Any, *, staff_email: str, today: date | None = None) 
 
         conn.execute(
             """
-            insert into policy_payments (policy_id, method, debit_day, frequency)
-            values (%s, %s, %s, %s)
+            insert into policy_payments (policy_id, method, debit_day, frequency,
+                                         pay_branch_code)
+            values (%s, %s, %s, %s, %s)
             """,
-            (policy_id, data.payment_method, data.debit_day, data.frequency),
+            (policy_id, data.payment_method, data.debit_day, data.frequency,
+             data.pay_branch_code),
         )
     except pg_errors.UniqueViolation as exc:
         raise Conflict(_conflict_message(exc, data)) from exc
 
-    add_dependant(conn, policy_id, data.beneficiary, staff_email=staff_email, today=today)
+    # The beneficiary may be left for the next page, where staff can make one of
+    # the dependants the beneficiary once they have been added.
+    if data.beneficiary is not None:
+        add_beneficiary(conn, policy_id, person=data.beneficiary,
+                        staff_email=staff_email, today=today)
 
     scheduled = instalments.generate(conn, policy_id, today=today)
 
@@ -377,6 +374,107 @@ def enrol(conn: Any, data: Any, *, staff_email: str, today: date | None = None) 
         "cover_cents": cover_cents,
         "instalments_scheduled": scheduled,
     }
+
+
+def _add_address(conn: Any, person_id: str, data: Any) -> None:
+    if getattr(data, "address_line1", None):
+        conn.execute(
+            """
+            insert into addresses (person_id, address_type, line1, line2, suburb,
+                                   city, province, postal_code, is_primary)
+            values (%s, 'residential', %s, %s, %s, %s, %s, %s, true)
+            """,
+            (person_id, data.address_line1, getattr(data, "address_line2", None),
+             getattr(data, "suburb", None), getattr(data, "city", None),
+             getattr(data, "province", None), getattr(data, "postal_code", None)),
+        )
+
+
+def add_beneficiary(conn: Any, policy_id: str, *, staff_email: str,
+                    person_id: str | None = None, person: Any = None,
+                    relationship: str | None = None, share_percent: int | None = None,
+                    today: date | None = None) -> dict:
+    """Name who the policy pays out to.
+
+    Either `person_id`, one of the lives already on this policy ("make this
+    dependant the beneficiary"), or `person`, someone not covered by it, with
+    full details. Someone already in the book (by ID number) is linked rather
+    than created again.
+    """
+    today = today or date.today()
+    policy = conn.execute(
+        "select id, policy_number from policies where id = %s and archived_at is null",
+        (policy_id,),
+    ).fetchone()
+    if policy is None:
+        raise NotFound("That policy no longer exists.")
+
+    existing_life = False
+    if person_id is not None:
+        life = conn.execute(
+            """
+            select person_id from policy_members
+             where policy_id = %s and person_id = %s
+               and archived_at is null and left_at is null
+            """,
+            (policy_id, person_id),
+        ).fetchone()
+        if life is None:
+            raise NotFound("That person is not on this policy.")
+        existing_life = True
+    else:
+        relationship = relationship or getattr(person, "relationship", None)
+        share_percent = share_percent or getattr(person, "share_percent", None)
+        identity = _identity(person, today)
+        found = None
+        if person.id_number:
+            found = conn.execute(
+                "select id from people where id_number = %s and archived_at is null",
+                (person.id_number,),
+            ).fetchone()
+        if found is not None:
+            person_id = str(found["id"])
+        else:
+            person_id = _insert_person(conn, person, identity,
+                                       email=getattr(person, "email", None),
+                                       language=person.language_preference, source="portal")
+            if person.mobile:
+                _add_phone(conn, person_id, person.mobile)
+            _add_address(conn, person_id, person)
+
+    try:
+        beneficiary_id = str(conn.execute(
+            """
+            insert into policy_beneficiaries
+                (policy_id, person_id, relationship, share_percent, created_by)
+            values (%s, %s, %s, %s, %s)
+            returning id
+            """,
+            (policy_id, person_id, relationship, share_percent, staff_email),
+        ).fetchone()["id"])
+    except pg_errors.UniqueViolation as exc:
+        raise Conflict("This person is already a beneficiary on this policy.") from exc
+
+    log_staff_event(conn, staff_email, "beneficiary_added", person_id,
+                    {"policy_number": policy["policy_number"], "covered_life": existing_life})
+    return {"beneficiary_id": beneficiary_id, "person_id": person_id,
+            "covered_life": existing_life}
+
+
+def remove_beneficiary(conn: Any, policy_id: str, beneficiary_id: str, *,
+                       staff_email: str) -> None:
+    row = conn.execute(
+        """
+        update policy_beneficiaries set archived_at = now()
+         where id = %s and policy_id = %s and archived_at is null
+        returning person_id
+        """,
+        (beneficiary_id, policy_id),
+    ).fetchone()
+    if row is None:
+        raise NotFound("That beneficiary is not on this policy.")
+    log_staff_event(conn, staff_email, "beneficiary_removed", str(row["person_id"]),
+                    {"policy_id": policy_id})
 
 
 def add_dependant(conn: Any, policy_id: str, data: Any, *, staff_email: str,
