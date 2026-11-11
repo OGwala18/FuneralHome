@@ -274,6 +274,54 @@ def send_whatsapp_escalation(escalation: dict, name: str) -> EmailResult:
     )
 
 
+# --- The applicant's own confirmation -------------------------------------------------
+
+def send_application_received(*, to_email: str, first_name: str, reference: str) -> EmailResult:
+    """Tell the person who applied on the website that we have it.
+
+    The same promise as the WhatsApp confirmation, by email, when they gave an
+    address. A notification: never raises. Goes to the applicant, not the
+    office; _send logs only the reference.
+    """
+    settings = get_settings()
+    name = (first_name or "").split(" ")[0] or "there"
+    message = EmailMessage()
+    message["Subject"] = f"We received your application ({reference})"
+    message["From"] = formataddr(("Induduzo Funeral Home", settings.mail_from))
+    message["To"] = to_email
+    message["Date"] = formatdate(localtime=True)
+    message["Message-ID"] = make_msgid(domain="induduzo.co.za")
+    message["X-Induduzo-Reference"] = reference
+    message.set_content(
+        f"Sawubona {name},\n\n"
+        "Thank you for applying for funeral cover with Induduzo Funeral Home.\n\n"
+        f"Your reference is {reference}.\n\n"
+        "What happens next:\n"
+        "1. A family liaison calls you within one working day to confirm your details.\n"
+        "2. Once you're added as a member, you'll get your policy number.\n"
+        "3. Your 3-month waiting period starts from your first payment.\n\n"
+        "We will never ask for your bank card details by phone, SMS, WhatsApp or email.\n\n"
+        "Induduzo Funeral Home - Siyazazi Izingxaki Zakho\n"
+        "WhatsApp 073 731 0521 | 082 954 9241 | info@induduzo.co.za\n"
+    )
+    message.add_alternative(
+        '<html><body style="font-family:Segoe UI,Arial,sans-serif;color:#171C21">'
+        f"<p>Sawubona {html.escape(name)},</p>"
+        "<p>Thank you for applying for funeral cover with Induduzo Funeral Home.</p>"
+        f'<p>Your reference is <strong>{html.escape(reference)}</strong>.</p>'
+        "<p><strong>What happens next</strong></p><ol>"
+        "<li>A family liaison calls you within one working day to confirm your details.</li>"
+        "<li>Once you're added as a member, you'll get your policy number.</li>"
+        "<li>Your 3-month waiting period starts from your first payment.</li></ol>"
+        '<p style="color:#526170">We will never ask for your bank card details by phone, '
+        "SMS, WhatsApp or email.</p>"
+        '<p style="color:#526170;font-size:12px">Induduzo Funeral Home &middot; '
+        "Siyazazi Izingxaki Zakho &middot; WhatsApp 073 731 0521</p></body></html>",
+        subtype="html",
+    )
+    return _send(message)
+
+
 # --- A new member's welcome --------------------------------------------------------
 
 def send_member_welcome(*, to_email: str, first_name: str, policy_number: str,
