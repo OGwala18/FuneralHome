@@ -4,7 +4,22 @@
     {
       "name": "induduzo-api",
       "runtimeExecutable": "backend/.venv/Scripts/python.exe",
-      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--app-dir", "backend", "--env-file", "backend/.env", "--host", "127.0.0.1", "--port", "8000", "--reload", "--reload-dir", "backend/app"],
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "backend",
+        "--env-file",
+        "backend/.env",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000",
+        "--reload",
+        "--reload-dir",
+        "backend/app"
+      ],
       "port": 8000,
       "url": "http://127.0.0.1:8000",
       "autoPort": false
@@ -12,15 +27,39 @@
     {
       "name": "induduzo-site",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "frontend"
+      ],
       "port": 8080,
       "autoPort": false
     },
     {
       "name": "induduzo-portal",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "portal"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "portal"
+      ],
       "port": 8090,
+      "autoPort": false
+    },
+    {
+      "name": "induduzo-site-built",
+      "runtimeExecutable": "C:/Users/GwalaOA/AppData/Local/npm-cache/_npx/52027bd8fc0022aa/node_modules/node/bin/node.exe",
+      "runtimeArgs": [
+        "frontend/node_modules/vite/bin/vite.js",
+        "preview",
+        "frontend",
+        "--port",
+        "8080",
+        "--strictPort"
+      ],
+      "port": 8080,
       "autoPort": false
     }
   ]

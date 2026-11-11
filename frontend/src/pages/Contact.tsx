@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Phone, Mail, MapPin, MessageCircle } from "lucide-react";
 import { OfficeMap } from "@/components/OfficeMap";
+import { PayingYourPolicy } from "@/components/PayingYourPolicy";
 import { OFFICE_ADDRESS_LINES, OFFICE_MAP_LINK } from "@/lib/location";
 import { CONTACT_EMAIL, CONTACT_EMAIL_LINK, CONTACT_PHONES } from "@/lib/contact";
 import { trackEvent } from "@/lib/analytics";
@@ -233,6 +234,14 @@ export default function Contact() {
                 </form>
               </CardContent>
             </Card>
+          </div>
+        </div>
+      </section>
+
+      <section id="paying" className="bg-secondary/30 py-20">
+        <div className="container">
+          <div className="mx-auto max-w-3xl">
+            <PayingYourPolicy />
           </div>
         </div>
       </section>
