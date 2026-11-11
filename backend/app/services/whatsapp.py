@@ -136,6 +136,59 @@ def send_registration_confirmation(
         return WhatsAppResult(sent=False, error=code)
 
 
+def send_payment_reminder(*, kind: str, to_mobile: str, body: str, first_name: str,
+                          amount: str, policy_number: str) -> WhatsAppResult:
+    """A payment reminder ('due' or 'missed'). Never raises.
+
+    Uses the approved template for `kind` when one is configured, because a
+    business-initiated WhatsApp outside a 24-hour conversation must be one.
+    Otherwise sends `body` as plain text (sandbox, or an open conversation).
+    """
+    settings = get_settings()
+    if not settings.whatsapp_enabled:
+        logger.info("WhatsApp not configured; would send a %s payment reminder", kind)
+        return WhatsAppResult(sent=False, error="whatsapp_not_configured")
+
+    refusal = outbound_refusal(settings, to_mobile)
+    if refusal:
+        logger.info("Payment reminder not sent: %s (WHATSAPP_OUTBOUND=%s)",
+                    refusal, settings.whatsapp_outbound)
+        return WhatsAppResult(sent=False, error=refusal)
+
+    try:
+        from twilio.rest import Client
+    except ImportError:
+        logger.warning("twilio package not installed; skipping WhatsApp send")
+        return WhatsAppResult(sent=False, error="twilio_sdk_missing")
+
+    template = (settings.twilio_payment_due_sid if kind == "due"
+                else settings.twilio_payment_missed_sid)
+    try:
+        import json
+
+        client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
+        params: dict = {
+            "from_": f"whatsapp:{settings.twilio_whatsapp_from}",
+            "to": f"whatsapp:{to_mobile}",
+        }
+        callback = status_callback_url(settings)
+        if callback:
+            params["status_callback"] = callback
+        if template:
+            params["content_sid"] = template
+            params["content_variables"] = json.dumps(
+                {"1": first_name, "2": amount, "3": policy_number})
+        else:
+            params["body"] = body
+        message = client.messages.create(**params)
+        logger.info("Payment reminder (%s) sent, sid=%s", kind, message.sid)
+        return WhatsAppResult(sent=True, message_sid=message.sid)
+    except Exception as exc:  # noqa: BLE001 - one failed send must not stop the run
+        code = _failure_code(exc)
+        logger.warning("Payment reminder (%s) failed: %s", kind, code)
+        return WhatsAppResult(sent=False, error=code)
+
+
 def status_callback_url(settings: Settings) -> str | None:
     """Where Twilio reports delivered and read, once the API's public address
     is known. Without it Twilio simply doesn't report."""
