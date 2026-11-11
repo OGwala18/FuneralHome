@@ -129,6 +129,8 @@ td a:hover, .fact a:hover, .card a:not(.btn):hover { text-decoration-thickness: 
 
 .brand { display: flex; align-items: center; gap: var(--s12); flex: 0 0 auto; }
 .brand-mark { color: var(--gold); display: block; }
+.brand-logo { display: block; height: 72px; width: auto; }
+.login-logo { display: block; width: 220px; height: auto; margin: 0 auto var(--s16); }
 .brand-words { display: flex; flex-direction: column; line-height: 1; }
 .brand-name { font: 600 24px/28px var(--serif); }
 .brand-sub {
@@ -303,7 +305,7 @@ td a:hover, .fact a:hover, .card a:not(.btn):hover { text-decoration-thickness: 
 /* Persistent label above, 48px input, hint line reserved even when empty so
    the layout never jumps when a message appears. */
 .field { display: flex; flex-direction: column; gap: var(--s8); }
-.field > label { font: 600 16px/24px var(--sans); color: var(--ink); }
+.field > label, .field-label { font: 600 16px/24px var(--sans); color: var(--ink); }
 .field input, .field select, .field textarea {
   min-height: 48px;
   padding: 12px var(--s12);
@@ -316,6 +318,41 @@ td a:hover, .fact a:hover, .card a:not(.btn):hover { text-decoration-thickness: 
 .field-hint { min-height: 20px; font: 400 14px/20px var(--sans); color: var(--muted); }
 .field-error input, .field-error select, .field-error textarea { border-color: var(--red); border-width: 2px; }
 .field-error .field-hint { color: var(--red); }
+/* Shown, not editable: read from another answer (date of birth from the ID
+   number, the premium from the plan) or not switched on yet. */
+.field input:disabled, .field select:disabled {
+  background: var(--paper);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* A feature that is built and shown, but not in use yet: hatched and muted,
+   so nobody mistakes it for a live part of the form. */
+.coming-soon {
+  position: relative;
+  margin-top: var(--s16);
+  padding: var(--s16);
+  border: 1px dashed var(--subtle);
+  border-radius: var(--r8);
+  background: repeating-linear-gradient(
+    -45deg, var(--paper) 0 10px, var(--white) 10px 20px);
+}
+.coming-soon > * { opacity: 0.7; }
+.coming-soon .coming-soon-head { opacity: 1; margin-bottom: var(--s12); }
+
+/* The premium the plan sets, read out large so it is checked with the family. */
+.premium-readout {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--s4);
+  min-height: 48px;
+  padding: var(--s8) var(--s12);
+  border: 1px solid var(--line);
+  border-radius: var(--r8);
+  background: var(--warm);
+}
+.premium-readout strong { font: 600 20px/28px var(--serif); color: var(--ink); }
 
 /* A form section: as many fields per row as fit, never narrower than 220px. */
 .form-grid {

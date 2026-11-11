@@ -1,9 +1,9 @@
 """The premium schedule: one row per expected payment.
 
 Generation only ever looks forward. It starts at today (or a later entry date)
-and keeps MONTHS_AHEAD instalments ahead of today, so running it again tomorrow
-adds at most the next month and never back-fills years of fictitious arrears for
-a policy that came in by import with no payment history.
+and keeps MONTHS_AHEAD months of instalments ahead of today, so running it
+again tomorrow adds at most the next one and never back-fills years of
+fictitious arrears for a policy that came in by import with no payment history.
 
 Re-running is harmless: the unique index on (policy_id, due_date) turns a
 second insert of the same month into a no-op. That is what lets the roll-forward
@@ -32,28 +32,39 @@ def _on_day(year: int, month: int, day: int) -> date:
     return date(year, month, min(day, calendar.monthrange(year, month)[1]))
 
 
-def _next_month(year: int, month: int) -> tuple[int, int]:
-    return (year + 1, 1) if month == 12 else (year, month + 1)
+# How many months one premium covers.
+STEP_MONTHS = {"monthly": 1, "quarterly": 3, "annually": 12}
 
 
-def due_dates(start: date, debit_day: int | None, frequency: str, count: int) -> list[date]:
+def _add_months(year: int, month: int, months: int) -> tuple[int, int]:
+    index = year * 12 + (month - 1) + months
+    return index // 12, index % 12 + 1
+
+
+def due_dates(start: date, debit_day: int | None, frequency: str, count: int,
+              anchor: date | None = None) -> list[date]:
     """The next `count` due dates on or after `start`.
 
-    No debit day (cash, EFT) means the day of the month the policy started.
+    `anchor` is the policy's start date. Quarterly and annual premiums fall due
+    in the months counted from it, and without a debit day (cash, EFT) on its
+    day of the month, so rolling the schedule forward on a later date keeps
+    the same rhythm instead of starting a new one from that date.
     A once-off premium is a single payment on `start`.
     """
     if frequency == "once_off":
         return [start]
 
-    day = debit_day or start.day
-    year, month = start.year, start.month
-    if _on_day(year, month, day) < start:
-        year, month = _next_month(year, month)
+    step = STEP_MONTHS[frequency]
+    anchor = anchor or start
+    day = debit_day or anchor.day
+    year, month = anchor.year, anchor.month
+    while _on_day(year, month, day) < start:
+        year, month = _add_months(year, month, step)
 
     dates = []
     for _ in range(count):
         dates.append(_on_day(year, month, day))
-        year, month = _next_month(year, month)
+        year, month = _add_months(year, month, step)
     return dates
 
 
@@ -90,8 +101,11 @@ def generate(conn: Any, policy_id: str, *, ahead: int = MONTHS_AHEAD,
         return 0
 
     start = max(row["entry_date"] or today, today)
+    # `ahead` is months of cover: twelve monthly premiums, four quarterly, one annual.
+    count = 1 if row["frequency"] == "once_off" else -(-ahead // STEP_MONTHS[row["frequency"]])
     added = 0
-    for due in due_dates(start, row["debit_day"], row["frequency"], ahead):
+    for due in due_dates(start, row["debit_day"], row["frequency"], count,
+                         anchor=row["entry_date"]):
         cursor = conn.execute(
             """
             insert into premium_instalments (policy_id, due_date, amount_cents, currency)
