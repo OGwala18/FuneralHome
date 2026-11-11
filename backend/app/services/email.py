@@ -19,6 +19,7 @@ import html
 import logging
 import smtplib
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 
@@ -271,3 +272,49 @@ def send_whatsapp_escalation(escalation: dict, name: str) -> EmailResult:
             urgent=urgent,
         )
     )
+
+
+# --- Staff sign-in code (2FA Bit 5; plan §9 "Emailed code") ------------------------
+
+# South Africa has no daylight saving, so a fixed offset is exact all year.
+_SAST = timezone(timedelta(hours=2), "SAST")
+
+
+def send_sign_in_code(to_email: str, code: str, expires_at: datetime) -> EmailResult:
+    """Email a staff member their sign-in code, inside the request.
+
+    Not a background task: the person is waiting and must be told if it failed.
+    Sent only to the address on the staff record. The subject never contains the
+    code (lock-screen previews), there are no links, and nothing here is logged
+    except the fixed reference "sign-in-code".
+    """
+    settings = get_settings()
+    until = expires_at.astimezone(_SAST).strftime("%H:%M")
+
+    message = EmailMessage()
+    message["Subject"] = "Your Induduzo sign-in code"
+    message["From"] = formataddr(("Induduzo Staff Portal", settings.mail_from))
+    message["To"] = to_email
+    message["Date"] = formatdate(localtime=True)
+    message["Message-ID"] = make_msgid(domain="induduzo.co.za")
+    # What _send logs. Never the address or the code.
+    message["X-Induduzo-Reference"] = "sign-in-code"
+
+    message.set_content(
+        "Your Induduzo sign-in code is:\n\n"
+        f"    {code}\n\n"
+        f"It is valid until {until} (5 minutes) and works once.\n\n"
+        "If this wasn't you, someone may know your password. Tell the owner.\n"
+    )
+    message.add_alternative(
+        '<html><body style="font-family:Segoe UI,Arial,sans-serif;color:#171C21">'
+        '<p style="margin:0 0 12px">Your Induduzo sign-in code is:</p>'
+        '<p style="font-size:30px;letter-spacing:6px;font-weight:700;margin:0 0 12px">'
+        f"{html.escape(code)}</p>"
+        f'<p style="color:#526170;margin:0 0 18px">Valid until {html.escape(until)} '
+        "(5 minutes). It works once.</p>"
+        '<p style="color:#B7352F;margin:0">If this wasn\'t you, someone may know your '
+        "password. Tell the owner.</p></body></html>",
+        subtype="html",
+    )
+    return _send(message)

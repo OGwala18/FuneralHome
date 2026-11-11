@@ -26,6 +26,8 @@ from app.services.two_step_crypto import hash_device_token, new_device_token
 # the 2FA endpoints that use require_staff_identity (plan §8, first table).
 SECOND_STEP_ALLOWLIST = {
     ("GET", "/api/admin/2fa/status"),
+    ("POST", "/api/admin/2fa/email/send"),
+    ("POST", "/api/admin/2fa/email/verify"),
 }
 
 
