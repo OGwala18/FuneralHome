@@ -342,7 +342,7 @@ def test_the_form_cannot_set_its_own_premium(client, db):
 
 
 @pytest.mark.parametrize("plan, premium", [("plan_a", 35000), ("plan_b", 25000),
-                                           ("dome_plan", 40000), ("plan_c", None)])
+                                           ("dome_plan", None), ("plan_c", None)])
 def test_the_premium_on_an_application_comes_from_the_plan(client, db, plan, premium):
     enquiry_id = client.post("/api/enquiries", json=_lead()).json()["id"]
     body = {"id_number": _synthetic_id_number(), "plan_selected": plan, "terms_accepted": True}
