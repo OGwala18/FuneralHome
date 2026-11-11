@@ -283,7 +283,8 @@ class EnrolmentIn(_PersonIn):
     # One branch is in the reference table today. More arrive with their codes.
     branch_code: Literal["pmburg"] = "pmburg"
     entry_date: date | None = None
-    cover_cents: int | None = Field(default=None, ge=0, le=10_000_000_000)
+    # No premium and no cover here, on purpose: both are read from the price
+    # list for the plan, option and age (0020, 0021). Sending either is a 422.
 
     payment_method: PaymentMethod = "undecided"
     debit_day: int | None = None
@@ -389,6 +390,7 @@ class EnrolmentOut(BaseModel):
     policy_id: UUID
     policy_number: str
     premium_cents: int
+    cover_cents: int | None
     instalments_scheduled: int
 
 
@@ -399,6 +401,8 @@ class PlanPrice(BaseModel):
     min_age: int | None = None
     max_age: int | None = None
     premium_cents: int
+    # None until the owner gives the cover for this line (0021).
+    cover_cents: int | None = None
     currency: str
     billing: Literal["monthly", "once_off"]
 

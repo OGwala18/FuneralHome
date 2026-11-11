@@ -331,7 +331,7 @@ export interface EnrolmentIn extends PersonIn {
   /** Which price of the plan. The API reads the premium from the price list. */
   plan_option?: string | null;
   entry_date?: string | null;
-  cover_cents?: number | null;
+  // No premium and no cover: the API reads both from the price list.
   payment_method: PaymentMethod;
   debit_day?: number | null;
   frequency: Frequency;
@@ -355,6 +355,8 @@ export interface PlanPrice {
   max_age: number | null;
   /** Per month when billing is monthly; the whole amount when once-off. */
   premium_cents: number;
+  /** The cover a policy on this line gets. Null until the owner gives it. */
+  cover_cents: number | null;
   currency: string;
   billing: "monthly" | "once_off";
 }
