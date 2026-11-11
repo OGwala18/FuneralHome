@@ -312,6 +312,9 @@ _REFUSALS = {
     "whatsapp_not_allowlisted": (
         "This environment only sends WhatsApp messages to the test numbers "
         "(WHATSAPP_OUTBOUND=allowlist), and this number isn't one of them."),
+    "whatsapp_unknown_number": (
+        "We only send WhatsApp messages to numbers a family gave us on the website "
+        "form or that are in the member book (WHATSAPP_OUTBOUND=known)."),
     "whatsapp_outbound_off": "WhatsApp sending is switched off on this environment.",
     "whatsapp_not_configured": "WhatsApp is not configured on this server.",
 }
