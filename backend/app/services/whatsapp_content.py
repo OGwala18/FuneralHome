@@ -36,8 +36,10 @@ from . import banking
 # time zone database (Windows has none without the tzdata package).
 SAST = timezone(timedelta(hours=2), "SAST")
 
-PHONES_24H = "079 751 0648 or 082 954 9241"
+# The owner's flyer, 12 Nov 2026: a dedicated 24-hour line, then the offices.
+PHONES_24H = "069 706 0387 (24 hours), 079 751 0648 or 082 954 9241"
 OFFICE_ADDRESS = "Edendale Main Road, Kwadaya, Pietermaritzburg 3201"
+BRANCHES = "161 Boshoff Street and 171 Langalibalele Street, Pietermaritzburg"
 MAP_LINK = "https://www.google.com/maps/search/?api=1&query=Edendale+Main+Road+Kwadaya+Pietermaritzburg"
 WEBSITE_JOIN = "https://induduzo.co.za/register"
 EMAIL = "Info@induduzo.co.za"
@@ -372,7 +374,7 @@ _add(
             Option("Plan A (Urban) – R350 p/m", "plans.a"),
             Option("Plan B (Emakhaya) – R250 p/m", "plans.b"),
             Option("Plan C (Singles/Couples) – from R50 p/m", "plans.c"),
-            Option("Dome Plan – R400 once-off", "plans.dome"),
+            Option("Dome Plan – from R500 p/m", "plans.dome"),
             Option("How to join", "plans.join"),
             NONE_OF_THESE,
         ),
@@ -413,8 +415,10 @@ _add(
     Node(
         id="plans.dome", kind="answer", title="Dome Plan", parent="plans",
         text=_plan_text(
-            "Dome Plan", "R400 once-off, or R300 once-off + R50 p/m",
-            "The main member and 14 others, 15 people in total.",
+            "Dome Plan", "R500 p/m (husband & wife), or R750 p/m for the family option",
+            "Option 1 covers a husband and wife. Option 2 covers the family, up to "
+            "15 people: those 21 and over receive the dome and all plan benefits, "
+            "those under 21 a casket and all other benefits.",
             ["2 family cars", "hearse", "casket", "cross", "mortuary fridge",
              "tent (2 poles)", "100 programmes", "A3 photo frame", "gown",
              "doctor fees", "a grave at Ethembeni Cemetery", "cemetery equipment"],
@@ -492,7 +496,8 @@ _add(
     Node(
         id="contact.office", kind="answer", title="Office and hours", parent="contact",
         text=(
-            f"Our office: {OFFICE_ADDRESS}\n"
+            f"Our head office: {OFFICE_ADDRESS}\n"
+            f"Branches: {BRANCHES}\n"
             f"Map: {MAP_LINK}\n\n"
             f"Open {HOURS_TEXT}. Closed on Sundays and public holidays.\n\n"
             f"If someone has passed away, call any time: *{PHONES_24H}*."

@@ -1,9 +1,12 @@
 import { NavLink } from "@/lib/navigation";
-import { Mail, Phone } from "lucide-react";
+import { Clock, Mail, MessageCircle, Phone } from "lucide-react";
 
 import { OfficeMap } from "@/components/OfficeMap";
 import { useLanguage } from "@/lib/i18n";
-import { CONTACT_EMAIL, CONTACT_EMAIL_LINK, CONTACT_PHONES } from "@/lib/contact";
+import {
+  CONTACT_EMAIL, CONTACT_EMAIL_LINK, CONTACT_PHONES, TWENTY_FOUR_HOUR_LINE, WHATSAPP_LINE,
+  WHATSAPP_URL,
+} from "@/lib/contact";
 
 export const Footer = () => {
   const { t } = useLanguage();
@@ -53,6 +56,16 @@ export const Footer = () => {
                   {p.display}
                 </a>
               ))}
+              <a href={TWENTY_FOUR_HOUR_LINE.link}
+                className="flex items-center hover:text-primary transition-colors">
+                <Clock className="h-5 w-5 mr-2" />
+                {TWENTY_FOUR_HOUR_LINE.display} (24 hours)
+              </a>
+              <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
+                className="flex items-center hover:text-primary transition-colors">
+                <MessageCircle className="h-5 w-5 mr-2" />
+                {WHATSAPP_LINE.display} (WhatsApp)
+              </a>
               <a href={CONTACT_EMAIL_LINK} className="flex items-center break-all hover:text-primary transition-colors">
                 <Mail className="h-5 w-5 mr-2" />
                 {CONTACT_EMAIL}
