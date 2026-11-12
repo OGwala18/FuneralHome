@@ -28,6 +28,8 @@ export type Route =
   | { name: "growth" }
   /** Families who asked the WhatsApp menu for a person. Lives under Growth. */
   | { name: "whatsapp"; id?: string }
+  /** The live website's visitors and clicks, from Plausible. Owner only. */
+  | { name: "analytics" }
   | { name: "settings" };
 
 const parse = (pathname: string, search: string): Route => {
@@ -56,6 +58,8 @@ const parse = (pathname: string, search: string): Route => {
         return { name: "whatsapp", id: parts[2] ? decodeURIComponent(parts[2]) : undefined };
       }
       return { name: "growth" };
+    case "analytics":
+      return { name: "analytics" };
     case "settings":
       return { name: "settings" };
     default:
@@ -83,6 +87,7 @@ export const hrefFor = (route: Route): string => {
     case "growth": return "/growth";
     case "whatsapp":
       return route.id ? `/growth/whatsapp/${encodeURIComponent(route.id)}` : "/growth/whatsapp";
+    case "analytics": return "/analytics";
     case "settings": return "/settings";
   }
 };

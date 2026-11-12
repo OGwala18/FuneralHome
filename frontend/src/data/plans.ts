@@ -204,16 +204,18 @@ export const PLANS: Plan[] = [
   {
     id: "dome-plan",
     name: { en: "Dome Plan", zu: "Uhlelo lwe-Dome" },
-    coverage: { en: "Main member + 14", zu: "Ilungu eliyinhloko + 14" },
+    coverage: { en: "Couple or family", zu: "Izithandani noma umndeni" },
     members: {
-      en: "Main member plus 14 members, 15 people in total",
-      zu: "Ilungu eliyinhloko namalungu angu-14, abantu abangu-15 sebebonke",
+      en: "Option 1: husband & wife. Option 2: family, up to 15 people",
+      zu: "Inketho 1: umyeni nonkosikazi. Inketho 2: umndeni, kuze kube abantu abangu-15",
     },
-    price: "R400",
-    period: { en: "once-off", zu: "kanye kuphela" },
+    // The owner's flyer, 12 Nov 2026: two monthly options.
+    price: "R500",
+    period: { en: "p/m", zu: "ngenyanga" },
+    priceFrom: true,
     priceAlt: {
-      en: "or R300 once-off + R50 p/m",
-      zu: "noma R300 kanye kuphela + R50 ngenyanga",
+      en: "or R750 p/m for the family option",
+      zu: "noma R750 ngenyanga ngomndeni",
     },
     summary: {
       en: "Our most complete package with 15 members, two family cars and 100 programmes.",

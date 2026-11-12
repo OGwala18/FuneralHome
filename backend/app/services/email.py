@@ -19,6 +19,7 @@ import html
 import logging
 import smtplib
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 
@@ -271,3 +272,148 @@ def send_whatsapp_escalation(escalation: dict, name: str) -> EmailResult:
             urgent=urgent,
         )
     )
+
+
+# --- The applicant's own confirmation -------------------------------------------------
+
+def send_application_received(*, to_email: str, first_name: str, reference: str) -> EmailResult:
+    """Tell the person who applied on the website that we have it.
+
+    The same promise as the WhatsApp confirmation, by email, when they gave an
+    address. A notification: never raises. Goes to the applicant, not the
+    office; _send logs only the reference.
+    """
+    settings = get_settings()
+    name = (first_name or "").split(" ")[0] or "there"
+    message = EmailMessage()
+    message["Subject"] = f"We received your application ({reference})"
+    message["From"] = formataddr(("Induduzo Funeral Home", settings.mail_from))
+    message["To"] = to_email
+    message["Date"] = formatdate(localtime=True)
+    message["Message-ID"] = make_msgid(domain="induduzo.co.za")
+    message["X-Induduzo-Reference"] = reference
+    message.set_content(
+        f"Sawubona {name},\n\n"
+        "Thank you for applying for funeral cover with Induduzo Funeral Home.\n\n"
+        f"Your reference is {reference}.\n\n"
+        "What happens next:\n"
+        "1. A family liaison calls you within one working day to confirm your details.\n"
+        "2. Once you're added as a member, you'll get your policy number.\n"
+        "3. Your 3-month waiting period starts from your first payment.\n\n"
+        "We will never ask for your bank card details by phone, SMS, WhatsApp or email.\n\n"
+        "Induduzo Funeral Home - Siyazazi Izingxaki Zakho\n"
+        "WhatsApp 073 731 0521 | 082 954 9241 | info@induduzo.co.za\n"
+    )
+    message.add_alternative(
+        '<html><body style="font-family:Segoe UI,Arial,sans-serif;color:#171C21">'
+        f"<p>Sawubona {html.escape(name)},</p>"
+        "<p>Thank you for applying for funeral cover with Induduzo Funeral Home.</p>"
+        f'<p>Your reference is <strong>{html.escape(reference)}</strong>.</p>'
+        "<p><strong>What happens next</strong></p><ol>"
+        "<li>A family liaison calls you within one working day to confirm your details.</li>"
+        "<li>Once you're added as a member, you'll get your policy number.</li>"
+        "<li>Your 3-month waiting period starts from your first payment.</li></ol>"
+        '<p style="color:#526170">We will never ask for your bank card details by phone, '
+        "SMS, WhatsApp or email.</p>"
+        '<p style="color:#526170;font-size:12px">Induduzo Funeral Home &middot; '
+        "Siyazazi Izingxaki Zakho &middot; WhatsApp 073 731 0521</p></body></html>",
+        subtype="html",
+    )
+    return _send(message)
+
+
+# --- A new member's welcome --------------------------------------------------------
+
+def send_member_welcome(*, to_email: str, first_name: str, policy_number: str,
+                        review_url: str | None) -> EmailResult:
+    """Welcome a newly enrolled member by email. A notification: never raises.
+
+    Goes to the member, not the office. The policy number is the reference
+    _send logs; the address and name never reach a log.
+    """
+    settings = get_settings()
+    name = (first_name or "").split(" ")[0] or "there"
+    message = EmailMessage()
+    message["Subject"] = "Welcome to the Induduzo family"
+    message["From"] = formataddr(("Induduzo Funeral Home", settings.mail_from))
+    message["To"] = to_email
+    message["Date"] = formatdate(localtime=True)
+    message["Message-ID"] = make_msgid(domain="induduzo.co.za")
+    message["X-Induduzo-Reference"] = policy_number
+
+    review_plain = (f"\nIf you have a moment, we'd be grateful for a Google review:\n"
+                    f"{review_url}\n") if review_url else ""
+    message.set_content(
+        f"Hello {name},\n\n"
+        "You've been successfully added to the Induduzo family, and it's great to have you.\n\n"
+        f"Your policy number is {policy_number}. Please use it as the reference whenever "
+        "you pay, and keep it somewhere safe.\n\n"
+        "Your cover starts once your first premium is received, and a 3-month waiting "
+        "period applies to natural causes.\n"
+        f"{review_plain}\n"
+        "Induduzo Funeral Home - Siyazazi Izingxaki Zakho\n"
+        "WhatsApp 073 731 0521 | 082 954 9241 | info@induduzo.co.za\n"
+    )
+    review_html = (f'<p><a href="{html.escape(review_url)}">Leave us a Google review</a>'
+                   "</p>") if review_url else ""
+    message.add_alternative(
+        '<html><body style="font-family:Segoe UI,Arial,sans-serif;color:#171C21">'
+        f"<p>Hello {html.escape(name)},</p>"
+        "<p><strong>You've been successfully added to the Induduzo family</strong>, and "
+        "it's great to have you.</p>"
+        f"<p>Your policy number is <strong>{html.escape(policy_number)}</strong>. Please use "
+        "it as the reference whenever you pay, and keep it somewhere safe.</p>"
+        "<p style=\"color:#526170\">Your cover starts once your first premium is received, "
+        "and a 3-month waiting period applies to natural causes.</p>"
+        f"{review_html}"
+        '<p style="color:#526170;font-size:12px">Induduzo Funeral Home &middot; '
+        "Siyazazi Izingxaki Zakho &middot; WhatsApp 073 731 0521</p></body></html>",
+        subtype="html",
+    )
+    return _send(message)
+
+
+# --- Staff sign-in code (2FA Bit 5; plan §9 "Emailed code") ------------------------
+
+# South Africa has no daylight saving, so a fixed offset is exact all year.
+_SAST = timezone(timedelta(hours=2), "SAST")
+
+
+def send_sign_in_code(to_email: str, code: str, expires_at: datetime) -> EmailResult:
+    """Email a staff member their sign-in code, inside the request.
+
+    Not a background task: the person is waiting and must be told if it failed.
+    Sent only to the address on the staff record. The subject never contains the
+    code (lock-screen previews), there are no links, and nothing here is logged
+    except the fixed reference "sign-in-code".
+    """
+    settings = get_settings()
+    until = expires_at.astimezone(_SAST).strftime("%H:%M")
+
+    message = EmailMessage()
+    message["Subject"] = "Your Induduzo sign-in code"
+    message["From"] = formataddr(("Induduzo Staff Portal", settings.mail_from))
+    message["To"] = to_email
+    message["Date"] = formatdate(localtime=True)
+    message["Message-ID"] = make_msgid(domain="induduzo.co.za")
+    # What _send logs. Never the address or the code.
+    message["X-Induduzo-Reference"] = "sign-in-code"
+
+    message.set_content(
+        "Your Induduzo sign-in code is:\n\n"
+        f"    {code}\n\n"
+        f"It is valid until {until} (5 minutes) and works once.\n\n"
+        "If this wasn't you, someone may know your password. Tell the owner.\n"
+    )
+    message.add_alternative(
+        '<html><body style="font-family:Segoe UI,Arial,sans-serif;color:#171C21">'
+        '<p style="margin:0 0 12px">Your Induduzo sign-in code is:</p>'
+        '<p style="font-size:30px;letter-spacing:6px;font-weight:700;margin:0 0 12px">'
+        f"{html.escape(code)}</p>"
+        f'<p style="color:#526170;margin:0 0 18px">Valid until {html.escape(until)} '
+        "(5 minutes). It works once.</p>"
+        '<p style="color:#B7352F;margin:0">If this wasn\'t you, someone may know your '
+        "password. Tell the owner.</p></body></html>",
+        subtype="html",
+    )
+    return _send(message)

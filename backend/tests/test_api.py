@@ -211,3 +211,174 @@ def test_adding_staff_says_whether_an_invitation_was_sent(client, db, staff_as, 
     # Neither the owner's address nor the new person's reaches the logs.
     assert owner.email not in caplog.text
     assert address not in caplog.text
+
+
+# --- Idempotency (0019) ----------------------------------------------------------
+
+def test_a_retried_lead_with_the_same_key_is_one_enquiry(client, db):
+    key = str(uuid.uuid4())
+    before = _count(db, "select count(*) from plan_enquiries")
+
+    first = client.post("/api/enquiries", json=_lead(), headers={"Idempotency-Key": key})
+    again = client.post("/api/enquiries", json=_lead(), headers={"Idempotency-Key": key})
+
+    assert first.status_code == again.status_code == 201
+    assert again.json() == first.json()
+    assert again.headers.get("idempotent-replayed") == "true"
+    assert "idempotent-replayed" not in first.headers
+    assert _count(db, "select count(*) from plan_enquiries") == before + 1
+    assert _count(
+        db,
+        "select count(*) from enquiry_events where enquiry_id = %s and event_type = 'lead_captured'",
+        first.json()["id"],
+    ) == 1
+
+
+def test_a_key_reused_with_different_details_is_refused(client, db):
+    key = str(uuid.uuid4())
+    client.post("/api/enquiries", json=_lead(), headers={"Idempotency-Key": key})
+    before = _count(db, "select count(*) from plan_enquiries")
+
+    response = client.post(
+        "/api/enquiries", json=_lead(first_name="Someone"), headers={"Idempotency-Key": key}
+    )
+
+    assert response.status_code == 422
+    assert _count(db, "select count(*) from plan_enquiries") == before
+
+
+def test_a_key_that_is_not_a_uuid_is_400(client):
+    response = client.post("/api/enquiries", json=_lead(), headers={"Idempotency-Key": "abc"})
+    assert response.status_code == 400
+
+
+def test_leads_without_a_key_still_work_for_older_browsers(client, db):
+    before = _count(db, "select count(*) from plan_enquiries")
+    assert client.post("/api/enquiries", json=_lead()).status_code == 201
+    assert client.post("/api/enquiries", json=_lead()).status_code == 201
+    assert _count(db, "select count(*) from plan_enquiries") == before + 2
+
+
+def test_a_replay_does_not_use_up_the_rate_limit(client):
+    key = str(uuid.uuid4())
+    for _ in range(10):
+        assert client.post(
+            "/api/enquiries", json=_lead(), headers={"Idempotency-Key": key}
+        ).status_code == 201
+
+
+def test_the_same_application_twice_changes_and_records_nothing_more(client, db):
+    enquiry_id = client.post("/api/enquiries", json=_lead()).json()["id"]
+    body = {"id_number": _synthetic_id_number(), "plan_selected": "plan_a", "terms_accepted": True}
+
+    first = client.patch(f"/api/enquiries/{enquiry_id}/application", json=body)
+    again = client.patch(f"/api/enquiries/{enquiry_id}/application", json=body)
+
+    assert first.status_code == again.status_code == 200
+    assert again.headers.get("idempotent-replayed") == "true"
+    assert _count(
+        db,
+        "select count(*) from enquiry_events "
+        "where enquiry_id = %s and event_type = 'application_submitted'",
+        enquiry_id,
+    ) == 1
+
+
+def test_a_corrected_application_still_updates(client, db):
+    enquiry_id = client.post("/api/enquiries", json=_lead()).json()["id"]
+    body = {"id_number": _synthetic_id_number(), "plan_selected": "plan_a", "terms_accepted": True}
+    client.patch(f"/api/enquiries/{enquiry_id}/application", json=body)
+
+    response = client.patch(
+        f"/api/enquiries/{enquiry_id}/application", json={**body, "plan_selected": "plan_b"}
+    )
+
+    assert response.status_code == 200
+    assert "idempotent-replayed" not in response.headers
+    assert db.execute(
+        "select plan_selected::text from plan_enquiries where id = %s", (enquiry_id,)
+    ).fetchone()[0] == "plan_b"
+
+
+def test_the_rate_limit_counts_the_proxy_address_not_a_forged_one(client):
+    # A script that invents a new X-Forwarded-For per request must still be
+    # counted as one caller: the proxy's own entry is the right-most one.
+    statuses = [
+        client.post(
+            "/api/enquiries",
+            json=_lead(),
+            headers={"X-Forwarded-For": f"10.0.0.{n}, 203.0.113.7"},
+        ).status_code
+        for n in range(8)
+    ]
+    assert statuses[:6] == [201] * 6
+    assert statuses[6:] == [429, 429]
+
+
+def test_the_form_header_passes_the_cors_preflight(client):
+    response = client.options(
+        "/api/enquiries",
+        headers={
+            "Origin": "http://localhost:8080",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type,idempotency-key",
+        },
+    )
+    assert response.status_code == 200
+    assert "idempotency-key" in response.headers["access-control-allow-headers"].lower()
+
+
+# --- The plan sets the premium (0020) ----------------------------------------------
+
+def test_the_form_cannot_set_its_own_premium(client, db):
+    enquiry_id = client.post("/api/enquiries", json=_lead()).json()["id"]
+    body = {"id_number": _synthetic_id_number(), "plan_selected": "plan_a",
+            "terms_accepted": True, "premium_amount_cents": 1}
+
+    response = client.patch(f"/api/enquiries/{enquiry_id}/application", json=body)
+
+    assert response.status_code == 422
+    assert "premium_amount_cents" in response.json()["field_errors"]
+
+
+@pytest.mark.parametrize("plan, premium", [("plan_a", 35000), ("plan_b", 25000),
+                                           ("dome_plan", None), ("plan_c", None)])
+def test_the_premium_on_an_application_comes_from_the_plan(client, db, plan, premium):
+    enquiry_id = client.post("/api/enquiries", json=_lead()).json()["id"]
+    body = {"id_number": _synthetic_id_number(), "plan_selected": plan, "terms_accepted": True}
+
+    assert client.patch(f"/api/enquiries/{enquiry_id}/application", json=body).status_code == 200
+    assert db.execute("select premium_amount_cents from plan_enquiries where id = %s",
+                      (enquiry_id,)).fetchone()[0] == premium
+
+
+# --- The applicant's own email ------------------------------------------------------
+
+def test_an_applicant_with_an_email_is_sent_their_reference(client, monkeypatch):
+    from app.routers import enquiries
+    from app.services.email import EmailResult
+
+    sent = []
+    monkeypatch.setattr(enquiries, "send_application_received",
+                        lambda **kwargs: sent.append(kwargs) or EmailResult(sent=True))
+    lead = client.post("/api/enquiries", json=_lead(email="applicant@example.test")).json()
+
+    response = client.patch(f"/api/enquiries/{lead['id']}/application", json={
+        "id_number": _synthetic_id_number(), "plan_selected": "plan_a", "terms_accepted": True})
+
+    assert response.status_code == 200
+    assert sent == [{"to_email": "applicant@example.test", "first_name": "Test",
+                     "reference": lead["reference"]}]
+
+
+def test_an_applicant_without_an_email_is_not(client, monkeypatch):
+    from app.routers import enquiries
+
+    sent = []
+    monkeypatch.setattr(enquiries, "send_application_received",
+                        lambda **kwargs: sent.append(kwargs))
+    lead = client.post("/api/enquiries", json=_lead()).json()
+    client.patch(f"/api/enquiries/{lead['id']}/application", json={
+        "id_number": _synthetic_id_number(), "plan_selected": "plan_a", "terms_accepted": True})
+
+    assert sent == []

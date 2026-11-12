@@ -1,6 +1,7 @@
 import { useEffect, useState, type MouseEvent } from "react";
 import { fetchWhatsAppSummary, type StaffIdentity, type WhatsAppSummary } from "@/lib/api";
 import { hrefFor, navigate, type Route } from "@/lib/router";
+import logoOnDark from "@/assets/logo-on-dark.png";
 import { Button } from "./ui";
 
 /**
@@ -9,7 +10,7 @@ import { Button } from "./ui";
  * Rendered on every signed-in screen so the frame never moves between pages.
  */
 
-const DESTINATIONS: { label: string; route: Route }[] = [
+const DESTINATIONS: { label: string; route: Route; ownerOnly?: boolean }[] = [
   { label: "Today", route: { name: "today" } },
   { label: "Members", route: { name: "members" } },
   { label: "Policies", route: { name: "policies" } },
@@ -17,6 +18,8 @@ const DESTINATIONS: { label: string; route: Route }[] = [
   { label: "Enquiries", route: { name: "people" } },
   { label: "Applications", route: { name: "applications" } },
   { label: "Growth", route: { name: "growth" } },
+  // Hidden from everyone else as a courtesy; the API refuses them anyway.
+  { label: "Analytics", route: { name: "analytics" }, ownerOnly: true },
   { label: "Settings", route: { name: "settings" } },
 ];
 
@@ -58,23 +61,6 @@ function useWhatsAppWaiting(): WhatsAppSummary | null {
   return summary;
 }
 
-const LeafMark = () => (
-  <svg
-    className="brand-mark"
-    width="30"
-    height="30"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.6"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <path d="M20 3C9 2 3 7 4 14s12 8 15-1c1-3 1-7 1-10zM4 21 16 7" />
-  </svg>
-);
-
 const SearchMark = () => (
   <svg
     width="20"
@@ -114,15 +100,14 @@ export default function PortalNav({
   return (
     <header className="portal-nav">
       <a className="brand" href="/" onClick={(e) => go(e, { name: "today" })}>
-        <LeafMark />
+        <img className="brand-logo" src={logoOnDark} alt="Induduzo Funeral Home" />
         <span className="brand-words">
-          <span className="brand-name">induduzo</span>
-          <span className="brand-sub">Funeral home · Staff portal</span>
+          <span className="brand-sub">Staff portal</span>
         </span>
       </a>
 
       <nav className="nav-links" aria-label="Portal">
-        {DESTINATIONS.map(({ label, route }) => (
+        {DESTINATIONS.filter((d) => !d.ownerOnly || me.role === "owner").map(({ label, route }) => (
           <a
             key={label}
             className="nav-link"
@@ -148,6 +133,7 @@ export default function PortalNav({
           second search box keeps one way to do the job. */}
       <a
         className="nav-search"
+        title="Find a member"
         href={hrefFor({ name: "members" })}
         onClick={(e) => go(e, { name: "members" })}
       >
@@ -156,7 +142,9 @@ export default function PortalNav({
       </a>
 
       <div className="nav-me">
-        <span className="avatar" aria-hidden="true">
+        {/* On narrower screens the name and role below are hidden; the
+            tooltip keeps who is signed in one hover away. */}
+        <span className="avatar" aria-hidden="true" title={`${me.email} · ${me.role}`}>
           {initials}
         </span>
         <span className="nav-me-text">

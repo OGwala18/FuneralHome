@@ -6,6 +6,7 @@ only to this; it never holds a database credential.
 
 from __future__ import annotations
 
+import itertools
 import logging
 from contextlib import asynccontextmanager
 
@@ -20,7 +21,8 @@ load_dotenv()
 from .config import get_settings  # noqa: E402  (must follow load_dotenv)
 from .db import close_pool, connection, init_pool  # noqa: E402
 from .observability import init_sentry  # noqa: E402
-from .routers import admin, enquiries, members, payments, whatsapp  # noqa: E402
+from .auth import StaffGateError  # noqa: E402
+from .routers import admin, analytics, enquiries, members, payments, two_step, whatsapp  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -69,7 +71,10 @@ app.add_middleware(
     # Authorization is required, not optional: the staff portal sends a bearer
     # token, and a preflight that does not permit this header fails outright —
     # the browser blocks the request before the API ever sees it.
-    allow_headers=["Content-Type", "Authorization"],
+    # Idempotency-Key is sent by the public form; without it here the browser's
+    # preflight fails and every registration is blocked before it leaves.
+    allow_headers=["Content-Type", "Authorization", "Idempotency-Key", "X-Induduzo-Device"],
+    expose_headers=["Idempotent-Replayed", "Retry-After"],
 )
 
 
@@ -100,6 +105,19 @@ app.include_router(members.router)
 app.include_router(payments.router)
 app.include_router(whatsapp.router)
 app.include_router(whatsapp.admin_router)
+app.include_router(analytics.router)
+app.include_router(two_step.router)
+
+
+@app.exception_handler(StaffGateError)
+async def staff_gate_handler(_: Request, exc: StaffGateError) -> JSONResponse:
+    """A sentence for the screen plus a machine code the portal branches on
+    (second_step_required, two_step_not_configured, ...). Plan §8."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "code": exc.code},
+        headers=exc.headers,
+    )
 
 
 @app.exception_handler(RequestValidationError)
@@ -112,8 +130,13 @@ async def validation_handler(_: Request, exc: RequestValidationError) -> JSONRes
     field_errors: dict[str, str] = {}
     for error in exc.errors():
         location = [part for part in error["loc"] if part != "body"]
+        # A nested form section reads "beneficiary.date_of_birth". Pydantic's
+        # union tags such as "literal['a']" are not field names, so they stop it.
+        names = list(itertools.takewhile(
+            lambda part: isinstance(part, str) and part.isidentifier(), location))
         if location:
-            field_errors[str(location[0])] = error["msg"].replace("Value error, ", "")
+            key = ".".join(names) if names else str(location[0])
+            field_errors[key] = error["msg"].replace("Value error, ", "")
 
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -155,6 +178,7 @@ def health(response: Response) -> dict:
         "whatsapp_webhooks": "configured" if settings.public_api_url else "not_configured",
         "email": "configured" if settings.email_enabled else "not_configured",
         "staff_portal": "configured" if settings.staff_portal_enabled else "not_configured",
+        "analytics": "configured" if settings.analytics_enabled else "not_configured",
         "error_tracking": "enabled" if _sentry_enabled else "disabled",
         "release": settings.release,
     }

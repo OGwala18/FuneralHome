@@ -18,7 +18,11 @@ from functools import lru_cache
 MIN_PEPPER_BYTES = 32
 
 # Who an outbound WhatsApp may go to: nobody, the test numbers, or anyone.
-WHATSAPP_OUTBOUND_MODES = ("off", "allowlist", "on")
+# off: nothing goes out. allowlist: only WHATSAPP_TEST_RECIPIENTS. known: the
+# allowlist plus any number a family gave us (the website form or the member
+# book), and nobody else; the owner's choice for going live, 11 Nov 2026.
+# on: anyone.
+WHATSAPP_OUTBOUND_MODES = ("off", "allowlist", "known", "on")
 
 _E164_RE = re.compile(r"^\+[1-9][0-9]{7,14}$")
 
@@ -68,6 +72,18 @@ class Settings:
     twilio_auth_token: str | None = os.getenv("TWILIO_AUTH_TOKEN")
     twilio_whatsapp_from: str | None = os.getenv("TWILIO_WHATSAPP_FROM")
     twilio_content_sid: str | None = os.getenv("TWILIO_CONTENT_SID")
+    # Approved WhatsApp templates for the payment reminders (app/services/
+    # payment_reminders.py). Variables: {{1}} first name, {{2}} amount,
+    # {{3}} policy number. Absent -> the plain text goes out instead, which
+    # only reaches sandbox numbers or a conversation open in the last 24 hours.
+    twilio_payment_due_sid: str | None = os.getenv("TWILIO_PAYMENT_DUE_SID") or None
+    twilio_payment_missed_sid: str | None = os.getenv("TWILIO_PAYMENT_MISSED_SID") or None
+    # Approved template for the welcome a new member gets (app/services/welcome.py).
+    # Variables: {{1}} first name, {{2}} policy number.
+    twilio_welcome_sid: str | None = os.getenv("TWILIO_WELCOME_SID") or None
+    # Where the welcome asks a new member to leave a Google review. Absent -> the
+    # welcome leaves the review sentence out.
+    google_review_url: str | None = os.getenv("GOOGLE_REVIEW_URL") or None
 
     # Who a WhatsApp from the line may go to: "off" (nobody), "allowlist" (only
     # WHATSAPP_TEST_RECIPIENTS) or "on" (anyone). docs/feature-3-whatsapp-line.md
@@ -115,6 +131,21 @@ class Settings:
     # Tags every event with the deployed commit, so an error can be traced to
     # the exact code that produced it. Railway and Netlify both expose this.
     release: str = os.getenv("RELEASE") or os.getenv("RAILWAY_GIT_COMMIT_SHA") or "dev"
+
+    # --- Website analytics --------------------------------------------------
+    # Plausible counts visits to the LIVE public site (induduzo.co.za) on every
+    # environment: internal and local read the same real numbers, read-only.
+    # The site itself only reports from its live hosts, so a test click on
+    # site-internal never reaches these figures.
+
+    # SEALED. A Plausible Stats API key: read-only, but it reads every site on
+    # the account. Kept out of repr(). Absent -> the owner's Analytics page says
+    # Plausible isn't connected, and nothing else changes.
+    plausible_api_key: str | None = field(
+        default=os.getenv("PLAUSIBLE_API_KEY") or None, repr=False
+    )
+    plausible_site_id: str = os.getenv("PLAUSIBLE_SITE_ID") or "induduzo.co.za"
+    plausible_api_url: str = (os.getenv("PLAUSIBLE_API_URL") or "https://plausible.io").rstrip("/")
 
     # --- Staff portal authentication ----------------------------------------
     # Supabase Auth issues the tokens; we only verify them against its public
@@ -181,7 +212,7 @@ class Settings:
                 "will not start. Set TWO_STEP_ENFORCEMENT=on."
             )
         if self.whatsapp_outbound not in WHATSAPP_OUTBOUND_MODES:
-            raise ValueError("WHATSAPP_OUTBOUND must be 'off', 'allowlist' or 'on'.")
+            raise ValueError("WHATSAPP_OUTBOUND must be 'off', 'allowlist', 'known' or 'on'.")
         # A number in any other form could never match, so the allowlist would
         # quietly send to nobody. The message names the setting, not the
         # numbers, which are personal.
@@ -234,6 +265,10 @@ class Settings:
             and self.twilio_auth_token
             and self.twilio_whatsapp_from
         )
+
+    @property
+    def analytics_enabled(self) -> bool:
+        return bool(self.plausible_api_key)
 
     @property
     def email_enabled(self) -> bool:

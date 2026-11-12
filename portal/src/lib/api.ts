@@ -31,13 +31,93 @@ export class ApiError extends Error {
   readonly status: number;
   /** Per-field messages from a 422, keyed by the request field name. */
   readonly fieldErrors: Record<string, string>;
-  constructor(message: string, status: number, fieldErrors: Record<string, string> = {}) {
+  /** The API's machine code, e.g. "second_step_required". Empty when it sent none. */
+  readonly code: string;
+  constructor(
+    message: string,
+    status: number,
+    fieldErrors: Record<string, string> = {},
+    code = "",
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.fieldErrors = fieldErrors;
+    this.code = code;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Two-step sign-in: the trusted-computer token and the gate signal
+// ---------------------------------------------------------------------------
+
+/**
+ * The trusted-computer token, if this computer was trusted. Sent on every call
+ * as X-Induduzo-Device, not as a cookie: the portal and the API are different
+ * sites on Railway, and browsers block those cookies. Signing out keeps it on
+ * purpose; that is the point of trusting a computer.
+ */
+const DEVICE_KEY = "induduzo-trusted-device";
+
+export const getDeviceToken = (): string | null => {
+  try {
+    return localStorage.getItem(DEVICE_KEY);
+  } catch {
+    return null;
+  }
+};
+
+const storeDeviceToken = (token: string) => {
+  try {
+    localStorage.setItem(DEVICE_KEY, token);
+  } catch {
+    /* private browsing: this computer simply is not remembered */
+  }
+};
+
+export const forgetDeviceToken = () => {
+  try {
+    localStorage.removeItem(DEVICE_KEY);
+  } catch {
+    /* no-op */
+  }
+};
+
+/** Fired when any call is refused for want of the second step (e.g. after 12 hours). */
+export const SECOND_STEP_EVENT = "induduzo:second-step-required";
+
+const authHeaders = (token: string, extra: Record<string, string> = {}) => {
+  const device = getDeviceToken();
+  return {
+    Authorization: `Bearer ${token}`,
+    ...(device ? { "X-Induduzo-Device": device } : {}),
+    ...extra,
+  };
+};
+
+/** Turn a failed response into an ApiError carrying detail, code and field errors. */
+const readError = async (response: Response, fallback: string) => {
+  let detail = fallback;
+  let code = "";
+  let fieldErrors: Record<string, string> = {};
+  try {
+    const parsed = await response.json();
+    if (typeof parsed?.detail === "string") detail = parsed.detail;
+    else if (Array.isArray(parsed?.detail) && parsed.detail[0]?.msg) {
+      detail = String(parsed.detail[0].msg).replace("Value error, ", "");
+    }
+    if (typeof parsed?.code === "string") code = parsed.code;
+    if (parsed?.field_errors && typeof parsed.field_errors === "object") {
+      fieldErrors = parsed.field_errors as Record<string, string>;
+    }
+  } catch {
+    /* keep the fallback message */
+  }
+  if (code === "second_step_required") {
+    window.dispatchEvent(new Event(SECOND_STEP_EVENT));
+  }
+  return new ApiError(detail, response.status, fieldErrors, code);
+};
 
 /** Every admin call carries the staff token; there are no unauthenticated ones. */
 const request = async <T>(path: string, params?: URLSearchParams): Promise<T> => {
@@ -48,7 +128,7 @@ const request = async <T>(path: string, params?: URLSearchParams): Promise<T> =>
 
   let response: Response;
   try {
-    response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    response = await fetch(url, { headers: authHeaders(token) });
   } catch {
     throw new ApiError(
       "Could not reach the server. Check that the API is running.",
@@ -56,16 +136,7 @@ const request = async <T>(path: string, params?: URLSearchParams): Promise<T> =>
     );
   }
 
-  if (!response.ok) {
-    let detail = "Something went wrong.";
-    try {
-      const body = await response.json();
-      if (typeof body?.detail === "string") detail = body.detail;
-    } catch {
-      /* keep the generic message */
-    }
-    throw new ApiError(detail, response.status);
-  }
+  if (!response.ok) throw await readError(response, "Something went wrong.");
 
   return (await response.json()) as T;
 };
@@ -79,30 +150,14 @@ const mutate = async <T>(path: string, method: "POST" | "PATCH", body: unknown):
   try {
     response = await fetch(`${API_BASE}${path}`, {
       method,
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: authHeaders(token, { "Content-Type": "application/json" }),
       body: JSON.stringify(body),
     });
   } catch {
     throw new ApiError("Could not reach the server.", 0);
   }
 
-  if (!response.ok) {
-    let detail = "Something went wrong.";
-    let fieldErrors: Record<string, string> = {};
-    try {
-      const parsed = await response.json();
-      if (typeof parsed?.detail === "string") detail = parsed.detail;
-      else if (Array.isArray(parsed?.detail) && parsed.detail[0]?.msg) {
-        detail = String(parsed.detail[0].msg).replace("Value error, ", "");
-      }
-      if (parsed?.field_errors && typeof parsed.field_errors === "object") {
-        fieldErrors = parsed.field_errors as Record<string, string>;
-      }
-    } catch {
-      /* keep the generic message */
-    }
-    throw new ApiError(detail, response.status, fieldErrors);
-  }
+  if (!response.ok) throw await readError(response, "Something went wrong.");
 
   return (await response.json()) as T;
 };
@@ -162,6 +217,18 @@ export interface MemberDetail extends MemberRow {
   id_number: string | null;
   date_of_birth: string | null;
   source: string;
+  /** Compliance answers from enrolment. Null for dependants and the imported book. */
+  country_of_birth: string | null;
+  citizenship: string | null;
+  passport_number: string | null;
+  employment_status: string | null;
+  employer_name: string | null;
+  industry: string | null;
+  occupation: string | null;
+  job_role: string | null;
+  source_of_funds: string | null;
+  source_of_funds_other: string | null;
+  salary_day: number | null;
   phones: { number: string; phone_type: string; is_primary: boolean }[];
   policies: MemberPolicy[];
 }
@@ -236,6 +303,29 @@ interface PersonIn {
   language_preference?: string;
 }
 
+export type Frequency = "monthly" | "quarterly" | "annually" | "once_off";
+
+/** The three branches a family can pay at, cash or card in person (0023). */
+export type PayBranch = "edendale" | "boshoff" | "langalibalele";
+export const PAY_BRANCHES: { value: PayBranch; label: string }[] = [
+  { value: "edendale", label: "Edendale Main Road (Head Office)" },
+  { value: "boshoff", label: "161 Boshoff Street" },
+  { value: "langalibalele", label: "171 Langalibalele Street" },
+];
+
+/** A beneficiary who is not one of the policy's lives: full details. */
+export interface BeneficiaryIn extends PersonIn {
+  email?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  suburb?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postal_code?: string | null;
+  relationship?: string | null;
+  share_percent?: number | null;
+}
+
 export interface EnrolmentIn extends PersonIn {
   enquiry_id?: string | null;
   initials?: string | null;
@@ -246,22 +336,58 @@ export interface EnrolmentIn extends PersonIn {
   city?: string | null;
   province?: string | null;
   postal_code?: string | null;
+  country_of_birth: string;
+  citizenship: string;
+  passport_number?: string | null;
+  employment_status: string;
+  employer_name?: string | null;
+  industry?: string | null;
+  occupation?: string | null;
+  job_role?: string | null;
+  source_of_funds: string;
+  source_of_funds_other?: string | null;
+  salary_day?: number | null;
   policy_number: string;
-  plan_code?: string | null;
+  plan_code: string;
+  /** Which price of the plan. The API reads the premium from the price list. */
+  plan_option?: string | null;
   entry_date?: string | null;
-  premium_cents: number;
-  cover_cents?: number | null;
+  // No premium and no cover: the API reads both from the price list.
   payment_method: PaymentMethod;
+  /** Required for cash or card in person. */
+  pay_branch_code?: PayBranch | null;
+  /** 1, 25 or 31 (the last day of the month). */
   debit_day?: number | null;
-  frequency: "monthly" | "once_off";
+  frequency: Frequency;
+  /** Null: choose on the next page, e.g. one of the dependants. */
+  beneficiary: BeneficiaryIn | null;
 }
 
 export interface EnrolmentOut {
   person_id: string;
   policy_id: string;
   policy_number: string;
+  premium_cents: number;
+  cover_cents: number | null;
   instalments_scheduled: number;
 }
+
+/** One line of the price list (migration 0018). */
+export interface PlanPrice {
+  plan_code: string;
+  option_code: string;
+  option_label: string;
+  min_age: number | null;
+  max_age: number | null;
+  /** Per month when billing is monthly; the whole amount when once-off. */
+  premium_cents: number;
+  /** The cover a policy on this line gets. Null until the owner gives it. */
+  cover_cents: number | null;
+  currency: string;
+  billing: "monthly" | "once_off";
+}
+
+export const fetchPlanPrices = () => request<PlanPrice[]>("/api/admin/plans/prices");
 
 export interface DependantIn extends PersonIn {
   member_type: DependantType;
@@ -276,6 +402,25 @@ export const enrolMember = (body: EnrolmentIn) =>
 export const addDependant = (policyId: string, body: DependantIn) =>
   mutate<{ person_id: string; policy_member_id: string; existing_person: boolean }>(
     `/api/admin/policies/${encodeURIComponent(policyId)}/members`, "POST", body);
+
+/** Make one of the policy's lives the beneficiary (personId), or add someone new. */
+export const addBeneficiary = (
+  policyId: string,
+  body: { person_id?: string; person?: BeneficiaryIn; relationship?: string | null },
+) =>
+  mutate<{ beneficiary_id: string; person_id: string; covered_life: boolean }>(
+    `/api/admin/policies/${encodeURIComponent(policyId)}/beneficiaries`, "POST", body);
+
+export const removeBeneficiary = async (policyId: string, beneficiaryId: string) => {
+  const token = await getAccessToken();
+  if (!token) throw new ApiError("Your session has ended. Please sign in again.", 401);
+  const response = await fetch(
+    `${API_BASE}/api/admin/policies/${encodeURIComponent(policyId)}/beneficiaries/` +
+      `${encodeURIComponent(beneficiaryId)}/remove`,
+    { method: "POST", headers: authHeaders(token) },
+  );
+  if (!response.ok) throw await readError(response, "Could not remove the beneficiary.");
+};
 
 /* ---------------------------------------------- Policy and premiums --- */
 
@@ -306,12 +451,25 @@ export interface PolicyLife {
   joined_at: string | null;
 }
 
+export interface PolicyBeneficiary {
+  beneficiary_id: string;
+  person_id: string;
+  surname: string;
+  first_names: string;
+  id_number: string | null;
+  relationship: string | null;
+  share_percent: number | null;
+  /** Also one of the lives the policy covers. */
+  covered_life: boolean;
+}
+
 export interface PolicyDetail {
   policy_id: string;
   policy_number: string;
   status_code: string;
   status_label: string;
   plan_code: string | null;
+  plan_option: string | null;
   branch_code: string | null;
   entry_date: string | null;
   premium_cents: number | null;
@@ -321,7 +479,14 @@ export interface PolicyDetail {
   enquiry_reference: string | null;
   dependants_expected: number | null;
   lives: PolicyLife[];
-  payment: { method: string; debit_day: number | null; frequency: string } | null;
+  beneficiaries: PolicyBeneficiary[];
+  payment: {
+    method: string;
+    debit_day: number | null;
+    frequency: string;
+    pay_branch_code: string | null;
+    pay_branch_label: string | null;
+  } | null;
   instalments: Instalment[];
 }
 
@@ -487,6 +652,43 @@ export const resolveEscalation = (id: string, body: { note?: string; ask_rating:
 export const fetchWhatsAppStats = (days = 30) =>
   request<WhatsAppStats>("/api/admin/whatsapp/stats", new URLSearchParams({ days: String(days) }));
 
+/* ------------------------------------------------------------ Analytics --- */
+/* The LIVE public site's Plausible figures, owner only. Counts, no people. */
+
+export type AnalyticsPeriod = "day" | "7d" | "28d" | "91d";
+
+export interface SiteStats {
+  period: AnalyticsPeriod;
+  site: string;
+  fetched_at: string;
+  totals: {
+    visitors: number;
+    visits: number;
+    pageviews: number;
+    /** Percent of visits that saw one page and left. */
+    bounce_rate: number;
+    /** Seconds. */
+    visit_duration: number;
+    views_per_visit: number;
+  };
+  /** Hourly for "day", daily otherwise. Every bucket, zeros included. */
+  series: { bucket: string; visitors: number; pageviews: number }[];
+  actions: { goal: string; visitors: number; events: number; conversion_rate: number }[];
+  /** Call, WhatsApp and Email clicks, by where on the page they were. */
+  clicks_by_place: { goal: string; where: string; events: number }[];
+  /** The same clicks, by which page they were on. */
+  clicks_by_page: { goal: string; where: string; events: number }[];
+  outbound: { url: string; events: number }[];
+  pages: { page: string; visitors: number; pageviews: number }[];
+  sources: { label: string; visitors: number }[];
+  devices: { label: string; visitors: number }[];
+  cities: { label: string; visitors: number }[];
+  path: { label: string; goal: string | null; visitors: number }[];
+}
+
+export const fetchSiteStats = (period: AnalyticsPeriod) =>
+  request<SiteStats>("/api/admin/analytics", new URLSearchParams({ period }));
+
 /** A photo or document a family sent. The API fetches it from Twilio, so the
  *  browser never sees a Twilio address; an <img> can't send the staff token,
  *  so it comes back as a Blob for an object URL. */
@@ -497,20 +699,55 @@ export const fetchWhatsAppMedia = async (messageId: string, index: number): Prom
   try {
     response = await fetch(
       `${API_BASE}/api/admin/whatsapp/messages/${encodeURIComponent(messageId)}/media/${index}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      { headers: authHeaders(token) },
     );
   } catch {
     throw new ApiError("Could not reach the server.", 0);
   }
-  if (!response.ok) {
-    let detail = "Could not open the attachment.";
-    try {
-      const body = await response.json();
-      if (typeof body?.detail === "string") detail = body.detail;
-    } catch {
-      /* keep the generic message */
-    }
-    throw new ApiError(detail, response.status);
-  }
+  if (!response.ok) throw await readError(response, "Could not open the attachment.");
   return response.blob();
+};
+
+// ---------------------------------------------------------------------------
+// Two-step sign-in calls (/api/admin/2fa)
+// ---------------------------------------------------------------------------
+
+export interface TwoStepStatus {
+  enforced: boolean;
+  session_verified: boolean;
+  verified_by: string | null;
+  verified_until: string | null;
+  trusted_device: boolean;
+  methods: { email_code: boolean; authenticator_app: boolean; passkeys: number };
+  email_hint: string;
+}
+
+export interface EmailCodeSent {
+  challenge_id: string;
+  expires_at: string;
+  resend_after: string;
+  email_hint: string;
+}
+
+export interface SecondStepPassed {
+  verified: boolean;
+  verified_by: string;
+  verified_until: string;
+  device_token: string | null;
+  trusted_until: string | null;
+}
+
+export const fetchTwoStepStatus = () => request<TwoStepStatus>("/api/admin/2fa/status");
+
+export const sendEmailCode = () => mutate<EmailCodeSent>("/api/admin/2fa/email/send", "POST", {});
+
+/** Check the emailed code. With trustDevice, keeps the returned token for 30 days. */
+export const verifyEmailCode = async (challengeId: string, code: string, trustDevice: boolean) => {
+  const passed = await mutate<SecondStepPassed>("/api/admin/2fa/email/verify", "POST", {
+    challenge_id: challengeId,
+    code,
+    trust_device: trustDevice,
+  });
+  if (passed.device_token) storeDeviceToken(passed.device_token);
+  return passed;
 };

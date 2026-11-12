@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import logging
+import uuid
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response, status
 from psycopg import errors as pg_errors
 
 from ..db import connection, log_event
+from ..idempotency import fingerprint, idempotency_key, mark_replayed, refuse_mismatch
 from ..ratelimit import application_limiter, enforce, lead_limiter
 from ..schemas import ApplicationIn, EnquiryOut, LeadIn
-from ..services.email import send_completed_application, send_new_lead
+from ..services.email import (
+    send_application_received,
+    send_completed_application,
+    send_new_lead,
+)
 from ..services.whatsapp import _plain_body, send_registration_confirmation
 from ..services.whatsapp_line import record_confirmation
 
@@ -34,7 +40,9 @@ def _to_out(row: dict) -> EnquiryOut:
 
 
 @router.post("", response_model=EnquiryOut, status_code=status.HTTP_201_CREATED)
-def create_lead(payload: LeadIn, background: BackgroundTasks, request: Request) -> EnquiryOut:
+def create_lead(
+    payload: LeadIn, background: BackgroundTasks, request: Request, response: Response
+) -> EnquiryOut:
     """Stage 1. Commits the lead immediately, then emails the office.
 
     This is the point of the two-step split: the moment somebody gives us a name
@@ -42,7 +50,21 @@ def create_lead(payload: LeadIn, background: BackgroundTasks, request: Request) 
     The notification goes out on THIS step for the same reason — the office
     should be able to phone someone who abandoned the second page.
     """
+    key = idempotency_key(request)
+    data = payload.model_dump()
+    data_fingerprint = fingerprint(data)
+
+    # A retry of a submission we already hold is answered before the rate limit,
+    # so a family's second tap never counts against them.
+    if key is not None:
+        existing = _find_by_key(key)
+        if existing is not None:
+            return _replay_lead(existing, data_fingerprint, response)
+
     enforce(lead_limiter, request)
+
+    data["idempotency_key"] = key
+    data["idempotency_fingerprint"] = data_fingerprint if key is not None else None
 
     with connection() as conn:
         row = conn.execute(
@@ -50,17 +72,28 @@ def create_lead(payload: LeadIn, background: BackgroundTasks, request: Request) 
             insert into plan_enquiries (
                 first_name, surname, mobile_number, email, city, suburb_or_town,
                 province, language_preference, plan_interest, best_contact_time,
-                how_heard, contact_consent, marketing_consent, consented_at, source
+                how_heard, contact_consent, marketing_consent, consented_at, source,
+                idempotency_key, idempotency_fingerprint
             ) values (
                 %(first_name)s, %(surname)s, %(mobile_number)s, %(email)s, %(city)s,
                 %(suburb_or_town)s, %(province)s, %(language_preference)s,
                 %(plan_interest)s, %(best_contact_time)s, %(how_heard)s,
-                %(contact_consent)s, %(marketing_consent)s, now(), 'website'
+                %(contact_consent)s, %(marketing_consent)s, now(), 'website',
+                %(idempotency_key)s, %(idempotency_fingerprint)s
             )
+            on conflict (idempotency_key) where idempotency_key is not null do nothing
             returning {_RETURNING}
             """,
-            payload.model_dump(),
+            data,
         ).fetchone()
+
+        if row is None:
+            # Two tries with the same key arrived together and the other one
+            # won. Answer with its enquiry; it is the one that notifies.
+            existing = conn.execute(
+                f"select {_RETURNING} from plan_enquiries where idempotency_key = %s", (key,)
+            ).fetchone()
+            return _replay_lead(existing, data_fingerprint, response)
 
         log_event(
             conn,
@@ -79,6 +112,22 @@ def create_lead(payload: LeadIn, background: BackgroundTasks, request: Request) 
     background.add_task(_notify_new_lead, dict(row))
 
     logger.info("Lead captured: %s", row["reference"])
+    return _to_out(row)
+
+
+def _find_by_key(key: str) -> dict | None:
+    with connection() as conn:
+        return conn.execute(
+            f"select {_RETURNING} from plan_enquiries where idempotency_key = %s", (key,)
+        ).fetchone()
+
+
+def _replay_lead(row: dict, data_fingerprint: str, response: Response) -> EnquiryOut:
+    """The answer to a repeated stage-1 request: the original, and nothing sent."""
+    if row["idempotency_fingerprint"] != data_fingerprint:
+        raise refuse_mismatch()
+    mark_replayed(response)
+    logger.info("Lead replayed: %s", row["reference"])
     return _to_out(row)
 
 
@@ -104,15 +153,48 @@ def _record_email_outcome(enquiry_id: str, kind: str, result) -> None:
 
 @router.patch("/{enquiry_id}/application", response_model=EnquiryOut)
 def submit_application(
-    enquiry_id: str, payload: ApplicationIn, background: BackgroundTasks, request: Request
+    enquiry_id: str,
+    payload: ApplicationIn,
+    background: BackgroundTasks,
+    request: Request,
+    response: Response,
 ) -> EnquiryOut:
-    """Stage 2. Promotes an existing lead to a full application."""
+    """Stage 2. Promotes an existing lead to a full application.
+
+    Sending the identical application again changes nothing and notifies no
+    one; a real correction (any field different) updates as before.
+    """
     enforce(application_limiter, request)
 
+    try:
+        uuid.UUID(enquiry_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="We could not find your registration. Please start again.",
+        ) from exc
+
     data = payload.model_dump()
+    data["application_fingerprint"] = fingerprint(data)
     data["enquiry_id"] = enquiry_id
+    # The same plan code again, as plain text, to look up its price.
+    data["plan_for_price"] = payload.plan_selected
 
     with connection() as conn:
+        unchanged = conn.execute(
+            f"""
+            select {_RETURNING} from plan_enquiries
+             where id = %(enquiry_id)s
+               and archived_at is null
+               and application_fingerprint = %(application_fingerprint)s
+            """,
+            data,
+        ).fetchone()
+        if unchanged is not None:
+            mark_replayed(response)
+            logger.info("Application replayed: %s", unchanged["reference"])
+            return _to_out(unchanged)
+
         try:
             row = conn.execute(
                 f"""
@@ -127,7 +209,15 @@ def submit_application(
                     plan_selected            = %(plan_selected)s,
                     coffin_choice            = %(coffin_choice)s,
                     age_band                 = %(age_band)s,
-                    premium_amount_cents     = %(premium_amount_cents)s,
+                    -- Set by the plan, never by the browser: the price of a
+                    -- plan with exactly one price (A, B, Dome). Plan C depends
+                    -- on single or couple and age, which staff confirm at
+                    -- enrolment, so it stays empty here.
+                    premium_amount_cents     = (
+                        select min(premium_cents) from ref_plan_prices
+                         where plan_code = %(plan_for_price)s and is_active
+                        having count(*) = 1
+                    ),
                     payment_frequency        = %(payment_frequency)s,
                     payment_preference       = %(payment_preference)s,
                     number_of_dependants     = %(number_of_dependants)s,
@@ -139,6 +229,7 @@ def submit_application(
                     beneficiary_relationship = %(beneficiary_relationship)s,
                     notes                    = %(notes)s,
                     terms_accepted           = %(terms_accepted)s,
+                    application_fingerprint  = %(application_fingerprint)s,
                     stage                    = 'application',
                     status                   = 'application_submitted',
                     application_submitted_at = now()
@@ -189,9 +280,18 @@ def submit_application(
         _send_confirmation, str(row["id"]), row["mobile_number"], row["first_name"], row["reference"]
     )
     background.add_task(_notify_completed_application, dict(row))
+    if row.get("email"):
+        background.add_task(_confirm_to_applicant, dict(row))
 
     logger.info("Application submitted: %s", row["reference"])
     return _to_out(row)
+
+
+def _confirm_to_applicant(row: dict) -> None:
+    """Email the applicant their reference, as the WhatsApp confirmation does."""
+    result = send_application_received(to_email=row["email"], first_name=row["first_name"],
+                                       reference=row["reference"])
+    _record_email_outcome(row["id"], "applicant_email", result)
 
 
 def _notify_completed_application(row: dict) -> None:

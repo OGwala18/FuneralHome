@@ -40,6 +40,7 @@ for _name in (
     "SUPABASE_URL",
     "SUPABASE_SERVICE_ROLE_KEY",
     "STAFF_EMAILS",
+    "PLAUSIBLE_API_KEY",
 ):
     os.environ[_name] = ""
 os.environ["ENVIRONMENT"] = "test"
@@ -91,3 +92,153 @@ def db():
     """A separate connection for checking what the API actually wrote."""
     with psycopg.connect(os.environ["DATABASE_URL"], autocommit=True) as conn:
         yield conn
+
+
+# --- Two-step sign-in (plan §11B) -------------------------------------------------
+#
+# These sign in the REAL way: a genuine ES256 token checked by the real
+# require_staff_identity and require_staff, with only the key lookup stubbed.
+# staff_as above stays for the role tests, which don't care about the second step.
+
+import dataclasses  # noqa: E402
+import time as _time  # noqa: E402
+import uuid as _uuid  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
+
+import jwt as _jwt  # noqa: E402
+from cryptography.fernet import Fernet  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import ec  # noqa: E402
+
+from app import auth as _auth  # noqa: E402
+from app.config import get_settings as _real_get_settings  # noqa: E402
+from app.routers import two_step as _two_step_router  # noqa: E402
+from app.services import email as _email  # noqa: E402
+from app.services import two_step as _two_step  # noqa: E402
+
+TEST_SUPABASE_URL = "https://two-step-test.supabase.test"
+_SIGNING_KEY = ec.generate_private_key(ec.SECP256R1())
+
+
+class _StubJwks:
+    """Stands in for Supabase's JWKS: every token is checked against our test key."""
+
+    class _Key:
+        key = _SIGNING_KEY.public_key()
+
+    def get_signing_key_from_jwt(self, _token):
+        return self._Key()
+
+
+def _two_step_settings(enforcement: str, configured: bool = True):
+    extra = (
+        {
+            "two_step_encryption_keys": [Fernet.generate_key().decode()],
+            "two_step_code_pepper": "test-pepper-" + "x" * 32,
+            "webauthn_rp_id": "localhost",
+            "webauthn_origins": ["http://localhost:8081"],
+        }
+        if configured
+        else {"two_step_encryption_keys": [], "two_step_code_pepper": None}
+    )
+    return dataclasses.replace(
+        _real_get_settings(),
+        supabase_url=TEST_SUPABASE_URL,
+        two_step_enforcement=enforcement,
+        **extra,
+    )
+
+
+@pytest.fixture
+def two_step(monkeypatch):
+    """Switch the second step on or off for this test, as the server would be.
+
+    two_step("on") / two_step("off") / two_step("on", configured=False).
+    """
+    def switch(enforcement: str = "on", configured: bool = True):
+        settings = _two_step_settings(enforcement, configured)
+        for module in (_auth, _two_step_router):
+            monkeypatch.setattr(module, "get_settings", lambda: settings)
+        monkeypatch.setattr(_auth, "_client", lambda: _StubJwks())
+        return settings
+
+    return switch
+
+
+@pytest.fixture
+def signed_in(two_step, db):
+    """Mint a real token for a real staff row: signed_in(role, session_id=...).
+
+    Returns (headers, staff_id, session_id). The staff row is created fresh, so
+    tests never share a person. Enforcement defaults to ON unless the test
+    already called two_step().
+    """
+    if _auth.get_settings is _real_get_settings:
+        two_step("on")
+
+    def sign_in(role: str = "admin", session_id: str | None = None, email: str | None = None):
+        email = email or f"two-step-{_uuid.uuid4().hex[:10]}@staff.test"
+        session_id = session_id or str(_uuid.uuid4())
+        # Signing in again as an existing person (a second session) reuses the row.
+        existing = db.execute(
+            "select id, supabase_user_id from staff_users where email = %s", (email,)
+        ).fetchone()
+        if existing:
+            staff_id, subject = existing[0], str(existing[1])
+        else:
+            subject = str(_uuid.uuid4())
+            staff_id = db.execute(
+                """
+                insert into staff_users (email, role, is_active, supabase_user_id, invited_by)
+                values (%s, %s, true, %s, 'test') returning id
+                """,
+                (email, role, subject),
+            ).fetchone()[0]
+        token = _jwt.encode(
+            {
+                "sub": subject,
+                "email": email,
+                "aud": "authenticated",
+                "iss": TEST_SUPABASE_URL + "/auth/v1",
+                "exp": int(_time.time()) + 3600,
+                "iat": int(_time.time()),
+                "session_id": session_id,
+            },
+            _SIGNING_KEY,
+            algorithm="ES256",
+        )
+        return {"Authorization": f"Bearer {token}"}, str(staff_id), session_id
+
+    return sign_in
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    """The two-step clock, frozen and movable: clock.advance(hours=12)."""
+
+    class Clock:
+        def __init__(self):
+            self.at = datetime.now(timezone.utc).replace(microsecond=0)
+
+        def __call__(self):
+            return self.at
+
+        def advance(self, **delta):
+            from datetime import timedelta
+            self.at += timedelta(**delta)
+
+    c = Clock()
+    monkeypatch.setattr(_two_step, "now", c)
+    return c
+
+
+@pytest.fixture
+def mailbox(monkeypatch):
+    """Every email the API sends lands in this list instead of an SMTP server."""
+    sent: list = []
+
+    def capture(message):
+        sent.append(message)
+        return _email.EmailResult(sent=True)
+
+    monkeypatch.setattr(_email, "_send", capture)
+    return sent

@@ -16,6 +16,12 @@ drift apart.
 Facts only. Nothing here promises a payout date or a response time the office
 hasn't committed to, and nothing ever asks for an ID number, a card number or
 banking details: scammers copy exactly those messages.
+
+The one exception that GIVES banking details is "pay.bank": Induduzo's own
+account (app/services/banking.py), with the family's policy number filled in
+by the line (POLICY_REFERENCE). The owner chose this on 11 Nov 2026 so families
+can pay without phoning first. It always ends with the warning not to pay into
+any other account.
 """
 
 from __future__ import annotations
@@ -24,12 +30,16 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal
 
+from . import banking
+
 # South Africa has no daylight saving, so a fixed offset is exact, and needs no
 # time zone database (Windows has none without the tzdata package).
 SAST = timezone(timedelta(hours=2), "SAST")
 
-PHONES_24H = "079 751 0648 or 082 954 9241"
+# The owner's flyer, 12 Nov 2026: a dedicated 24-hour line, then the offices.
+PHONES_24H = "069 706 0387 (24 hours), 079 751 0648 or 082 954 9241"
 OFFICE_ADDRESS = "Edendale Main Road, Kwadaya, Pietermaritzburg 3201"
+BRANCHES = "161 Boshoff Street and 171 Langalibalele Street, Pietermaritzburg"
 MAP_LINK = "https://www.google.com/maps/search/?api=1&query=Edendale+Main+Road+Kwadaya+Pietermaritzburg"
 WEBSITE_JOIN = "https://induduzo.co.za/register"
 EMAIL = "Info@induduzo.co.za"
@@ -116,6 +126,11 @@ BACK = "back"          # the menu the family came from
 class Option:
     label: str
     goto: str
+
+
+# Filled in by whatsapp_line with the family's own policy number(s), or with a
+# line telling them where to find it. Never shown to a family as written.
+POLICY_REFERENCE = "{policy_reference}"
 
 
 @dataclass(frozen=True)
@@ -263,6 +278,7 @@ _add(
             Option("I missed a payment", "pay.missed"),
             Option("Wrong amount or a double deduction", "pay.wrong"),
             Option("Changing or cancelling my debit order", "pay.change"),
+            Option("Pay now: our bank details", "pay.bank"),
             NONE_OF_THESE,
         ),
     ),
@@ -271,9 +287,19 @@ _add(
         text=(
             "You can pay by debit order, stop order, EFT, Easypay or Pay@, or in "
             "cash or by card at our office.\n\n"
-            "We never send banking details on WhatsApp, and we will never ask for "
-            "your card number or PIN. For our account details, phone the office on "
-            "079 751 0648."
+            "To pay by EFT or bank deposit, choose \"Pay now\" in the payment menu "
+            "for our bank details. We will never ask for your card number or PIN."
+        ),
+    ),
+    Node(
+        id="pay.bank", kind="answer", title="Our bank details", parent="pay",
+        text=(
+            "Please pay into our official account:\n\n"
+            + banking.details_block(POLICY_REFERENCE) + "\n\n"
+            f"Send your proof of payment here, or to {banking.PROOF_OF_PAYMENT_EMAIL}, "
+            "and keep a copy for your records.\n\n"
+            "Received different banking details? Don't pay. Contact us first: we "
+            "never change our account by SMS, WhatsApp or email."
         ),
     ),
     Node(
@@ -348,7 +374,7 @@ _add(
             Option("Plan A (Urban) – R350 p/m", "plans.a"),
             Option("Plan B (Emakhaya) – R250 p/m", "plans.b"),
             Option("Plan C (Singles/Couples) – from R50 p/m", "plans.c"),
-            Option("Dome Plan – R400 once-off", "plans.dome"),
+            Option("Dome Plan – from R500 p/m", "plans.dome"),
             Option("How to join", "plans.join"),
             NONE_OF_THESE,
         ),
@@ -389,8 +415,10 @@ _add(
     Node(
         id="plans.dome", kind="answer", title="Dome Plan", parent="plans",
         text=_plan_text(
-            "Dome Plan", "R400 once-off, or R300 once-off + R50 p/m",
-            "The main member and 14 others, 15 people in total.",
+            "Dome Plan", "R500 p/m (husband & wife), or R750 p/m for the family option",
+            "Option 1 covers a husband and wife. Option 2 covers the family, up to "
+            "15 people: those 21 and over receive the dome and all plan benefits, "
+            "those under 21 a casket and all other benefits.",
             ["2 family cars", "hearse", "casket", "cross", "mortuary fridge",
              "tent (2 poles)", "100 programmes", "A3 photo frame", "gown",
              "doctor fees", "a grave at Ethembeni Cemetery", "cemetery equipment"],
@@ -468,7 +496,8 @@ _add(
     Node(
         id="contact.office", kind="answer", title="Office and hours", parent="contact",
         text=(
-            f"Our office: {OFFICE_ADDRESS}\n"
+            f"Our head office: {OFFICE_ADDRESS}\n"
+            f"Branches: {BRANCHES}\n"
             f"Map: {MAP_LINK}\n\n"
             f"Open {HOURS_TEXT}. Closed on Sundays and public holidays.\n\n"
             f"If someone has passed away, call any time: *{PHONES_24H}*."

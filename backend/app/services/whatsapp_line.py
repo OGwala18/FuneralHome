@@ -149,6 +149,42 @@ def _link(conn: Any, conv: dict) -> None:
             conv["person_id"] = row["person_id"]
 
 
+def policy_numbers(conn: Any, person_id: Any) -> list[str]:
+    """The live policies this person is the MAIN member of.
+
+    Only the main member's: a phone that belongs to a dependant must not reveal
+    the number of someone else's policy.
+    """
+    if person_id is None:
+        return []
+    rows = conn.execute(
+        """
+        select p.policy_number
+          from policy_members pm
+          join policies p on p.id = pm.policy_id
+          join ref_policy_statuses s on s.code = p.status_code
+         where pm.person_id = %s
+           and pm.member_type = 'main_member'
+           and pm.archived_at is null and pm.left_at is null
+           and p.archived_at is null and not s.is_terminal
+         order by p.policy_number
+        """,
+        (person_id,),
+    ).fetchall()
+    return [r["policy_number"] for r in rows]
+
+
+def policy_reference(conn: Any, person_id: Any) -> str:
+    """What goes after "Reference:" in the bank details for this family."""
+    numbers = policy_numbers(conn, person_id)
+    if len(numbers) == 1:
+        return f"{numbers[0]} (your policy number)"
+    if numbers:
+        return "your policy number: " + " or ".join(numbers) + " (one payment per policy)"
+    return ("your policy number. It's on your policy documents; choose 2 below "
+            "if you don't have it")
+
+
 def _conversation(conn: Any, number: str, profile_name: str | None) -> dict:
     """The family's conversation, created if new, locked for this transaction."""
     row = conn.execute(
@@ -294,7 +330,18 @@ def handle_inbound(conn: Any, message: Inbound, now: datetime | None = None) -> 
     open_escalation = _open_escalation(conn, conv["id"])
     turn: menu.Turn | None = None
 
-    if opted_out_at is not None:
+    settings = get_settings()
+    stranger = (settings.whatsapp_outbound == "known"
+                and conv["enquiry_id"] is None and conv["person_id"] is None
+                and message.from_number not in settings.whatsapp_test_recipients)
+
+    if stranger:
+        # Going live (the owner, 11 Nov 2026): only numbers a family gave us on
+        # the website form or in the member book get the menu. Anyone else's
+        # message is kept for staff to see, and gets no automatic reply.
+        turn = menu.Turn(replies=[], state=state, data=data, misses=misses,
+                         node="unknown_number")
+    elif opted_out_at is not None:
         if words == "start":
             opted_out_at = None
             turn = menu.respond(state=menu.IDLE, data={}, misses=0, text=body,
@@ -329,7 +376,11 @@ def handle_inbound(conn: Any, message: Inbound, now: datetime | None = None) -> 
                                                    open_escalation)
         if turn.feedback:
             _record_feedback(conn, conv, turn.feedback, data.get("escalation_id"))
-        delivery.replies = [(text, turn.node) for text in turn.replies]
+        replies = turn.replies
+        if any(content.POLICY_REFERENCE in text for text in replies):
+            reference = policy_reference(conn, conv["person_id"])
+            replies = [text.replace(content.POLICY_REFERENCE, reference) for text in replies]
+        delivery.replies = [(text, turn.node) for text in replies]
 
     conn.execute(
         """

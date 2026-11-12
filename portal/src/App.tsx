@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { authConfigured, supabase } from "@/lib/supabase";
-import { ApiError, fetchMe, type StaffIdentity } from "@/lib/api";
+import { ApiError, fetchMe, SECOND_STEP_EVENT, type StaffIdentity } from "@/lib/api";
 import { useRoute } from "@/lib/router";
 import PortalNav from "@/components/PortalNav";
 import { Button } from "@/components/ui";
 import Login from "@/pages/Login";
+import ConfirmItsYou from "@/pages/ConfirmItsYou";
 import Today from "@/pages/Today";
 import People from "@/pages/People";
 import Person from "@/pages/Person";
@@ -18,6 +19,7 @@ import Payments from "@/pages/Payments";
 import Applications from "@/pages/Applications";
 import Growth from "@/pages/Growth";
 import WhatsApp from "@/pages/WhatsApp";
+import Analytics from "@/pages/Analytics";
 import Settings from "@/pages/Settings";
 
 /**
@@ -32,7 +34,24 @@ export default function App() {
   const [checking, setChecking] = useState(true);
   const [me, setMe] = useState<StaffIdentity | null>(null);
   const [denied, setDenied] = useState<string | null>(null);
+  // Signed in with the password, but the API wants the second step first.
+  const [secondStep, setSecondStep] = useState(false);
+  // Bumped to ask the API "who am I?" again, e.g. after the second step passes.
+  const [recheck, setRecheck] = useState(0);
   const route = useRoute();
+
+  // Any call refused for want of the second step (a session past its 12 hours,
+  // say) brings the "Confirm it's you" screen back, wherever the person was.
+  useEffect(() => {
+    const ask = () => setSecondStep(true);
+    window.addEventListener(SECOND_STEP_EVENT, ask);
+    return () => window.removeEventListener(SECOND_STEP_EVENT, ask);
+  }, []);
+
+  const secondStepPassed = useCallback(() => {
+    setSecondStep(false);
+    setRecheck((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     if (!supabase) {
@@ -48,6 +67,7 @@ export default function App() {
       if (!next) {
         setMe(null);
         setDenied(null);
+        setSecondStep(false);
       }
     });
     return () => sub.subscription.unsubscribe();
@@ -63,10 +83,15 @@ export default function App() {
         if (!cancelled) {
           setMe(identity);
           setDenied(null);
+          setSecondStep(false);
         }
       })
       .catch((err) => {
         if (cancelled) return;
+        if (err instanceof ApiError && err.code === "second_step_required") {
+          setSecondStep(true);
+          return;
+        }
         setMe(null);
         setDenied(
           err instanceof ApiError
@@ -77,7 +102,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [session]);
+  }, [session, recheck]);
 
   if (!authConfigured) {
     return (
@@ -98,6 +123,8 @@ export default function App() {
   if (!session) return <Login />;
 
   const signOut = () => void supabase!.auth.signOut();
+
+  if (secondStep) return <ConfirmItsYou onDone={secondStepPassed} onSignOut={signOut} />;
 
   // Signed in to Supabase, but the API says this account is not staff.
   if (denied) {
@@ -138,6 +165,8 @@ export default function App() {
         {route.name === "growth" && <Growth />}
         {/* Only an owner sends from the WhatsApp line, for now. The API enforces it. */}
         {route.name === "whatsapp" && <WhatsApp id={route.id} canEdit={me.role === "owner"} />}
+        {/* Owner only. Anyone else who types the address lands on Today. */}
+        {route.name === "analytics" && (me.role === "owner" ? <Analytics /> : <Today canEdit={canEdit} />)}
         {route.name === "settings" && <Settings me={me} />}
       </main>
     </>
