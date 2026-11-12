@@ -37,6 +37,31 @@ KINDS = ("due", "missed")
 TABLE_KIND = {"due": "upcoming", "missed": "overdue"}
 
 
+def not_ready(settings: Any) -> list[str]:
+    """What stops reminders going out properly, by setting name. Empty = ready.
+
+    run() claims each reminder BEFORE sending and never retries a failed one,
+    so running it while WhatsApp can't deliver would use up that month's
+    reminders as "failed". The scheduled job asks this first and claims
+    nothing unless it is empty. Names only, never values.
+    """
+    missing = []
+    if not settings.whatsapp_enabled:
+        missing.append("TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_WHATSAPP_FROM")
+    if not settings.twilio_payment_due_sid:
+        missing.append("TWILIO_PAYMENT_DUE_SID (approved template)")
+    if not settings.twilio_payment_missed_sid:
+        missing.append("TWILIO_PAYMENT_MISSED_SID (approved template)")
+    if settings.whatsapp_outbound == "off":
+        missing.append("WHATSAPP_OUTBOUND (off)")
+    elif (settings.environment.strip().lower() == "production"
+          and settings.whatsapp_outbound != "on"):
+        # 'allowlist' or 'known' would refuse most families, and each refusal
+        # is recorded as a failed reminder that is never sent again.
+        missing.append("WHATSAPP_OUTBOUND (must be 'on' in production)")
+    return missing
+
+
 def money(cents: int, currency: str = "ZAR") -> str:
     return f"R{cents // 100:,}.{cents % 100:02d}".replace(",", " ") if currency == "ZAR" \
         else f"{currency} {cents / 100:.2f}"
