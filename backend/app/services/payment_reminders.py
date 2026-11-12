@@ -97,7 +97,7 @@ def candidates(conn: Any, due_on: date) -> list[dict]:
         """
         select i.id as instalment_id, i.amount_cents, i.currency, p.policy_number,
                pe.id as person_id, pe.first_names, ph.number,
-               c.id as conversation_id, c.opted_out_at
+               c.id as conversation_id, c.opted_out_at, c.last_inbound_at
           from premium_instalments i
           join policies p on p.id = i.policy_id
           join policy_members pm on pm.policy_id = p.id
@@ -155,7 +155,7 @@ def run(conn: Any, today: date,
     Each reminder is claimed and committed before it is sent, so a crash
     mid-run never leads to a second message.
     """
-    from .whatsapp_line import record_outbound  # avoids an import cycle
+    from .whatsapp_line import record_outbound, window_open  # avoids an import cycle
 
     send = send or whatsapp.send_payment_reminder
     counts: collections.Counter[str] = collections.Counter()
@@ -180,7 +180,8 @@ def run(conn: Any, today: date,
                 result = send(kind=kind, to_mobile=row["number"], body=body,
                               first_name=(row["first_names"] or "").split(" ")[0],
                               amount=money(row["amount_cents"], row["currency"]),
-                              policy_number=row["policy_number"])
+                              policy_number=row["policy_number"],
+                              window_open=window_open(row["last_inbound_at"]))
                 record_outbound(conn, conversation_id=row["conversation_id"],
                                 to_number=row["number"], body=body, author="system",
                                 result=result, node=f"payment_{kind}")

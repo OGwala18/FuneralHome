@@ -338,7 +338,7 @@ def enrol(conn: Any, data: Any, *, staff_email: str, today: date | None = None) 
     # the dependants the beneficiary once they have been added.
     if data.beneficiary is not None:
         add_beneficiary(conn, policy_id, person=data.beneficiary,
-                        staff_email=staff_email, today=today)
+                        staff_email=staff_email, today=today, field="beneficiary")
 
     scheduled = instalments.generate(conn, policy_id, today=today)
 
@@ -390,10 +390,14 @@ def _add_address(conn: Any, person_id: str, data: Any) -> None:
         )
 
 
+# The application form, section 8: "each beneficiary must be 18 years or older".
+BENEFICIARY_MIN_AGE = 18
+
+
 def add_beneficiary(conn: Any, policy_id: str, *, staff_email: str,
                     person_id: str | None = None, person: Any = None,
                     relationship: str | None = None, share_percent: int | None = None,
-                    today: date | None = None) -> dict:
+                    today: date | None = None, field: str = "person") -> dict:
     """Name who the policy pays out to.
 
     Either `person_id`, one of the lives already on this policy ("make this
@@ -421,11 +425,18 @@ def add_beneficiary(conn: Any, policy_id: str, *, staff_email: str,
         ).fetchone()
         if life is None:
             raise NotFound("That person is not on this policy.")
+        born = conn.execute("select date_of_birth from people where id = %s",
+                            (person_id,)).fetchone()["date_of_birth"]
+        if born is not None and age_on(born, today) < BENEFICIARY_MIN_AGE:
+            raise Invalid("person_id", "A beneficiary must be 18 or older.")
         existing_life = True
     else:
         relationship = relationship or getattr(person, "relationship", None)
         share_percent = share_percent or getattr(person, "share_percent", None)
         identity = _identity(person, today)
+        born = identity["date_of_birth"]
+        if born is not None and age_on(born, today) < BENEFICIARY_MIN_AGE:
+            raise Invalid(f"{field}.date_of_birth", "A beneficiary must be 18 or older.")
         found = None
         if person.id_number:
             found = conn.execute(

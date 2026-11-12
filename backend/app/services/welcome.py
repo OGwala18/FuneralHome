@@ -48,7 +48,7 @@ def _member(conn: Any, policy_id: str) -> dict | None:
     return conn.execute(
         """
         select p.policy_number, pe.first_names, pe.email, ph.number,
-               c.id as conversation_id, c.opted_out_at
+               c.id as conversation_id, c.opted_out_at, c.last_inbound_at
           from policies p
           join policy_members pm on pm.policy_id = p.id and pm.member_type = 'main_member'
                and pm.archived_at is null
@@ -66,7 +66,7 @@ def _member(conn: Any, policy_id: str) -> dict | None:
 
 def send(policy_id: str, staff_email: str = "system") -> dict[str, str]:
     """Send the welcome. Never raises. Returns what happened per channel."""
-    from .whatsapp_line import record_outbound  # avoids an import cycle
+    from .whatsapp_line import record_outbound, window_open  # avoids an import cycle
 
     outcome = {"whatsapp": "not_tried", "email": "not_tried"}
     try:
@@ -87,7 +87,8 @@ def send(policy_id: str, staff_email: str = "system") -> dict[str, str]:
                 result = whatsapp.send_welcome(
                     to_mobile=member["number"], body=text,
                     first_name=(member["first_names"] or "").split(" ")[0],
-                    policy_number=member["policy_number"])
+                    policy_number=member["policy_number"],
+                    window_open=window_open(member["last_inbound_at"]))
                 record_outbound(conn, conversation_id=member["conversation_id"],
                                 to_number=member["number"], body=text, author="system",
                                 result=result, node="welcome")

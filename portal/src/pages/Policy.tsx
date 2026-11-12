@@ -203,6 +203,13 @@ export default function Policy({ id, canEdit, addLives }:
 
   const main = policy.lives.find((life) => life.member_type === "main_member");
   const beneficiaryIds = new Set(policy.beneficiaries.map((b) => b.person_id));
+  // The application form: each beneficiary must be 18 or older.
+  const adult = (born: string | null) => {
+    if (!born) return true;
+    const cutoff = new Date();
+    cutoff.setFullYear(cutoff.getFullYear() - 18);
+    return new Date(born) <= cutoff;
+  };
   const dependants = policy.lives.length - (main ? 1 : 0);
   const due = policy.instalments.filter((row) => row.status === "due");
   const overdue = due.filter((row) => row.due_date < today());
@@ -298,7 +305,7 @@ export default function Policy({ id, canEdit, addLives }:
                     <td onClick={(e) => e.stopPropagation()}>
                       {beneficiaryIds.has(life.person_id)
                         ? <Badge tone="success">Beneficiary</Badge>
-                        : canEdit && (
+                        : canEdit && adult(life.date_of_birth) && (
                           <Button small disabled={benBusy}
                             onClick={() => void makeBeneficiary(life.person_id)}>
                             Make beneficiary
@@ -321,8 +328,8 @@ export default function Policy({ id, canEdit, addLives }:
               )}
             </div>
             <p className="t-small muted" style={{ marginTop: 0 }}>
-              Who receives the payout. Choose <strong>Make beneficiary</strong> on one of the lives
-              above, or add someone who isn&rsquo;t covered by this policy.
+              Who receives the payout, 18 or older. Choose <strong>Make beneficiary</strong> on one
+              of the lives above, or add someone who isn&rsquo;t covered by this policy.
             </p>
             {benError && <div style={{ marginBottom: "var(--s16)" }}>
               <Notice tone="error" title="Not saved." detail={benError} /></div>}
