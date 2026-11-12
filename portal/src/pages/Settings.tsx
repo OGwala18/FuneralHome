@@ -1,6 +1,7 @@
 import type { StaffIdentity } from "@/lib/api";
 import { Fact, Notice } from "@/components/ui";
 import Staff from "./Staff";
+import ChangePassword from "@/components/ChangePassword";
 
 /**
  * Settings is deliberately thin. The Figma design has screens for office
@@ -31,10 +32,7 @@ export default function Settings({ me }: { me: StaffIdentity }) {
             <Fact label="Signed in as">{me.email}</Fact>
             <Fact label="Role">{me.role}</Fact>
           </div>
-          <p className="t-small muted" style={{ margin: "var(--s16) 0 0" }}>
-            Passwords are managed by Supabase, not here. To change yours, use the reset link on
-            the sign-in screen.
-          </p>
+          <ChangePassword />
         </section>
 
         {isOwner ? (
