@@ -180,7 +180,21 @@ class EnquiryDetail(EnquiryRow):
     payment_preference: str | None
     number_of_dependants: int | None
     beneficiary_name: str | None
+    beneficiary_mobile: str | None
     beneficiary_relationship: str | None
+    # Everything else the website asked. The enrolment form fills what it has a
+    # field for, and carries the rest into the policy's notes, so staff never
+    # retype what the family already told us.
+    marital_status: str | None
+    cover_area: str | None
+    coffin_choice: str | None
+    age_band: str | None
+    next_of_kin_name: str | None
+    next_of_kin_mobile: str | None
+    next_of_kin_relationship: str | None
+    best_contact_time: str | None
+    how_heard: str | None
+    notes: str | None
     # Set once the enquiry has been enrolled as a member.
     person_id: str | None
 
@@ -197,7 +211,11 @@ def get_enquiry(enquiry_id: UUID, staff: StaffUser = Depends(require_staff)) -> 
                    id_number, date_of_birth, address_line1, address_line2, postal_code,
                    premium_amount_cents, payment_frequency::text as payment_frequency,
                    payment_preference::text as payment_preference, number_of_dependants,
-                   beneficiary_name, beneficiary_relationship, person_id, created_at
+                   beneficiary_name, beneficiary_mobile, beneficiary_relationship,
+                   marital_status::text as marital_status, cover_area::text as cover_area,
+                   coffin_choice::text as coffin_choice, age_band,
+                   next_of_kin_name, next_of_kin_mobile, next_of_kin_relationship,
+                   best_contact_time, how_heard, notes, person_id, created_at
               from plan_enquiries
              where id = %s and archived_at is null
             """,

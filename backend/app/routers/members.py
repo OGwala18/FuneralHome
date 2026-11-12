@@ -166,6 +166,7 @@ class PolicyDetail(BaseModel):
     # How many dependants the family said they had on the website form. A hint
     # for staff adding them, not a limit.
     dependants_expected: int | None = None
+    notes: str | None = None
     lives: list[PolicyLife]
     beneficiaries: list[PolicyBeneficiary] = []
     payment: PolicyPayment | None = None
@@ -317,6 +318,10 @@ class EnrolmentIn(_PersonIn):
     entry_date: date | None = None
     # No premium and no cover here, on purpose: both are read from the price
     # list for the plan, option and age (0020, 0021). Sending either is a 422.
+    # Free text kept on the policy: started from an enquiry, the portal fills it
+    # with what the website asked that has no field of its own (next of kin,
+    # marital status, coffin, the family's own note).
+    notes: str | None = Field(default=None, max_length=4000)
 
     payment_method: PaymentMethod = "undecided"
     # The branch, for cash or card in person. Required for those, refused
@@ -657,7 +662,7 @@ def get_policy(policy_id: UUID, staff: StaffUser = Depends(require_staff)) -> Po
             select p.id as policy_id, p.policy_number, p.status_code, s.label as status_label,
                    p.plan_code, p.plan_option, p.branch_code, p.entry_date, p.premium_cents,
                    p.cover_cents, p.currency, p.enquiry_id, e.reference as enquiry_reference,
-                   e.number_of_dependants as dependants_expected
+                   e.number_of_dependants as dependants_expected, p.notes
               from policies p
               join ref_policy_statuses s on s.code = p.status_code
               left join plan_enquiries e on e.id = p.enquiry_id
