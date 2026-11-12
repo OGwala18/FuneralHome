@@ -40,7 +40,7 @@ All ten in `ARCHITECTURE.md` §7 apply. The ones most often broken in practice:
 | Hosting | Netlify (web) + Railway (API, EU West) + Supabase (data/auth) + Cloudflare | see `docs/hosting-decision.md` |
 | Supabase plan | **Free**, not Pro. Pausing mitigated by `db/keepalive.py` | 14 Sep 2026 |
 | Consent gating a review request | **`contact_consent`** | 14 Sep 2026 |
-| Scheduler | None yet. Jobs are built as idempotent commands; a clock gets wired at deploy | 14 Sep 2026 |
+| Scheduler | One Railway cron service, `jobs`, runs `backend/app/jobs/daily.py` at 08:00 SAST: backup and premium schedule daily, payment reminders on `REMINDER_DAYS` (25th) | 13 Nov 2026 |
 | Payments | Delegated to a provider. Never collected or stored here | — |
 | Member book access | Through the API's own `induduzo_api` login, one database, one transaction per enrolment. Not via Supabase's Data API | 14 Oct 2026 |
 | Premium schedule | One row per expected payment (`premium_instalments`), generated forward only; overdue is derived, never stored | 14 Oct 2026 |
@@ -106,17 +106,18 @@ line may message: `off` (the default when unset), `allowlist` (only
 `WHATSAPP_TEST_RECIPIENTS`) or `on`. Internal uses `allowlist`. Production must
 set `on`, or no family gets a confirmation. `/health` shows the mode.
 
-**The free Supabase tier has no automated backups.** There are 61 real members
-with ID numbers in that database. See the revision note in
-`docs/hosting-decision.md` — this is an accepted temporary risk, not a solved
-problem.
+**The free Supabase tier has no automated backups of its own.** The `jobs`
+cron (`backend/app/jobs/daily.py`) writes a JSON backup of every `public` table
+to its private Railway volume each morning and keeps 30 days. Those files hold
+ID numbers: never copy them into the repo. The schema is in `db/migrations`.
 
-**Someone must run the keep-alive weekly** until a scheduler exists, or the free
-project pauses and staff cannot sign in:
+**The daily backup is also the keep-alive.** It touches the database every day,
+so the free project never pauses. If the `jobs` cron stops, someone must run
+`python db/keepalive.py` weekly, or staff cannot sign in.
 
-```bash
-python db/keepalive.py
-```
+**Payment reminders burn on failure.** Each is claimed before it is sent and
+never retried, so the job refuses, claiming nothing, until Twilio, both payment
+templates and `WHATSAPP_OUTBOUND=on` are set (`payment_reminders.not_ready`).
 
 **The repo is public.** Check for secrets and personal data before every push.
 `db/seed/` scripts are tracked; the CSV/XLSX/SQL data they read and write is
