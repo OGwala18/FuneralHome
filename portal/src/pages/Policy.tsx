@@ -280,6 +280,13 @@ export default function Policy({ id, canEdit, addLives }:
             </section>
           )}
 
+          {policy.notes && (
+            <section className="card">
+              <div className="card-head"><h2 className="t-section">Notes</h2></div>
+              <p className="t-small" style={{ margin: 0, whiteSpace: "pre-wrap" }}>{policy.notes}</p>
+            </section>
+          )}
+
           <section className="card" style={{ padding: 0, overflow: "hidden" }}>
             <div className="card-head" style={{ padding: "var(--s24) var(--s24) 0" }}>
               <h2 className="t-section">Lives covered</h2>
