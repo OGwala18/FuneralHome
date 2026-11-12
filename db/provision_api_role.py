@@ -35,7 +35,7 @@ from pathlib import Path
 try:
     import psycopg
     from psycopg import sql
-    from psycopg.conninfo import make_conninfo
+    from psycopg.conninfo import conninfo_to_dict, make_conninfo
 except ImportError:  # pragma: no cover
     sys.exit("psycopg is required.  pip install 'psycopg[binary]'")
 
@@ -100,7 +100,13 @@ def main() -> int:
     # 3. Prove it, the way the API will connect.
     print("== Check")
     try:
-        api_conninfo = make_conninfo(owner_url, user=API_ROLE, password=password)
+        # Behind Supabase's pooler a username carries the project: the owner is
+        # `postgres.<ref>`, so the API role must be `induduzo_api.<ref>`. Copy
+        # whatever suffix the owner's username has.
+        owner_user = conninfo_to_dict(owner_url).get("user") or ""
+        suffix = owner_user.partition(".")[2]
+        api_user = f"{API_ROLE}.{suffix}" if suffix else API_ROLE
+        api_conninfo = make_conninfo(owner_url, user=api_user, password=password)
         with psycopg.connect(api_conninfo) as conn:
             who = conn.execute("select current_user").fetchone()[0]
             conn.execute("select count(*) from plan_enquiries").fetchone()
