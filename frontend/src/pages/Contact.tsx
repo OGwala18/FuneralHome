@@ -152,7 +152,7 @@ export default function Contact() {
           </div>
 
           <div className="mb-16">
-            <OfficeMap className="mx-auto max-w-4xl" height="h-80 sm:h-96" showAddress={false} />
+            <OfficeMap className="mx-auto max-w-4xl" height="h-80 sm:h-96" />
           </div>
 
           <div className="max-w-2xl mx-auto">

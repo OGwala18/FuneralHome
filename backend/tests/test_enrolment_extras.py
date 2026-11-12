@@ -221,3 +221,50 @@ def test_a_failed_welcome_never_fails_the_enrolment(client, staff_as, monkeypatc
     staff_as("admin")
     response = client.post("/api/admin/members", json=_enrolment(mobile=_mobile()))
     assert response.status_code == 201
+
+
+# --- Enrolling from an enquiry carries everything across -------------------------
+
+def test_the_enquiry_page_returns_everything_the_website_asked(client, staff_as):
+    lead = client.post("/api/enquiries", json={
+        "first_name": "Zanele", "surname": "Testperson", "mobile_number": _mobile(),
+        "contact_consent": True, "best_contact_time": "evening",
+    })
+    assert lead.status_code == 201, lead.text
+    enquiry_id = lead.json()["id"]
+    application = client.patch(f"/api/enquiries/{enquiry_id}/application", json={
+        "marital_status": "married", "cover_area": "emakhaya", "plan_selected": "plan_c",
+        "coffin_choice": "casket", "age_band": "21-45", "number_of_dependants": 2,
+        "next_of_kin_name": "Sipho Testperson", "next_of_kin_mobile": _mobile(),
+        "next_of_kin_relationship": "Husband", "beneficiary_name": "Sipho Testperson",
+        "beneficiary_mobile": _mobile(), "beneficiary_relationship": "Husband",
+        "notes": "Please phone after five.", "terms_accepted": True,
+    })
+    assert application.status_code == 200, application.text
+
+    staff_as("admin")
+    detail = client.get(f"/api/admin/enquiries/{enquiry_id}").json()
+
+    assert detail["marital_status"] == "married"
+    assert detail["cover_area"] == "emakhaya"
+    assert detail["coffin_choice"] == "casket"
+    assert detail["age_band"] == "21-45"
+    assert detail["next_of_kin_name"] == "Sipho Testperson"
+    assert detail["next_of_kin_relationship"] == "Husband"
+    assert detail["next_of_kin_mobile"].startswith("+27")
+    assert detail["beneficiary_mobile"].startswith("+27")
+    assert detail["best_contact_time"] == "evening"
+    assert detail["notes"] == "Please phone after five."
+
+
+def test_enrolment_notes_are_kept_on_the_policy(client, staff_as):
+    staff_as("admin")
+    note = "From website enquiry IND-TEST:\nNext of kin: Sipho Testperson (Husband)"
+    enrolled = _enrol(client, notes=f"  {note}  ")
+
+    policy = client.get(f"/api/admin/policies/{enrolled['policy_id']}").json()
+    assert policy["notes"] == note
+
+    # Blank notes are stored as nothing, not as an empty string.
+    bare = _enrol(client, notes="   ")
+    assert client.get(f"/api/admin/policies/{bare['policy_id']}").json()["notes"] is None
