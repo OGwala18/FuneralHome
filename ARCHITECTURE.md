@@ -153,6 +153,7 @@ backend/
     │   ├── enrolment.py       Enquiry -> person, policy, lives. One transaction.
     │   └── instalments.py     The premium schedule: generate, pay, waive
     └── jobs/
+        ├── daily.py                 The Railway `jobs` cron: backup, schedule, reminders.
         ├── schedule_instalments.py  Roll every live schedule forward. Idempotent.
         └── whatsapp_backfill.py     Re-send failed escalation emails; store missed messages.
 ```
