@@ -101,6 +101,7 @@ const BLANK = {
   ben_first_names: "", ben_surname: "", ben_id_number: "", ben_date_of_birth: "",
   ben_relationship: "", ben_mobile: "", ben_email: "",
   ben_address_line1: "", ben_suburb: "", ben_city: "", ben_postal_code: "",
+  notes: "",
 };
 
 type Form = typeof BLANK;
@@ -116,10 +117,58 @@ const splitName = (name: string | null) => {
   return { first: words.slice(0, -1).join(" "), last: words[words.length - 1] };
 };
 
+const WEBSITE_LABELS: Record<string, string> = {
+  single: "Single", married: "Married", customary_union: "Customary union",
+  divorced: "Divorced", widowed: "Widowed", other: "Other",
+  edolobheni: "Edolobheni (urban)", emakhaya: "Emakhaya (rural)",
+  flat_lid: "Flat lid", casket: "Casket",
+  morning: "Morning (8am–12pm)", afternoon: "Afternoon (12pm–5pm)", evening: "Evening (5pm–8pm)",
+};
+
+/** "customary_union" as "Customary union", unless there is a better label. */
+const websiteLabel = (value: string) => WEBSITE_LABELS[value]
+  ?? (value.charAt(0).toUpperCase() + value.slice(1)).replace(/_/g, " ");
+
+/**
+ * Everything the website asked that has no field of its own on this form,
+ * as lines for the policy's notes. Nothing the family typed is dropped: what
+ * has a field is filled in above, and the rest lands here.
+ */
+const websiteNotes = (e: EnquiryDetail): string => {
+  const lines: string[] = [];
+  const add = (label: string, value: string | number | null | undefined) => {
+    if (value !== null && value !== undefined && String(value).trim()) {
+      lines.push(`${label}: ${String(value).trim()}`);
+    }
+  };
+  add("Marital status", e.marital_status && websiteLabel(e.marital_status));
+  if (e.next_of_kin_name || e.next_of_kin_mobile) {
+    add("Next of kin", [
+      e.next_of_kin_name,
+      e.next_of_kin_relationship && `(${e.next_of_kin_relationship})`,
+      e.next_of_kin_mobile,
+    ].filter(Boolean).join(" "));
+  }
+  add("Dependants listed", e.number_of_dependants);
+  add("Cover area", e.cover_area && websiteLabel(e.cover_area));
+  add("Coffin", e.coffin_choice && websiteLabel(e.coffin_choice));
+  add("Age band", e.age_band);
+  if (e.payment_preference === "debit_order") {
+    lines.push("Asked to pay by debit order (not available yet)");
+  }
+  add("Best time to call", e.best_contact_time && websiteLabel(e.best_contact_time));
+  add("Heard about us", e.how_heard && websiteLabel(e.how_heard));
+  add("Their note", e.notes);
+  return lines.length ? [`From website enquiry ${e.reference}:`, ...lines].join("\n") : "";
+};
+
 /** What the family already told us on the website, mapped onto the form. */
-const fromEnquiry = (e: EnquiryDetail, form: Form): Form => {
+const fromEnquiry = (e: EnquiryDetail, form: Form, prices: PlanPrice[]): Form => {
   const beneficiary = splitName(e.beneficiary_name);
   const plan = e.plan_selected ?? (e.plan_interest !== "unsure" ? e.plan_interest : "");
+  // From the price list, as choosing the plan by hand does: the Dome Plan has
+  // been monthly since the flyer prices (0024), so it is never assumed once-off.
+  const onceOff = prices.some((p) => p.plan_code === plan && p.billing === "once_off");
   return {
     ...form,
     first_names: e.first_name,
@@ -136,7 +185,7 @@ const fromEnquiry = (e: EnquiryDetail, form: Form): Form => {
     province: e.province ?? form.province,
     postal_code: e.postal_code ?? "",
     plan_code: plan,
-    frequency: plan === "dome_plan" ? "once_off" : form.frequency,
+    frequency: onceOff ? "once_off" : form.frequency === "once_off" ? "monthly" : form.frequency,
     payment_method: e.payment_preference && PAYMENT_PREFERENCES.has(e.payment_preference)
       ? e.payment_preference : form.payment_method,
     // The website asked who the beneficiary is. Start with that person; staff
@@ -145,6 +194,8 @@ const fromEnquiry = (e: EnquiryDetail, form: Form): Form => {
     ben_first_names: beneficiary.first,
     ben_surname: beneficiary.last,
     ben_relationship: e.beneficiary_relationship ?? "",
+    ben_mobile: e.beneficiary_mobile ?? "",
+    notes: websiteNotes(e),
   };
 };
 
@@ -221,7 +272,7 @@ export default function Enrol({ enquiryId }: { enquiryId?: string }) {
         setPrices(priceList);
         setForm((current) => {
           const base = { ...current, policy_number: next.policy_number };
-          return found ? fromEnquiry(found, base) : base;
+          return found ? fromEnquiry(found, base, priceList) : base;
         });
       })
       .catch((err) => {
@@ -332,6 +383,7 @@ export default function Enrol({ enquiryId }: { enquiryId?: string }) {
         frequency: form.frequency,
         pay_branch_code: IN_PERSON.has(form.payment_method)
           ? (form.pay_branch_code as PayBranch) : null,
+        notes: orNull(form.notes),
         beneficiary: form.ben_mode === "later" ? null : {
           first_names: form.ben_first_names.trim(),
           surname: form.ben_surname.trim(),
@@ -412,7 +464,10 @@ export default function Enrol({ enquiryId }: { enquiryId?: string }) {
             {planOptions.length > 1 && (
               <Select label="Plan option" value={form.plan_option} onChange={set("plan_option")}
                 options={[{ value: "", label: "Choose" }, ...planOptions]}
-                hint="Priced by the main member's age" error={err("plan_option")} />
+                hint={enquiry?.coffin_choice && form.plan_code === "plan_c"
+                  ? `Website: ${websiteLabel(enquiry.coffin_choice).toLowerCase()}${enquiry.age_band ? `, ages ${enquiry.age_band}` : ""}`
+                  : "Priced by the main member's age"}
+                error={err("plan_option")} />
             )}
             <Field label="Start date" type="date" value={form.entry_date} onChange={set("entry_date")}
               error={err("entry_date")} />
@@ -611,6 +666,21 @@ export default function Enrol({ enquiryId }: { enquiryId?: string }) {
             Debit orders are coming soon. Bank account details are never captured here:
             when debit orders go live, the payment provider takes them.
           </p>
+        </section>
+
+        <section className="card">
+          <div className="card-head"><h2 className="t-section">6. Notes</h2></div>
+          <div className={`field${err("notes") ? " field-error" : ""}`}>
+            <label htmlFor="enrol-notes">Notes on this policy</label>
+            <textarea id="enrol-notes" rows={Math.max(4, form.notes.split("\n").length + 1)}
+              maxLength={4000} value={form.notes} onChange={(e) => set("notes")(e.target.value)}
+              aria-describedby="enrol-notes-hint" />
+            <span className="field-hint" id="enrol-notes-hint" role={err("notes") ? "alert" : undefined}>
+              {err("notes") ?? (enquiry
+                ? "Filled in with what the website asked that has no field above. Edit it as needed."
+                : "Optional. Shown on the policy page.")}
+            </span>
+          </div>
         </section>
 
         <div className="page-foot">

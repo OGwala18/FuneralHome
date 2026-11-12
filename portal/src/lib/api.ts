@@ -278,7 +278,19 @@ export interface EnquiryDetail extends EnquiryRow {
   payment_preference: string | null;
   number_of_dependants: number | null;
   beneficiary_name: string | null;
+  beneficiary_mobile: string | null;
   beneficiary_relationship: string | null;
+  marital_status: string | null;
+  cover_area: string | null;
+  coffin_choice: string | null;
+  age_band: string | null;
+  next_of_kin_name: string | null;
+  next_of_kin_mobile: string | null;
+  next_of_kin_relationship: string | null;
+  best_contact_time: string | null;
+  how_heard: string | null;
+  /** The family's own note on the website form. */
+  notes: string | null;
   /** Set once the enquiry has been enrolled as a member. */
   person_id: string | null;
 }
@@ -361,6 +373,8 @@ export interface EnrolmentIn extends PersonIn {
   frequency: Frequency;
   /** Null: choose on the next page, e.g. one of the dependants. */
   beneficiary: BeneficiaryIn | null;
+  /** Kept on the policy. From an enquiry: what the website asked with no field of its own. */
+  notes?: string | null;
 }
 
 export interface EnrolmentOut {
@@ -478,6 +492,7 @@ export interface PolicyDetail {
   enquiry_id: string | null;
   enquiry_reference: string | null;
   dependants_expected: number | null;
+  notes: string | null;
   lives: PolicyLife[];
   beneficiaries: PolicyBeneficiary[];
   payment: {
