@@ -1,5 +1,6 @@
+import { useState } from "react";
 import type { StaffIdentity } from "@/lib/api";
-import { Fact, Notice } from "@/components/ui";
+import { Button, Notice } from "@/components/ui";
 import Staff from "./Staff";
 import ChangePassword from "@/components/ChangePassword";
 
@@ -8,45 +9,49 @@ import ChangePassword from "@/components/ChangePassword";
  * details and integrations; neither has an API behind it, so building them
  * would be drawing a picture of a control that does nothing.
  *
- * What is here is real: who you are, and who else can get in.
+ * What is here is real: who else can get in, and your own password. Team and
+ * access leads the page; changing your password is a button beside it that
+ * opens a small form, because it is done once, not every visit (owner,
+ * 13 Nov 2026).
  */
 
 export default function Settings({ me }: { me: StaffIdentity }) {
   const isOwner = me.role === "owner";
+  const [changing, setChanging] = useState(false);
+  const [changed, setChanged] = useState(false);
 
   return (
     <div className="page">
       <div className="page-head">
         <div className="page-head-text">
-          <h1 className="t-heading">Settings</h1>
-          <p className="muted">Your account, and who else can sign in.</p>
+          <h1 className="t-heading">{isOwner ? "Team and access" : "Settings"}</h1>
+          <p className="muted">
+            Signed in as <strong>{me.email}</strong> ({me.role}).
+            {isOwner && " Removing access here stops the API serving that person, immediately."}
+          </p>
         </div>
+        {!changing && (
+          <Button aria-expanded={false}
+            onClick={() => { setChanging(true); setChanged(false); }}>
+            Change password
+          </Button>
+        )}
       </div>
 
       <div className="stack" style={{ gap: "var(--s24)" }}>
-        <section className="card">
-          <div className="card-head">
-            <h2 className="t-section">You</h2>
-          </div>
-          <div className="fact-grid">
-            <Fact label="Signed in as">{me.email}</Fact>
-            <Fact label="Role">{me.role}</Fact>
-          </div>
-          <ChangePassword />
-        </section>
+        {changed && (
+          <Notice tone="success" title="Password changed" detail="Use it next time you sign in." />
+        )}
+        {changing && (
+          <ChangePassword
+            id="change-password"
+            onCancel={() => setChanging(false)}
+            onChanged={() => { setChanging(false); setChanged(true); }}
+          />
+        )}
 
         {isOwner ? (
-          <>
-            <div className="page-head" style={{ margin: 0 }}>
-              <div className="page-head-text">
-                <h2 className="t-title">Team and access</h2>
-                <p className="muted">
-                  Removing access here stops the API serving that person, immediately.
-                </p>
-              </div>
-            </div>
-            <Staff myEmail={me.email} />
-          </>
+          <Staff myEmail={me.email} />
         ) : (
           <Notice
             title="Only owners manage staff"
