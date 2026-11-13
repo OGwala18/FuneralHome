@@ -45,4 +45,6 @@ EXPOSE 8000
 # makes it open one socket of each, so both work.
 # `exec` replaces the shell, so Railway's stop signal reaches Uvicorn and
 # in-flight registrations finish before the container goes away.
-CMD ["sh", "-c", "exec uvicorn backend.app.main:app --host '' --port \"${PORT:-8000}\""]
+# --no-server-header: a response need not tell a scanner which server and
+# version to look up advisories for.
+CMD ["sh", "-c", "exec uvicorn backend.app.main:app --host '' --port \"${PORT:-8000}\" --no-server-header"]
