@@ -75,6 +75,32 @@ _SORT_COLUMNS: dict[str, str] = {
 }
 
 
+class EnquirySearch(BaseModel):
+    """The enquiry list's filters, in a request body (POST /enquiries/search)."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    search: str | None = Field(default=None, max_length=120)
+    status: str | None = Field(default=None, max_length=40)
+    sort: SortField = "created_at"
+    descending: bool = True
+    limit: int = Field(default=50, ge=1, le=200)
+    offset: int = Field(default=0, ge=0)
+
+
+@router.post("/enquiries/search", response_model=EnquiryPage)
+def search_enquiries(filters: EnquirySearch,
+                     staff: StaffUser = Depends(require_staff)) -> EnquiryPage:
+    """The enquiry list, with its filters in the body rather than the URL.
+
+    A staff search is usually a person's name, mobile number or reference, and
+    a URL is written down by every proxy and log it passes, Railway's edge
+    included. A body is not. A read, so any signed-in staff role may use it.
+    """
+    return _enquiry_page(staff, filters.search, filters.status, filters.sort,
+                         filters.descending, filters.limit, filters.offset)
+
+
 @router.get("/enquiries", response_model=EnquiryPage)
 def list_enquiries(
     staff: StaffUser = Depends(require_staff),
@@ -87,8 +113,16 @@ def list_enquiries(
 ) -> EnquiryPage:
     """List enquiries, newest first, with optional search and status filter.
 
-    Search matches name, surname, mobile, email or reference.
+    The portal searches with POST /enquiries/search instead (13 Nov 2026), so a
+    name or number stays out of URLs; `search` here remains for a portal tab
+    opened before that release. Drop it once no such tab can be open.
     """
+    return _enquiry_page(staff, search, status_filter, sort, descending, limit, offset)
+
+
+def _enquiry_page(staff: StaffUser, search: str | None, status_filter: str | None,
+                  sort: SortField, descending: bool, limit: int, offset: int) -> EnquiryPage:
+    """Search matches name, surname, mobile, email or reference."""
     where = ["archived_at is null"]
     params: dict[str, object] = {"limit": limit, "offset": offset}
 

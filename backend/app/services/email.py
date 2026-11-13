@@ -18,6 +18,8 @@ from __future__ import annotations
 import html
 import logging
 import smtplib
+import socket
+import ssl
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
@@ -30,8 +32,64 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class EmailResult:
+    """`error` is a code from app/errors.py (email_auth_required, ...), never
+    the server's text: a refused recipient's text quotes the address, and an
+    applicant's address must not reach a log or an event (rule 9).
+    `smtp_status` is the server's numeric reply, when it gave one."""
+
     sent: bool
     error: str | None = None
+    smtp_status: int | None = None
+
+
+def classify_failure(exc: BaseException) -> tuple[str, int | None]:
+    """What went wrong, as (catalog code, SMTP status). Safe to log and store."""
+    if isinstance(exc, smtplib.SMTPRecipientsRefused):
+        replies = list(exc.recipients.values())
+        status = replies[0][0] if replies else None
+        text = b" ".join(reply[1] for reply in replies if isinstance(reply[1], bytes))
+        if _mentions_auth(text):
+            return "email_auth_required", status
+        return "email_recipient_refused", status
+    if isinstance(exc, smtplib.SMTPAuthenticationError):
+        return "email_auth_failed", exc.smtp_code
+    if isinstance(exc, smtplib.SMTPConnectError):
+        # The server answered the connection with something other than 220.
+        return "email_connect_failed", exc.smtp_code
+    if isinstance(exc, smtplib.SMTPSenderRefused):
+        if _mentions_auth(exc.smtp_error):
+            return "email_auth_required", exc.smtp_code
+        return "email_sender_refused", exc.smtp_code
+    if isinstance(exc, smtplib.SMTPResponseException):
+        if exc.smtp_code == 530 or _mentions_auth(exc.smtp_error):
+            return "email_auth_required", exc.smtp_code
+        return "email_rejected", exc.smtp_code
+    if isinstance(exc, smtplib.SMTPNotSupportedError):
+        # Asked for STARTTLS or a login the server does not offer.
+        return "email_tls_failed", None
+    if isinstance(exc, ssl.SSLError):
+        return "email_tls_failed", None
+    if isinstance(exc, (TimeoutError, socket.timeout)) or isinstance(
+        exc.__context__, (TimeoutError, socket.timeout)
+    ):
+        # smtplib re-raises a read timeout as SMTPServerDisconnected; the
+        # timeout is still underneath it.
+        return "email_timeout", None
+    if isinstance(exc, smtplib.SMTPServerDisconnected):
+        return "email_connect_failed", None
+    if isinstance(exc, smtplib.SMTPException):
+        # Every smtplib error is an OSError, so this must come before the next.
+        return "email_failed", None
+    if isinstance(exc, OSError):
+        # Refused, unreachable, or the host name does not resolve.
+        return "email_connect_failed", None
+    return "email_failed", None
+
+
+def _mentions_auth(text: bytes | str | None) -> bool:
+    if isinstance(text, bytes):
+        text = text.decode("utf-8", "replace")
+    return "auth" in (text or "").lower()
 
 
 # Field label -> key in the enquiry dict. Ordered for how a human reads it.
@@ -160,16 +218,19 @@ def _send(message: EmailMessage) -> EmailResult:
                 server.login(settings.smtp_username, settings.smtp_password)
             server.send_message(message)
 
-        logger.info("Admin email sent for %s", message["X-Induduzo-Reference"])
+        logger.info("Email sent for %s", message["X-Induduzo-Reference"])
         return EmailResult(sent=True)
 
     except Exception as exc:  # noqa: BLE001 - a mail failure must not fail the request
-        # Deliberately logging neither the body nor the subject: the body is full
-        # of personal data and the subject carries the applicant's name.
+        # Deliberately logging neither the body, the subject nor the server's
+        # text: the body is full of personal data, the subject carries the
+        # applicant's name, and a refusal quotes the recipient's address.
+        code, smtp_status = classify_failure(exc)
         logger.warning(
-            "Admin email failed for %s: %s", message["X-Induduzo-Reference"], exc
+            "Email failed for %s: %s (%s, SMTP %s)", message["X-Induduzo-Reference"],
+            code, type(exc).__name__, smtp_status or "-",
         )
-        return EmailResult(sent=False, error=str(exc)[:200])
+        return EmailResult(sent=False, error=code, smtp_status=smtp_status)
 
 
 def send_new_lead(enquiry: dict) -> EmailResult:
