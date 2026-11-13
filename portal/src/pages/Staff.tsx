@@ -5,6 +5,7 @@ import {
   fetchStaff,
   inviteStaff,
   setStaffActive,
+  setStaffMobile,
   type StaffAdded,
   type StaffMember,
   type StaffRole,
@@ -53,6 +54,12 @@ const addedNotice = (member: StaffAdded): AddedNotice =>
           `User. Then tell them the password in person or by phone.`,
       };
 
+/** "+27825550123" reads as "082 555 0123", the way the office writes it. */
+const formatMobile = (e164: string) => {
+  const local = /^\+27(\d{2})(\d{3})(\d{4})$/.exec(e164);
+  return local ? `0${local[1]} ${local[2]} ${local[3]}` : e164;
+};
+
 const formatWhen = (iso: string | null) => {
   if (!iso) return "Never";
   const d = new Date(iso);
@@ -70,8 +77,13 @@ export default function Staff({ myEmail }: { myEmail: string }) {
 
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
+  const [mobile, setMobile] = useState("");
   const [role, setRole] = useState<StaffRole>("viewer");
   const [inviting, setInviting] = useState(false);
+
+  // The one row whose cell number is open for editing, and what is typed in it.
+  const [editingMobile, setEditingMobile] = useState<string | null>(null);
+  const [mobileDraft, setMobileDraft] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -98,10 +110,12 @@ export default function Staff({ myEmail }: { myEmail: string }) {
       const created = await inviteStaff({
         email: email.trim(),
         full_name: fullName.trim() || undefined,
+        mobile: mobile.trim() || undefined,
         role,
       });
       setEmail("");
       setFullName("");
+      setMobile("");
       setRole("viewer");
       setNotice(addedNotice(created));
       await load();
@@ -124,6 +138,29 @@ export default function Staff({ myEmail }: { myEmail: string }) {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not change that role.");
       await load(); // resync the dropdown with reality
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const startMobileEdit = (member: StaffMember) => {
+    setEditingMobile(member.id);
+    setMobileDraft(member.mobile ? formatMobile(member.mobile) : "");
+    setError(null);
+    setNotice(null);
+  };
+
+  const onSaveMobile = async (member: StaffMember, event: FormEvent) => {
+    event.preventDefault();
+    setBusyId(member.id);
+    setError(null);
+    try {
+      await setStaffMobile(member.id, mobileDraft.trim() || null);
+      setEditingMobile(null);
+      await load();
+    } catch (err) {
+      // The draft stays open, so a mistyped number can be corrected.
+      setError(err instanceof ApiError ? err.message : "Could not save that number.");
     } finally {
       setBusyId(null);
     }
@@ -180,6 +217,17 @@ export default function Staff({ myEmail }: { myEmail: string }) {
                 autoComplete="off"
               />
             </div>
+            <div className="grow" style={{ minWidth: 180 }}>
+              <Field
+                label="Cell number"
+                type="tel"
+                value={mobile}
+                onChange={setMobile}
+                placeholder="082 123 4567"
+                hint="Optional"
+                autoComplete="off"
+              />
+            </div>
             <div className="field" style={{ minWidth: 160 }}>
               <label htmlFor="new-role">Role</label>
               <select
@@ -218,6 +266,7 @@ export default function Staff({ myEmail }: { myEmail: string }) {
               <thead>
                 <tr>
                   <th>Person</th>
+                  <th>Cell</th>
                   <th>Role</th>
                   <th>Signed in</th>
                   <th>Last seen</th>
@@ -236,6 +285,47 @@ export default function Staff({ myEmail }: { myEmail: string }) {
                         {isMe && (
                           <div style={{ marginTop: 4 }}>
                             <Badge>You</Badge>
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        {editingMobile === m.id ? (
+                          <form
+                            className="row"
+                            style={{ gap: "var(--s8)", flexWrap: "nowrap" }}
+                            onSubmit={(e) => void onSaveMobile(m, e)}
+                          >
+                            <input
+                              aria-label={`Cell number for ${m.email}`}
+                              type="tel"
+                              value={mobileDraft}
+                              placeholder="082 123 4567"
+                              autoComplete="off"
+                              autoFocus
+                              style={{ width: "9.5rem" }}
+                              onChange={(e) => setMobileDraft(e.target.value)}
+                            />
+                            <Button small variant="primary" type="submit" loading={busyId === m.id}
+                              loadingLabel="Saving…">
+                              Save
+                            </Button>
+                            <Button small type="button" disabled={busyId === m.id}
+                              onClick={() => setEditingMobile(null)}>
+                              Cancel
+                            </Button>
+                          </form>
+                        ) : (
+                          <div className="row" style={{ gap: "var(--s8)", flexWrap: "nowrap" }}>
+                            {m.mobile ? (
+                              <a href={`tel:${m.mobile}`}>{formatMobile(m.mobile)}</a>
+                            ) : (
+                              <span className="muted">None</span>
+                            )}
+                            <Button small disabled={busyId === m.id}
+                              aria-label={`${m.mobile ? "Change" : "Add"} cell number for ${m.email}`}
+                              onClick={() => startMobileEdit(m)}>
+                              {m.mobile ? "Change" : "Add"}
+                            </Button>
                           </div>
                         )}
                       </td>

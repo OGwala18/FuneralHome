@@ -368,7 +368,8 @@ db/
 │   ├── 0024_flyer_prices.sql
 │   ├── 0025_close_data_api_again.sql
 │   ├── 0026_close_the_public_key.sql   (anon reaches nothing, now or on later tables)
-│   └── 0027_business_phones_reach_the_api.sql
+│   ├── 0027_business_phones_reach_the_api.sql
+│   └── 0028_staff_mobile_numbers.sql   (optional cell number on each staff account)
 ├── seed/                      Import tooling. Scripts tracked, their data is NOT.
 │   ├── import_policy_template.py       spreadsheet  → SQL
 │   ├── export_phone_capture_sheet.sql  database     → blank capture sheet
