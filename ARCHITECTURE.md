@@ -134,7 +134,9 @@ backend/
 └── app/
     ├── main.py                App setup, CORS, /health, error shaping
     ├── config.py              ★ ALL settings read from environment. No secrets in code.
-    ├── db.py                  Connection pool + append-only event logging
+    ├── db.py                  Connection pool (TLS when deployed) + append-only event logging
+    ├── errors.py              ★ ERROR CODES: every way a request or notification fails, and the fix
+    ├── request_context.py     Request id, body-size limit, security headers on every response
     ├── schemas.py             ★ Request validation. The security boundary.
     ├── routers/
     │   ├── enquiries.py       The two funnel endpoints (public)
@@ -175,6 +177,7 @@ also needs `require_role("admin")`. The ones that touch the book of business:
 |---|---|---|
 | `GET` | `/api/admin/enquiries/{id}` | One enquiry in full, for its page and for pre-filling an enrolment |
 | `GET` | `/api/admin/members`, `/members/{id}` | The member book |
+| `POST` | `/api/admin/enquiries/search`, `/members/search` | The two lists with their search in the body, not the URL: staff search by name and ID number, and URLs end up in logs. Any staff role. The GET forms keep `search` only for portal tabs opened before 13 Nov 2026 |
 | `POST` | `/api/admin/members` | **Enrol.** Person, policy, main member, payment arrangement, 12 instalments; links the enquiry |
 | `GET` | `/api/admin/policies`, `/policies/{id}` | Policies; one policy with its lives and schedule |
 | `GET` | `/api/admin/policies/next-number` | The next free AA number, as a suggestion |
@@ -356,7 +359,16 @@ db/
 │   ├── 0015_business_phone_numbers.sql
 │   ├── 0016_staff_two_step_sign_in.sql
 │   ├── 0017_whatsapp_line_moves_to_073.sql
-│   └── 0018_whatsapp_conversations.sql
+│   ├── 0018_whatsapp_conversations.sql
+│   ├── 0019_enquiry_idempotency.sql
+│   ├── 0020_enrolment_compliance_and_plan_prices.sql
+│   ├── 0021_plan_cover_on_the_price_list.sql
+│   ├── 0022_payment_reminders.sql
+│   ├── 0023_branches_and_beneficiaries.sql
+│   ├── 0024_flyer_prices.sql
+│   ├── 0025_close_data_api_again.sql
+│   ├── 0026_close_the_public_key.sql   (anon reaches nothing, now or on later tables)
+│   └── 0027_business_phones_reach_the_api.sql
 ├── seed/                      Import tooling. Scripts tracked, their data is NOT.
 │   ├── import_policy_template.py       spreadsheet  → SQL
 │   ├── export_phone_capture_sheet.sql  database     → blank capture sheet
@@ -496,6 +508,15 @@ not lose the thread, and is cleared once stage 2 succeeds.
 | WhatsApp not configured or failing | Logged, event recorded, **enquiry still succeeds** |
 | Duplicate SA ID on stage 2 | `409` with a "phone us" message — the unique index caught it |
 | Invalid input | `422` with `field_errors` keyed by field, so the form highlights the right input |
+| Database unreachable | `503 database_unavailable` with `Retry-After`; the form shows its call/WhatsApp fallback. Nothing saved |
+| A bug | `500 internal_error` as JSON, never a stack trace; the traceback is in the log under the same request id |
+
+Every error body is `{detail, code, request_id}`. `code` is from
+`backend/app/errors.py`, which says for each one what it means, the usual
+cause and the fix; `request_id` matches the response's `X-Request-ID` header
+and the `[request_id]` on every log line written for that request. A failed
+email or WhatsApp is recorded on the enquiry as a `*_failed` event whose
+`error` is a code from the same file. How to triage one: `docs/error-handling.md`.
 
 The principle: **a notification failure must never cost a lead.** Both mailers
 run as background tasks *after* the row is committed, never before.

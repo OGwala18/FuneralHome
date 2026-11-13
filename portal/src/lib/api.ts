@@ -33,17 +33,21 @@ export class ApiError extends Error {
   readonly fieldErrors: Record<string, string>;
   /** The API's machine code, e.g. "second_step_required". Empty when it sent none. */
   readonly code: string;
+  /** The API's X-Request-ID for this call: what a ticket quotes to find the log lines. */
+  readonly requestId: string;
   constructor(
     message: string,
     status: number,
     fieldErrors: Record<string, string> = {},
     code = "",
+    requestId = "",
   ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.fieldErrors = fieldErrors;
     this.code = code;
+    this.requestId = requestId;
   }
 }
 
@@ -116,7 +120,8 @@ const readError = async (response: Response, fallback: string) => {
   if (code === "second_step_required") {
     window.dispatchEvent(new Event(SECOND_STEP_EVENT));
   }
-  return new ApiError(detail, response.status, fieldErrors, code);
+  return new ApiError(detail, response.status, fieldErrors, code,
+    response.headers.get("X-Request-ID") ?? "");
 };
 
 /** Every admin call carries the staff token; there are no unauthenticated ones. */
@@ -171,16 +176,37 @@ export interface EnquiryQuery {
   offset?: number;
 }
 
-export const fetchEnquiries = (query: EnquiryQuery = {}) => {
-  const params = new URLSearchParams();
-  if (query.search) params.set("search", query.search);
-  if (query.status) params.set("status", query.status);
-  if (query.sort) params.set("sort", query.sort);
-  if (query.descending !== undefined) params.set("descending", String(query.descending));
-  params.set("limit", String(query.limit ?? 50));
-  params.set("offset", String(query.offset ?? 0));
-  return request<EnquiryPage>("/api/admin/enquiries", params);
+/**
+ * A list with a search box. Its filters go to `<path>/search` in a POST body,
+ * not the URL: staff search by name, mobile and ID number, and a URL is written
+ * down by every proxy and log it passes (Railway's edge included); a body is not.
+ *
+ * An API older than the /search routes answers 404 or 405, and then the old
+ * GET is used. The portal deploys a few minutes before the API, so without
+ * this, search would fail in between. Remove the fallback once both are live.
+ */
+const searchList = async <T>(path: string, filters: Record<string, unknown>): Promise<T> => {
+  try {
+    return await mutate<T>(`${path}/search`, "POST", filters);
+  } catch (error) {
+    if (!(error instanceof ApiError) || (error.status !== 404 && error.status !== 405)) throw error;
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== "") params.set(key, String(value));
+    }
+    return request<T>(path, params);
+  }
 };
+
+export const fetchEnquiries = (query: EnquiryQuery = {}) =>
+  searchList<EnquiryPage>("/api/admin/enquiries", {
+    search: query.search || undefined,
+    status: query.status || undefined,
+    sort: query.sort,
+    descending: query.descending,
+    limit: query.limit ?? 50,
+    offset: query.offset ?? 0,
+  });
 
 export interface MemberRow {
   id: string;
@@ -250,13 +276,12 @@ export interface PolicyRow {
   lives_covered: number;
 }
 
-export const fetchMembers = (query: { search?: string; limit?: number; offset?: number } = {}) => {
-  const params = new URLSearchParams();
-  if (query.search) params.set("search", query.search);
-  params.set("limit", String(query.limit ?? 25));
-  params.set("offset", String(query.offset ?? 0));
-  return request<MemberPage>("/api/admin/members", params);
-};
+export const fetchMembers = (query: { search?: string; limit?: number; offset?: number } = {}) =>
+  searchList<MemberPage>("/api/admin/members", {
+    search: query.search || undefined,
+    limit: query.limit ?? 25,
+    offset: query.offset ?? 0,
+  });
 
 export const fetchMember = (id: string) =>
   request<MemberDetail>(`/api/admin/members/${encodeURIComponent(id)}`);

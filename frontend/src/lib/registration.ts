@@ -87,11 +87,17 @@ export interface EnquiryHandle {
 
 export class RegistrationError extends Error {
   readonly fieldErrors: Record<string, string>;
+  /** The API's error code (backend/app/errors.py), e.g. "rate_limited". Empty when none came back. */
+  readonly code: string;
+  /** The API's X-Request-ID for this call: what a support ticket quotes to find the log lines. */
+  readonly requestId: string;
 
-  constructor(message: string, fieldErrors: Record<string, string> = {}) {
+  constructor(message: string, fieldErrors: Record<string, string> = {}, code = "", requestId = "") {
     super(message);
     this.name = "RegistrationError";
     this.fieldErrors = fieldErrors;
+    this.code = code;
+    this.requestId = requestId;
   }
 }
 
@@ -190,22 +196,27 @@ const request = async <T,>(path: string, init: RequestInit): Promise<T> => {
   } catch {
     throw new RegistrationError(
       "We could not reach our system just now. Please phone or WhatsApp us and we will capture your details for you.",
+      {},
+      "network_unreachable",
     );
   }
 
   if (!response.ok) {
     let fieldErrors: Record<string, string> = {};
     let message = "Something went wrong on our side. Please try again, or phone us.";
+    let code = "";
+    const requestId = response.headers.get("X-Request-ID") ?? "";
     try {
       const body = await response.json();
       if (body?.detail && typeof body.detail === "string") message = body.detail;
       if (body?.field_errors && typeof body.field_errors === "object") {
         fieldErrors = body.field_errors as Record<string, string>;
       }
+      if (typeof body?.code === "string") code = body.code;
     } catch {
       /* keep the generic message */
     }
-    throw new RegistrationError(message, fieldErrors);
+    throw new RegistrationError(message, fieldErrors, code, requestId);
   }
 
   return (await response.json()) as T;
