@@ -571,6 +571,8 @@ export interface StaffMember {
   id: string;
   email: string;
   full_name: string | null;
+  /** Their own cell number, E.164 (+27...), or null when none is on file. */
+  mobile: string | null;
   role: StaffRole;
   is_active: boolean;
   has_signed_in: boolean;
@@ -588,8 +590,13 @@ export interface StaffAdded extends StaffMember {
   invite_sent: boolean;
 }
 
-export const inviteStaff = (body: { email: string; full_name?: string; role: StaffRole }) =>
-  mutate<StaffAdded>("/api/admin/staff", "POST", body);
+export const inviteStaff = (
+  body: { email: string; full_name?: string; mobile?: string; role: StaffRole },
+) => mutate<StaffAdded>("/api/admin/staff", "POST", body);
+
+/** Set someone's cell number. Null clears it. Owner only. */
+export const setStaffMobile = (id: string, mobile: string | null) =>
+  mutate<StaffMember>(`/api/admin/staff/${id}/mobile`, "PATCH", { mobile });
 
 export const changeStaffRole = (id: string, role: StaffRole) =>
   mutate<StaffMember>(`/api/admin/staff/${id}/role`, "PATCH", { role });

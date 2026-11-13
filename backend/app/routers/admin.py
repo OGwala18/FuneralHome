@@ -22,6 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..auth import StaffUser, require_role, require_staff
 from ..db import connection
+from ..schemas import _MOBILE_RE, normalise_mobile
 from ..services.staff import find_by_email, list_staff, log_staff_event
 from ..services.supabase_admin import invite_supabase_user
 
@@ -291,6 +292,8 @@ class StaffMember(BaseModel):
     id: str
     email: str
     full_name: str | None
+    # Their own cell number, E.164 (+27...). Optional; nothing is sent to it.
+    mobile: str | None
     role: str
     is_active: bool
     has_signed_in: bool
@@ -311,6 +314,7 @@ class InviteStaff(BaseModel):
 
     email: EmailLike
     full_name: str | None = Field(default=None, max_length=200)
+    mobile: str | None = Field(default=None, max_length=30)
     role: Literal["viewer", "admin", "owner"] = "viewer"
 
     @field_validator("email")
@@ -319,6 +323,34 @@ class InviteStaff(BaseModel):
         if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value):
             raise ValueError("Enter a valid email address")
         return value.lower()
+
+    @field_validator("mobile")
+    @classmethod
+    def _mobile(cls, value: str | None) -> str | None:
+        return _staff_mobile(value)
+
+
+def _staff_mobile(value: str | None) -> str | None:
+    """A blank number means none; anything else must be a South African mobile,
+    stored E.164 the way person_phones stores one."""
+    if not value:
+        return None
+    normalised = normalise_mobile(value)
+    if not _MOBILE_RE.fullmatch(normalised):
+        raise ValueError("Enter a valid South African mobile number, e.g. 082 123 4567")
+    return normalised
+
+
+class ChangeMobile(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    # Required, but may be null or blank: that clears the number.
+    mobile: str | None = Field(max_length=30)
+
+    @field_validator("mobile")
+    @classmethod
+    def _mobile(cls, value: str | None) -> str | None:
+        return _staff_mobile(value)
 
 
 class ChangeRole(BaseModel):
@@ -333,11 +365,18 @@ class SetActive(BaseModel):
     is_active: bool
 
 
+# What every staff route hands back, so a new column is added in one place.
+_MEMBER_COLUMNS = """id, email, full_name, mobile, role::text as role, is_active,
+                      supabase_user_id is not null as has_signed_in,
+                      invited_by, last_seen_at, created_at"""
+
+
 def _to_member(r: dict) -> StaffMember:
     return StaffMember(
         id=str(r["id"]),
         email=r["email"],
         full_name=r.get("full_name"),
+        mobile=r.get("mobile"),
         role=r["role"],
         is_active=r["is_active"],
         has_signed_in=bool(r.get("has_signed_in")),
@@ -374,14 +413,12 @@ def invite_staff(
                 detail="That person already has an account.",
             )
         row = conn.execute(
-            """
-            insert into staff_users (email, full_name, role, invited_by)
-            values (%s, %s, %s::staff_role, %s)
-            returning id, email, full_name, role::text as role, is_active,
-                      supabase_user_id is not null as has_signed_in,
-                      invited_by, last_seen_at, created_at
+            f"""
+            insert into staff_users (email, full_name, mobile, role, invited_by)
+            values (%s, %s, %s, %s::staff_role, %s)
+            returning {_MEMBER_COLUMNS}
             """,
-            (email, payload.full_name, payload.role, staff.email),
+            (email, payload.full_name, payload.mobile, payload.role, staff.email),
         ).fetchone()
         log_staff_event(conn, staff.email, "staff_invited", email, {"role": payload.role})
 
@@ -413,12 +450,10 @@ def change_role(
             _guard_last_owner(conn, staff_id)
 
         row = conn.execute(
-            """
+            f"""
             update staff_users set role = %s::staff_role
              where id = %s
-            returning id, email, full_name, role::text as role, is_active,
-                      supabase_user_id is not null as has_signed_in,
-                      invited_by, last_seen_at, created_at
+            returning {_MEMBER_COLUMNS}
             """,
             (payload.role, staff_id),
         ).fetchone()
@@ -458,12 +493,10 @@ def set_active(
             _guard_last_owner(conn, staff_id)
 
         row = conn.execute(
-            """
+            f"""
             update staff_users set is_active = %s
              where id = %s
-            returning id, email, full_name, role::text as role, is_active,
-                      supabase_user_id is not null as has_signed_in,
-                      invited_by, last_seen_at, created_at
+            returning {_MEMBER_COLUMNS}
             """,
             (payload.is_active, staff_id),
         ).fetchone()
@@ -471,6 +504,32 @@ def set_active(
             conn, staff.email,
             "staff_activated" if payload.is_active else "staff_deactivated",
             target["email"],
+        )
+
+    return _to_member(row)
+
+
+@router.patch("/staff/{staff_id}/mobile", response_model=StaffMember)
+def change_mobile(
+    staff_id: UUID, payload: ChangeMobile, staff: StaffUser = Depends(require_role("owner"))
+) -> StaffMember:
+    """Set or clear someone's cell number. A null or blank number clears it."""
+    with connection() as conn:
+        row = conn.execute(
+            f"""
+            update staff_users set mobile = %s
+             where id = %s and archived_at is null
+            returning {_MEMBER_COLUMNS}
+            """,
+            (payload.mobile, str(staff_id)),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such staff member.")
+        # Whether a number is now on file, never the number itself: staff_events
+        # is append-only, so a number written there could never be removed.
+        log_staff_event(
+            conn, staff.email, "mobile_changed", row["email"],
+            {"has_mobile": payload.mobile is not None},
         )
 
     return _to_member(row)
