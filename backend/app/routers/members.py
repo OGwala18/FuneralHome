@@ -516,11 +516,40 @@ def _raise_for(exc: Exception) -> None:
 # Members
 # ---------------------------------------------------------------------------
 
+class MemberSearch(BaseModel):
+    """The member book's search, in a request body (POST /members/search)."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    search: str | None = Field(default=None, max_length=120)
+    limit: int = Field(default=25, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
+
+
+@router.post("/members/search", response_model=MemberPage)
+def search_members(filters: MemberSearch,
+                   staff: StaffUser = Depends(require_staff)) -> MemberPage:
+    """The member book, with the search in the body rather than the URL.
+
+    Staff search the book by surname and by ID number; in a URL either would be
+    written down by every proxy and log it passes, Railway's edge included. A
+    read, so any signed-in staff role may use it.
+    """
+    return _member_page(staff, filters.search, filters.limit, filters.offset)
+
+
 @router.get("/members", response_model=MemberPage)
 def list_members(staff: StaffUser = Depends(require_staff),
                  search: str | None = Query(default=None, max_length=120),
                  limit: int = Query(default=25, ge=1, le=100),
                  offset: int = Query(default=0, ge=0)) -> MemberPage:
+    """The member book. The portal searches with POST /members/search instead
+    (13 Nov 2026); `search` here remains for a portal tab opened before that
+    release. Drop it once no such tab can be open."""
+    return _member_page(staff, search, limit, offset)
+
+
+def _member_page(staff: StaffUser, search: str | None, limit: int, offset: int) -> MemberPage:
     where = "archived_at is null"
     params: dict[str, object] = {"limit": limit, "offset": offset}
     if search and search.strip():

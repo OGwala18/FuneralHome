@@ -52,12 +52,14 @@ All ten in `ARCHITECTURE.md` §7 apply. The ones most often broken in practice:
 
 ## Things that will bite you
 
-**Migration numbering.** `0001`–`0018` exist. `docs/feature-1-review-loop.md`
-says its new tables go in "migration 0008". That number is taken, and so are
-0013 (enrolment and the premium schedule), 0014 (closing the Data API), 0015
-(the business's own phone numbers), 0016 (staff two-step sign-in), 0017 (the
-WhatsApp line moving to 073 731 0521) and 0018 (WhatsApp conversations and
-escalations). It must be **0019**, or the next free number when it is built.
+**Migration numbering.** `0001`–`0028` exist. `docs/feature-1-review-loop.md`
+says its new tables go in "migration 0008". That number is taken, and so is
+every number up to 0028 (0026 closed Supabase's public `anon` key, 0027
+repaired the API's access to business_phone_numbers, 0028 gave staff accounts
+a mobile number, 13 Nov 2026). It must be
+**0029**, or the next free number when it is built. A new table
+needs its `induduzo_api` grant written out; since 0026 nothing is granted to
+`anon` or `authenticated` by default.
 
 **Supabase's Data API is closed, and must stay closed.** Since 0014, no table
 or view grants anything to Supabase's `authenticated` role, and public sign-up
@@ -71,7 +73,13 @@ through the API's own database. On a laptop that is Docker, with test data, not
 the 61 real members in Supabase. Never point a local API at production to "see
 the real ones": enrolment and the test suite write rows.
 
-**Supabase tracks migrations separately.** `0008`–`0012` were applied through
+**Supabase tracks migrations separately — until the 12 Nov 2026 launch.** Since
+then Supabase's `public.schema_migrations` records every file from 0001 to 0025
+(checked 13 Nov 2026), so the live `migrator` applies 0026 onward there by
+itself and no baseline is needed. 0026 was also run by hand on 13 Nov 2026
+(owner's go-ahead, dry run first) to close the hole at once; the migrator runs
+it again harmlessly and records it. The history below explains the old state.
+`0008`–`0012` were applied through
 Supabase's own migration system, so `public.schema_migrations` (what
 `db/migrate.py` reads) does not know about them there. Before running the runner
 against Supabase:

@@ -10,24 +10,35 @@ import itertools
 import logging
 from contextlib import asynccontextmanager
 
+import psycopg
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from psycopg_pool import PoolTimeout
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 load_dotenv()
 
 from .config import get_settings  # noqa: E402  (must follow load_dotenv)
 from .db import close_pool, connection, init_pool  # noqa: E402
+from .errors import code_for_status  # noqa: E402
 from .observability import init_sentry  # noqa: E402
-from .auth import StaffGateError  # noqa: E402
+from .request_context import (  # noqa: E402
+    REQUEST_ID_HEADER,
+    RequestContextMiddleware,
+    install_logging_filters,
+    security_headers,
+)
 from .routers import admin, analytics, enquiries, members, payments, two_step, whatsapp  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+    # [request_id] ties every line to the X-Request-ID a ticket quotes.
+    format="%(asctime)s %(levelname)-8s %(name)s [%(request_id)s]: %(message)s",
 )
+install_logging_filters()
 logger = logging.getLogger(__name__)
 
 # Before anything else, so errors raised during startup are captured too.
@@ -74,30 +85,20 @@ app.add_middleware(
     # Idempotency-Key is sent by the public form; without it here the browser's
     # preflight fails and every registration is blocked before it leaves.
     allow_headers=["Content-Type", "Authorization", "Idempotency-Key", "X-Induduzo-Device"],
-    expose_headers=["Idempotent-Replayed", "Retry-After"],
+    # X-Request-ID is readable by the site and portal, so an error toast can
+    # show it and a ticket can quote it.
+    expose_headers=["Idempotent-Replayed", "Retry-After", REQUEST_ID_HEADER],
 )
 
-
-@app.middleware("http")
-async def security_headers(request: Request, call_next):
-    """Send the same class of headers the website already gets from Netlify.
-
-    The API returns JSON rather than HTML, so the set is narrower than a page
-    needs — but nosniff and anti-framing still matter for any response a browser
-    might be tricked into rendering, and HSTS matters once it is behind TLS.
-    """
-    response = await call_next(request)
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Referrer-Policy"] = "no-referrer"
-    # An API serves no documents and needs no browser features.
-    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    if _is_deployed:
-        # Only when deployed: sending HSTS over plain HTTP in dev would pin
-        # localhost to HTTPS in the browser and break the dev server.
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    return response
+# Added last, so it is the outermost: the request id exists before anything
+# else runs, an oversized body is refused before it is read, and every response
+# (CORS preflights and errors included) leaves with the security headers and
+# Cache-Control: no-store. See app/request_context.py.
+app.add_middleware(
+    RequestContextMiddleware,
+    max_body_bytes=settings.max_request_bytes,
+    deployed=_is_deployed,
+)
 
 app.include_router(enquiries.router)
 app.include_router(admin.router)
@@ -109,19 +110,89 @@ app.include_router(analytics.router)
 app.include_router(two_step.router)
 
 
-@app.exception_handler(StaffGateError)
-async def staff_gate_handler(_: Request, exc: StaffGateError) -> JSONResponse:
-    """A sentence for the screen plus a machine code the portal branches on
-    (second_step_required, two_step_not_configured, ...). Plan §8."""
+def _request_id(request: Request) -> str:
+    return getattr(request.state, "request_id", None) or "-"
+
+
+def _error(request: Request, status_code: int, code: str, detail, *,
+           headers: dict[str, str] | None = None, **extra) -> JSONResponse:
+    """Every error body has the same three keys: detail, code, request_id."""
     return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail, "code": exc.code},
-        headers=exc.headers,
+        status_code=status_code,
+        content={"detail": detail, "code": code, "request_id": _request_id(request), **extra},
+        headers=headers,
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_error_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    """A sentence for the screen plus a machine code (app/errors.py).
+
+    ApiError and StaffGateError name their own code (second_step_required,
+    duplicate_id_number, ...); any other HTTPException gets the generic code
+    for its status, so no error leaves without one. Headers such as
+    WWW-Authenticate and Retry-After are kept.
+    """
+    code = getattr(exc, "code", None) or code_for_status(exc.status_code)
+    return _error(request, exc.status_code, code, exc.detail, headers=exc.headers)
+
+
+@app.exception_handler(psycopg.OperationalError)
+@app.exception_handler(PoolTimeout)
+async def database_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Postgres unreachable, or every pooled connection busy.
+
+    A 503 the form already knows how to explain ("phone or WhatsApp us"),
+    instead of a bare 500. The exception's text can carry the host name, so
+    only its type is logged.
+    """
+    logger.error("Database unavailable: %s on %s %s",
+                 type(exc).__name__, request.method, request.url.path)
+    return _error(
+        request, status.HTTP_503_SERVICE_UNAVAILABLE, "database_unavailable",
+        "Our system is busy right now. Please try again in a minute, or phone or "
+        "WhatsApp us and we will help you straight away.",
+        headers={"Retry-After": "30"},
+    )
+
+
+@app.exception_handler(psycopg.DataError)
+async def unstorable_value_handler(request: Request, exc: psycopg.DataError) -> JSONResponse:
+    """A value Postgres cannot hold: a NUL byte, a number out of range, a date
+    that does not exist. Caused by the request, so a 422, never a 500.
+
+    The public form's schemas refuse these first (app/schemas.py); this is the
+    net under every other route. The message can quote the value, so it is not
+    logged or returned.
+    """
+    logger.warning("Unstorable value (%s) on %s %s",
+                   type(exc).__name__, request.method, request.url.path)
+    return _error(request, 422, "validation_failed",
+                  "One of the fields contains something we cannot store. "
+                  "Please check it and try again.", field_errors={})
+
+
+@app.exception_handler(Exception)
+async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """The last resort: a bug. JSON with the request id, never a stack trace.
+
+    Starlette runs this outside the middleware stack, so the headers every other
+    response gets are added here by hand. The exception still propagates after
+    this returns, so Uvicorn logs the traceback and Sentry still sees it.
+    """
+    request_id = _request_id(request)
+    logger.error("Unhandled %s on %s %s", type(exc).__name__, request.method, request.url.path)
+    headers = {name.decode(): value.decode() for name, value in security_headers(_is_deployed)}
+    headers.update({"Cache-Control": "no-store", REQUEST_ID_HEADER: request_id})
+    return _error(
+        request, status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error",
+        "Something went wrong on our side. Please try again, or phone us.",
+        headers=headers,
     )
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Return field-level errors the form can attach to the right input.
 
     FastAPI's default shape is a list the browser cannot map back to fields;
@@ -138,13 +209,8 @@ async def validation_handler(_: Request, exc: RequestValidationError) -> JSONRes
             key = ".".join(names) if names else str(location[0])
             field_errors[key] = error["msg"].replace("Value error, ", "")
 
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={
-            "detail": "Please check the highlighted fields.",
-            "field_errors": field_errors,
-        },
-    )
+    return _error(request, 422, "validation_failed",
+                  "Please check the highlighted fields.", field_errors=field_errors)
 
 
 @app.get("/health", tags=["ops"])
