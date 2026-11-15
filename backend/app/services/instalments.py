@@ -81,8 +81,8 @@ def generate(conn: Any, policy_id: str, *, ahead: int = MONTHS_AHEAD,
         select p.premium_cents, p.currency, p.entry_date, p.status_code,
                pay.debit_day,
                coalesce(pay.frequency::text, 'monthly') as frequency,
-               exists (select 1 from premium_instalments i
-                        where i.policy_id = p.id and i.archived_at is null) as has_any
+               (select min(i.due_date) from premium_instalments i
+                 where i.policy_id = p.id and i.archived_at is null) as first_due
           from policies p
           left join policy_payments pay
             on pay.policy_id = p.id and pay.is_active and pay.archived_at is null
@@ -97,15 +97,20 @@ def generate(conn: Any, policy_id: str, *, ahead: int = MONTHS_AHEAD,
         return 0
     # A once-off premium is owed once. Re-running must not invent a second one
     # on whichever day the job happens to run.
-    if row["frequency"] == "once_off" and row["has_any"]:
+    if row["frequency"] == "once_off" and row["first_due"] is not None:
         return 0
 
     start = max(row["entry_date"] or today, today)
+    # The rhythm is counted from the start date. A policy imported without one
+    # keeps the rhythm of its first instalment: anchored on `today` instead,
+    # each daily run began a new series on that day (production, Nov 2026). Only a
+    # policy with no instalments yet starts its rhythm today.
+    anchor = row["entry_date"] or row["first_due"]
     # `ahead` is months of cover: twelve monthly premiums, four quarterly, one annual.
     count = 1 if row["frequency"] == "once_off" else -(-ahead // STEP_MONTHS[row["frequency"]])
     added = 0
     for due in due_dates(start, row["debit_day"], row["frequency"], count,
-                         anchor=row["entry_date"]):
+                         anchor=anchor):
         cursor = conn.execute(
             """
             insert into premium_instalments (policy_id, due_date, amount_cents, currency)

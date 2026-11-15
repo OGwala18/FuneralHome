@@ -370,6 +370,61 @@ def test_generating_the_schedule_again_adds_nothing(client, staff_as):
         assert instalments.generate(conn, policy_id) == 0
 
 
+def _policy_without_entry_date(db, frequency: str | None = None) -> str:
+    """An imported policy: a premium, no entry date, no debit day."""
+    import uuid
+    number = "SCHED-" + uuid.uuid4().hex[:8].upper()
+    policy_id = _one(db, "insert into policies (policy_number, status_code, premium_cents) "
+                         "values (%s, 'pending', 20000) returning id::text", number)[0]
+    if frequency is not None:
+        db.execute("insert into policy_payments (policy_id, method, frequency) "
+                   "values (%s, 'cash', %s)", (policy_id, frequency))
+    return policy_id
+
+
+def _schedule(db, policy_id: str) -> list[date]:
+    return [r[0] for r in db.execute(
+        "select due_date from premium_instalments where policy_id = %s "
+        "and archived_at is null order by due_date", (policy_id,)).fetchall()]
+
+
+def test_a_policy_without_an_entry_date_keeps_one_rhythm_day_after_day(db):
+    """Production, Nov 2026: each daily run started a new series on that day.
+
+    Anchored on the day the job ran, the 12th, 13th and 14th each got twelve
+    instalments of their own, so the family appeared to owe three times over.
+    """
+    import os
+    policy_id = _policy_without_entry_date(db)
+
+    with psycopg.connect(os.environ["DATABASE_URL"], row_factory=dict_row, autocommit=True) as conn:
+        assert instalments.generate(conn, policy_id, today=date(2026, 11, 12)) == 12
+        # The 12 Nov premium is now behind us, so twelve ahead means one more:
+        # November 2027, on the 12th. Not twelve more on the 13th.
+        assert instalments.generate(conn, policy_id, today=date(2026, 11, 13)) == 1
+        assert instalments.generate(conn, policy_id, today=date(2026, 11, 14)) == 0
+        assert instalments.generate(conn, policy_id, today=date(2026, 12, 20)) == 1
+
+    due = _schedule(db, policy_id)
+    assert len(due) == 14
+    assert {d.day for d in due} == {12}
+    assert len({(d.year, d.month) for d in due}) == 14
+
+
+def test_a_quarterly_policy_without_an_entry_date_keeps_its_months(db):
+    import os
+    policy_id = _policy_without_entry_date(db, frequency="quarterly")
+
+    with psycopg.connect(os.environ["DATABASE_URL"], row_factory=dict_row, autocommit=True) as conn:
+        assert instalments.generate(conn, policy_id, today=date(2026, 11, 12)) == 4
+        # Rolled forward in December, it must not start a December quarter.
+        instalments.generate(conn, policy_id, today=date(2026, 12, 15))
+
+    due = _schedule(db, policy_id)
+    assert {d.month for d in due} <= {2, 5, 8, 11}
+    assert {d.day for d in due} == {12}
+
+
 def test_the_first_payment_activates_the_policy_and_its_enquiry(client, db, staff_as):
     enquiry_id = _lead(client)
     staff_as("admin")
