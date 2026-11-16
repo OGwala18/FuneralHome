@@ -85,6 +85,24 @@ def connection() -> Iterator[Any]:
         yield conn
 
 
+def set_actor(conn: Any, staff_email: str) -> None:
+    """Name the staff member behind this transaction in member_book_history.
+
+    The history triggers (migration 0031) read it; without it they record the
+    database login. Transaction-local, so it never leaks to the next request
+    that borrows this pooled connection.
+    """
+    conn.execute("select set_config('induduzo.actor', %s, true)", (staff_email,))
+
+
+@contextmanager
+def staff_connection(staff_email: str) -> Iterator[Any]:
+    """A connection whose writes are recorded in the history as `staff_email`'s."""
+    with connection() as conn:
+        set_actor(conn, staff_email)
+        yield conn
+
+
 def log_event(conn: Any, enquiry_id: str, event_type: str, payload: dict | None = None,
               actor: str = "public_website") -> None:
     """Append to the audit trail.
