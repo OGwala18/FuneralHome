@@ -161,6 +161,29 @@ CATALOG: dict[str, ErrorInfo] = _entries(
               "Fix the mailbox settings; meanwhile use another second-step method.", "owner",
               retryable=True),
 
+    # --- A forgotten staff password (app/routers/password_reset.py) -------------
+    ErrorInfo("password_reset_not_configured", 503, "forgotten password",
+              "\"Forgot your password?\" is off on this server, so nothing was sent.",
+              "SUPABASE_SERVICE_ROLE_KEY, TWO_STEP_CODE_PEPPER or SMTP_* unset on the API "
+              "(/health shows password_reset; the log names which).",
+              "Set the missing variable on the Railway api service and redeploy. Meanwhile "
+              "the owner resets the password in Supabase.", "owner"),
+    ErrorInfo("temporary_password_invalid", 400, "forgotten password",
+              "The temporary password was wrong, expired, used, replaced or tried five times.",
+              "A typo, an older email, or more than 30 minutes since it was asked for.",
+              "Ask for a new one on the sign-in page. The staff log has "
+              "password_reset_failed with a reason.", "staff"),
+    ErrorInfo("password_rejected", 422, "forgotten password",
+              "The new password was refused: under 12 characters, the temporary one again, "
+              "or against the Supabase project's password rules.",
+              "A short or simple password.",
+              "Choose a longer one; the temporary password still works.", "staff"),
+    ErrorInfo("sign_in_missing", 409, "forgotten password",
+              "The staff row is real but Supabase has no sign-in with that address.",
+              "The owner added the person in the portal but never created their Supabase user.",
+              "Supabase > Authentication > Users > Add user (Auto Confirm), same address.",
+              "owner"),
+
     # --- Email (recorded on *_email_failed events; app/services/email.py) -------
     ErrorInfo("email_not_configured", None, "email",
               "No SMTP_HOST on this server, so nothing was sent.",
