@@ -500,6 +500,10 @@ def apply_status(conn: Any, sid: str, status: str, error_code: str | None) -> bo
         "update whatsapp_messages set status = %s, error_code = coalesce(%s, error_code) where id = %s",
         (status, (error_code or None) and f"twilio_{error_code}"[:40], row["id"]),
     )
+    if status in _FINAL_FAILURES:
+        # Visible in the logs, so a message Twilio accepted but WhatsApp
+        # refused (63016: plain text outside the 24-hour window) is not silent.
+        logger.warning("WhatsApp %s %s (error %s)", sid, status, error_code or "none")
     return True
 
 
