@@ -9,7 +9,7 @@ import { Badge, Button, Empty, Fact, Notice, Skeleton } from "@/components/ui";
 const money = (cents: number | null, currency: string) =>
   cents === null ? "Not recorded" : `${currency} ${(cents / 100).toFixed(2)}`;
 
-export default function Member({ id }: { id: string }) {
+export default function Member({ id, canEdit }: { id: string; canEdit: boolean }) {
   const [member, setMember] = useState<MemberDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +93,10 @@ export default function Member({ id }: { id: string }) {
                   <strong className="ref">{policy.policy_number}</strong></Button>
                 <span className="muted"> · {policy.status_code.replace(/_/g, " ")}
                   {policy.plan_code ? ` · ${policy.plan_code}` : ""}</span>
+                {canEdit && policy.member_type === "main_member" && <span className="row" style={{ display: "inline-flex", marginLeft: "var(--s8)" }}>
+                  <Button small onClick={() => navigate({ name: "editMember", id: policy.policy_id })}>Edit details</Button>
+                  <Button small onClick={() => navigate({ name: "changePlan", id: policy.policy_id })}>Change plan</Button>
+                </span>}
                 <div className="fact-grid" style={{ marginTop: "var(--s12)" }}>
                   <Fact label="Role">{policy.member_type.replace(/_/g, " ")}
                     {policy.is_inferred ? " (inferred from import)" : ""}</Fact>

@@ -123,6 +123,55 @@ def generate(conn: Any, policy_id: str, *, ahead: int = MONTHS_AHEAD,
     return added
 
 
+def reschedule(conn: Any, policy_id: str, *, staff_email: str, reason: str,
+               today: date | None = None) -> tuple[int, int]:
+    """Replace the premiums still to come after a plan or payment-day change.
+
+    Every unpaid premium due today or later is cancelled and archived (the
+    history keeps it), then the schedule is generated again from the policy as
+    it now is. What was already owed before today keeps the amount it was owed
+    at, and paid or waived premiums are never touched. Returns (cancelled, added).
+    """
+    today = today or date.today()
+    cancelled = conn.execute(
+        """
+        update premium_instalments
+           set status = 'cancelled', archived_at = now(), recorded_by = %s, notes = %s
+         where policy_id = %s and status = 'due' and due_date >= %s and archived_at is null
+        """,
+        (staff_email, reason, policy_id, today),
+    ).rowcount
+    added = generate(conn, policy_id, today=today)
+
+    # generate() never adds a second once-off premium. A policy MOVED to a
+    # once-off plan owes that premium once, from today, if nothing is still due.
+    if added == 0:
+        row = conn.execute(
+            """
+            select p.premium_cents, p.currency, p.entry_date, p.status_code
+              from policies p
+              join policy_payments pay on pay.policy_id = p.id and pay.is_active
+                                      and pay.archived_at is null
+             where p.id = %s and pay.frequency = 'once_off'
+               and not exists (select 1 from premium_instalments i
+                                where i.policy_id = p.id and i.status = 'due'
+                                  and i.archived_at is null)
+            """,
+            (policy_id,),
+        ).fetchone()
+        if row and row["premium_cents"] is not None and row["status_code"] in _LIVE_STATUSES:
+            added = conn.execute(
+                """
+                insert into premium_instalments (policy_id, due_date, amount_cents, currency)
+                values (%s, %s, %s, %s)
+                on conflict (policy_id, due_date) where archived_at is null do nothing
+                """,
+                (policy_id, max(row["entry_date"] or today, today), row["premium_cents"],
+                 row["currency"]),
+            ).rowcount
+    return cancelled, added
+
+
 def generate_all(conn: Any, *, ahead: int = MONTHS_AHEAD, today: date | None = None) -> tuple[int, int]:
     """Roll every live policy forward. Returns (policies checked, rows added)."""
     ids = [
