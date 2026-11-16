@@ -23,8 +23,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-induduzo}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-induduzo_local_dev}
       POSTGRES_DB: ${POSTGRES_DB:-induduzo}
-      # Consumed by db/migrations/0005_api_role.sh to create the restricted
-      # role the API connects as. Without it that migration is skipped.
+      # Consumed by db/migrations/0006_local_api_password.sh to let the
+      # restricted induduzo_api role (made by 0005_api_role.sql) log in.
+      # Without it that script is skipped.
       API_DB_PASSWORD: ${API_DB_PASSWORD:-induduzo_api_local_dev}
     ports:
       # 5433 on the host: this machine already runs another Postgres on 5432.

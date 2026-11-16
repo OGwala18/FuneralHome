@@ -18,15 +18,14 @@ the R450/month that Pro would have cost.
 
 HOW IT IS MEANT TO BE RUN
 
-Nothing in this repository runs on a clock yet, and the API is not deployed
-anywhere, so wiring a scheduler now would mean choosing infrastructure that does
-not exist. This is therefore a plain command: idempotent, safe to run as often
-as you like, and safe to run twice at the same moment.
+A plain command: idempotent, safe to run as often as you like, and safe to run
+twice at the same moment.
 
-When the backend is deployed, point something at it on a weekly-or-better
-schedule — a Railway cron, a GitHub Actions `schedule:` trigger, or an uptime
-monitor hitting an endpoint that calls the same query. Until then **somebody has
-to run it, or open the Supabase dashboard, at least once a week.**
+Two things already keep the project awake: the Railway `jobs` cron's daily
+backup (backend/app/jobs/daily.py) touches the database every morning, and
+.github/workflows/supabase-keepalive.yml runs this script on a schedule. If
+both stop, **somebody has to run it, or open the Supabase dashboard, at least
+once a week**, or staff cannot sign in.
 
 DESIGN NOTES
 

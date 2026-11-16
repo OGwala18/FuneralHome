@@ -7,7 +7,7 @@ prove it works.
 
 | | |
 |---|---|
-| Status | Being built, one bit at a time (see the §12 tracker) |
+| Status | Bits 0, 1 and 3–6 built and live: the emailed code, trusted computers and the "Confirm it's you" screen, with enforcement on in production (which refuses `off`). Bits 7–12 (authenticator app, passkeys, recovery codes, owner tools, portal headers) not started. See the §12 tracker |
 | Priority | Required before the production portal launches |
 | Repo state at time of writing | `fae330d` (Dev), 16 Oct 2026 |
 | Touches | `backend/`, `db/migrations/`, `portal/`, `.github/workflows/`, docs |
@@ -69,7 +69,7 @@ mean rebuilding.
 | 2 | Must staff set up a passkey or the app? | **No, optional for everyone.** The "Make sign-in stronger" screen always offers "Not now" |
 | 3 | Is "Trust this computer" ticked by default? | **No, unticked.** It's a deliberate choice, made only on your own work laptop |
 | 4 | How long does an untrusted computer stay signed in before asking again? | **12 hours** |
-| 5 | Production passkey domain (WebAuthn "relying party") | **The production portal's own address.** `portal.induduzo.co.za` if that domain is set up; otherwise whatever address production runs on. Set it at launch in `WEBAUTHN_RP_ID`, then never change it. If production keeps the internal portal's address, passkeys made on internal carry over |
+| 5 | Production passkey domain (WebAuthn "relying party") | **The production portal's own address: `induduzohome.co.za`** (decided 27 Oct 2026, see `CLAUDE.md`). Set it at launch in `WEBAUTHN_RP_ID`, then never change it. If production keeps the internal portal's address, passkeys made on internal carry over |
 | 6 | Laptop-only passkeys? | **No, synced passkeys are allowed.** The laptop-only switch exists but is off |
 
 ---
@@ -83,7 +83,7 @@ passkeys. Neither fits on its own:
   factor, a way to sign in without a password.
 - **Supabase passkeys are experimental and passwordless-only**, and each project
   has **one** passkey domain. Our one Supabase project serves three portals:
-  `localhost`, `portal-internal.up.railway.app` and later `portal.induduzo.co.za`.
+  `localhost`, `portal-internal.up.railway.app` and `induduzohome.co.za`.
   Passkeys can't span them.
 - **Mixing two systems means two sources of truth.** Supabase would mark the app
   in its token, while our API would track the email code and passkeys. Every
@@ -306,7 +306,7 @@ Indexes:
   on live devices (`where revoked_at is null`).
 
 **Housekeeping.** Add an idempotent command, `backend/app/jobs/purge_two_step.py`,
-in line with the decision that jobs are commands until a scheduler exists. It
+and add it to the Railway `jobs` cron (`backend/app/jobs/daily.py`). It
 deletes:
 - challenges older than 7 days;
 - verifications older than 60 days;
@@ -324,7 +324,7 @@ All on the API. Nothing new in the portal is secret.
 |---|---|---|
 | `TWO_STEP_ENCRYPTION_KEYS` | Fernet keys, comma-separated; the first one encrypts | Encrypts authenticator-app secrets. A list, so a key can be rotated (MultiFernet). **Sealed** on Railway. **Different per environment.** |
 | `TWO_STEP_CODE_PEPPER` | 32+ random bytes | HMAC key for emailed codes and recovery codes. Without it, a stolen database copy can't be used to guess codes offline. Sealed, and per environment. |
-| `WEBAUTHN_RP_ID` | Passkey domain | `localhost`, `portal-internal.up.railway.app`, `portal.induduzo.co.za` |
+| `WEBAUTHN_RP_ID` | Passkey domain | `localhost`, `portal-internal.up.railway.app`, `induduzohome.co.za` |
 | `WEBAUTHN_RP_NAME` | Shown in the passkey prompt | "Induduzo Staff Portal" |
 | `WEBAUTHN_ORIGINS` | Exact portal origins accepted | e.g. `https://portal-internal.up.railway.app` |
 | `TWO_STEP_ENFORCEMENT` | `on` / `off` | `off` only in `development` and `test`. **The API refuses to start with `off` when `ENVIRONMENT=production`**, so a mistake fails loudly rather than leaving the door open. |
@@ -783,7 +783,7 @@ Each bit's pull request updates its own row.
 | 3 | Database tables, settings and crypto helpers | 0 | ~8M | Done (#14) |
 | 4 | Enforcement core and the guard test (enforcement off) | 3 | ~10M | Done (#37) |
 | 5 | Emailed code (API) | 2, 4 | ~10M | Done (this PR) |
-| 6 | Trusted computers and the "Confirm it's you" screen; enforcement on for internal | 1, 5 | ~15M | Code done (this PR); switching on for internal pending |
+| 6 | Trusted computers and the "Confirm it's you" screen; enforcement on for internal | 1, 5 | ~15M | Done; enforcement on |
 | 7 | Authenticator app | 6 | ~10M | Not started |
 | 8 | Passkeys (API) | 6 | ~12M | Not started |
 | 9 | Passkeys (portal) and the Windows Hello check | 8 | ~10M | Not started |
@@ -942,7 +942,7 @@ Paste this into a new session, with the bit number filled in:
 ---
 
 ## 13. Production launch checklist
-- [ ] `WEBAUTHN_RP_ID` and `WEBAUTHN_ORIGINS` set to the production portal's address (`portal.induduzo.co.za` if that domain exists). Decide before anyone adds a passkey on production
+- [ ] `WEBAUTHN_RP_ID` and `WEBAUTHN_ORIGINS` set to the production portal's address (`induduzohome.co.za`). Decide before anyone adds a passkey on production
 - [ ] Fresh `TWO_STEP_ENCRYPTION_KEYS` and `TWO_STEP_CODE_PEPPER` for production, sealed, never shared with internal
 - [ ] `TWO_STEP_ENFORCEMENT=on` (production refuses `off` anyway)
 - [ ] `CORS_ORIGINS` is the production portal only, and `X-Induduzo-Device` is allowed

@@ -127,7 +127,7 @@ item is a scheduler, not an integration.
 | Twilio WhatsApp send path, failures swallowed after commit | `backend/app/services/whatsapp.py` |
 | SMTP office notification on both stages | `backend/app/services/email.py` |
 | Staff sign-in: Supabase token verified against JWKS, then `staff_users` | `backend/app/auth.py`, `routers/admin.py` |
-| Enquiry list, searchable, sortable, paginated | `GET /api/admin/enquiries`, `portal/src/pages/Enquiries.tsx` |
+| Enquiry list, searchable, sortable, paginated | `POST /api/admin/enquiries/search`, `portal/src/pages/People.tsx` |
 | Staff and role management with last-owner guard | `GET·POST·PATCH /api/admin/staff`, `portal/src/pages/Staff.tsx` |
 
 **"Who is still a member"** is already modelled. `enquiry_status` has an `active` value.
@@ -160,6 +160,11 @@ Each step unblocks the next. Do not start at the integrations.
 > was written. `0008`–`0012` now exist (reference tables, people, policies, data
 > quality flags, FK indexes). Migrations are forward-only, so the next free
 > number is **`0013`**.
+>
+> Corrected again 16 November 2026: `0013`–`0029` now exist too. Use the next
+> free number when this is built (**`0030`** at the time of writing), and write
+> out its `induduzo_api` grants: since 0026 nothing is granted to `anon` or
+> `authenticated` by default.
 
 Add `feedback_responses` and `insight_snapshots`. Both carry the standard skeleton from
 foundation 03 §5.1: `id`, `tenant_id`, `created_at`, `updated_at`, `archived_at`. Both get

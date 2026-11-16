@@ -14,9 +14,10 @@
 **/.env.*
 !**/.env.example
 
-# Password file used by the local pgAdmin container. Generated from
-# docker-compose values by db/pgadmin/make-pgpass.ps1 — never committed, even
-# though the local dev password is not sensitive, so the habit stays correct.
+# Password file for the local pgAdmin container. docker-compose.yml now writes
+# it inside the container, so it should never appear here; still ignored so an
+# old copy is never committed, even though the local dev password is not
+# sensitive, so the habit stays correct.
 db/pgadmin/pgpass
 
 # Private keys and certificates

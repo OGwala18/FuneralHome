@@ -12,12 +12,14 @@ API:
 | | |
 |---|---|
 | `frontend/` | Public site, `induduzo.co.za`. Captures enquiries. **Live on Netlify.** |
-| `portal/` | Staff portal, `portal.induduzo.co.za`. Separate app, separate deploy. **Never bundled with the public site.** |
-| `backend/` | FastAPI. The only thing that holds a secret, calls out, or touches the database. |
+| `portal/` | Staff portal, `induduzohome.co.za`. Separate app, separate Netlify project. **Never bundled with the public site.** |
+| `backend/` | FastAPI, `api.induduzo.co.za` on Railway. The only thing that holds a secret, calls out, or touches the database. |
 | `db/` | Migrations (the schema source of truth), the migration runner, and import tooling. |
 
-**The API and the database are not deployed anywhere.** Only the static site is
-live. The registration form cannot work in production until the API is hosted.
+**Everything is live since 12 Nov 2026.** Railway's `live` environment runs the
+`api`, the `migrator` and the daily `jobs` cron from `main`; production data is
+in Supabase. Railway's `internal` environment runs the same from the `internal`
+branch, with its own Postgres and test data only.
 
 ## Hard rules
 
@@ -37,7 +39,7 @@ All ten in `ARCHITECTURE.md` §7 apply. The ones most often broken in practice:
 
 | Decision | Choice | When |
 |---|---|---|
-| Hosting | Netlify (web) + Railway (API, EU West) + Supabase (data/auth) + Cloudflare | see `docs/hosting-decision.md` |
+| Hosting | Netlify (site, portal, DNS for `induduzo.co.za`) + Railway (API, Pro plan, EU West) + Supabase (data/auth). Cloudflare was proposed and not adopted | see `docs/hosting-decision.md` |
 | Supabase plan | **Free**, not Pro. Pausing mitigated by `db/keepalive.py` | 14 Sep 2026 |
 | Consent gating a review request | **`contact_consent`** | 14 Sep 2026 |
 | Scheduler | One Railway cron service, `jobs`, runs `backend/app/jobs/daily.py` at 08:00 SAST: backup and premium schedule daily, payment reminders on `REMINDER_DAYS` (25th) | 13 Nov 2026 |
@@ -71,7 +73,7 @@ book directly, around every check the API makes.
 
 **The local portal shows the local member book.** Member reads and writes go
 through the API's own database. On a laptop that is Docker, with test data, not
-the 61 real members in Supabase. Never point a local API at production to "see
+the real book in Supabase. Never point a local API at production to "see
 the real ones": enrolment and the test suite write rows.
 
 **Supabase tracks migrations separately — until the 12 Nov 2026 launch.** Since
@@ -82,8 +84,8 @@ itself and no baseline is needed. 0026 was also run by hand on 13 Nov 2026
 it again harmlessly and records it. The history below explains the old state.
 `0008`–`0012` were applied through
 Supabase's own migration system, so `public.schema_migrations` (what
-`db/migrate.py` reads) does not know about them there. Before running the runner
-against Supabase:
+`db/migrate.py` reads) did not know about them there. Before the launch, running
+the runner against Supabase first needed (no longer needed; kept for the record):
 
 ```bash
 python db/migrate.py --baseline 0012_foreign_key_indexes.sql
@@ -112,7 +114,8 @@ green health check is not proof that the approved-template path is live.
 
 **Twilio credentials alone send nothing.** `WHATSAPP_OUTBOUND` decides who the
 line may message: `off` (the default when unset), `allowlist` (only
-`WHATSAPP_TEST_RECIPIENTS`) or `on`. Internal uses `allowlist`. Production must
+`WHATSAPP_TEST_RECIPIENTS`), `known` (the allowlist plus any number a family
+gave us) or `on`. Internal uses `allowlist`. Production must
 set `on`, or no family gets a confirmation. `/health` shows the mode.
 
 **The free Supabase tier has no automated backups of its own.** The `jobs`
@@ -158,11 +161,12 @@ unpatched `braces` advisory until a Tailwind 4 migration), `pip-audit
 
 The behaviour checks need a **throwaway** Postgres, connected as `induduzo_api`
 (see `ARCHITECTURE.md` §9). They write test enquiries, so never point them at
-Supabase or Railway. They cover the funnel, `/health` and the staff gate. They
-do not cover the portal or the member-book routes beyond refusing anonymous
-callers.
+Supabase or Railway. They cover the funnel, `/health`, the staff gate and
+second step, enrolment, payments, staff search, the WhatsApp line, error codes
+and hostile input. They do not cover the portal's screens.
 
-Branch promotion is always `feature -> Dev -> internal -> main`. `main` deploys
-the live public site.
+Branch promotion is always `feature -> Dev -> internal -> main`. `internal`
+deploys the Railway test environment; `main` deploys production: both Netlify
+sites, the live API and the migrator.
 
 Commit prefixes: `feat:`, `fix:`, `docs:`, `chore:`.

@@ -1,5 +1,14 @@
 # Railway backend deployment plan
 
+> **Carried out; live since 12 Nov 2026.** Production chose **Supabase Postgres**
+> (the first option under "Which database is production"), so there is no
+> Railway `postgres` service in the `live` environment: it runs `api`,
+> `migrator` and the daily `jobs` cron. The staff portal is on its own domain,
+> `induduzohome.co.za`, not a subdomain. Since launch the migrator applies new
+> migrations to Supabase itself; no baseline is needed. The "61 members" below
+> were the book before the paper-form import of 11 Nov 2026. Read this as the
+> record of how it was planned; `ARCHITECTURE.md` and `CLAUDE.md` are current.
+
 Prepared for Induduzo Funeral Home on 16 September 2026.
 
 This is the deployment plan for making the public registration flow operational.
@@ -276,7 +285,7 @@ Set these on the `api` service. Seal secret values after confirming them.
 |---|---|---:|
 | `DATABASE_URL` | Restricted `induduzo_api` URL using the private Postgres host | Yes |
 | `ENVIRONMENT` | `production` | Yes |
-| `CORS_ORIGINS` | `https://induduzo.co.za,https://portal.induduzo.co.za` | Yes |
+| `CORS_ORIGINS` | `https://induduzo.co.za,https://induduzohome.co.za` | Yes |
 | `SUPABASE_URL` | Current Induduzo Supabase project URL | Staff portal |
 | `STAFF_EMAILS` | Bootstrap owner address | First staff setup |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase server-side secret | Optional; automated staff invites |
