@@ -6,9 +6,10 @@ ES256 and we check the signature against its PUBLIC key, fetched from the
 project's JWKS endpoint.
 
 Two gates, deliberately. A valid Supabase token proves someone signed up; it
-does not prove they work here. So a verified token must ALSO carry an email on
-the STAFF_EMAILS allowlist. Public sign-up should additionally be disabled in
-the Supabase dashboard — the allowlist is the belt to that braces.
+does not prove they work here. So a verified token must ALSO carry an email with
+an active row in staff_users (STAFF_EMAILS only seeds the first owners while
+that table is empty; see services/staff.py). Public sign-up is also disabled in
+the Supabase dashboard — the staff table is the belt to that braces.
 """
 
 from __future__ import annotations

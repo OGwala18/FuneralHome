@@ -4,8 +4,10 @@ Status of this system against the pre-launch checklist, what is already done,
 and what is not. Written honestly — the gaps are listed as plainly as the wins,
 because a checklist that only records successes is worse than none.
 
-**Context:** no real users yet. The static site is live; the API and database
-are **not deployed**. That makes now the cheap moment to fix things.
+**Context:** live since 12 Nov 2026. The public site, the staff portal, the API
+and the production database (Supabase) all hold or serve real people's details,
+and staff have accounts. A fix now has to be made without losing a lead or
+locking staff out.
 
 ---
 
@@ -18,11 +20,11 @@ are **not deployed**. That makes now the cheap moment to fix things.
 | 3 | Use public DB key | **Done** | The browser never talks to the database. Only the API holds the connection string. Supabase's publishable key (public, in the portal) reaches no table, view, sequence or function: migration 0026 (13 Nov 2026) removed the insert grant 0004 had left open, and stops new tables inheriting Supabase's default grants. |
 | 4 | Row-level security | **Done** | The API connects as `induduzo_api`, a non-owner role scoped by RLS policy. Verified: `rolbypassrls = false`, and DROP / DELETE / TRUNCATE / CREATE are all denied to it. |
 | 5 | Encrypt sensitive data | **Partial** | Encrypted at rest by the volume. ID numbers sit in plaintext columns. |
-| 6 | Server-side auth | **N/A** | No accounts exist. Nothing to authenticate yet. |
-| 7 | Lock record access | **Done** | **The API has no GET or DELETE route for enquiries.** Data cannot be read back out through it. |
+| 6 | Server-side auth | **Done** | Staff only; families never sign in. The API verifies the Supabase token's signature on every request, requires an active row in our own `staff_users`, the second step (emailed code or a trusted computer, `TWO_STEP_ENFORCEMENT=on` in production) and the route's role. Public sign-up is off in Supabase. |
+| 7 | Lock record access | **Done** | **The public API has no GET or DELETE route for enquiries.** Records are read back only through the staff routes under `/api/admin`, behind item 6, and each read and write is recorded in `staff_events`. |
 | 8 | Block field tampering | **Done** | Pydantic `extra="forbid"` rejects unknown fields; every column is set explicitly. |
-| 9 | Secure session cookies | **N/A** | No sessions or cookies. |
-| 10 | Hash passwords | **N/A** | No passwords stored. |
+| 9 | Secure session cookies | **N/A** | No cookies. A staff session is a Supabase token sent as a bearer header; a trusted computer is a device token sent in `X-Induduzo-Device`. |
+| 10 | Hash passwords | **Done** | Staff passwords are held by Supabase Auth, never by us. Emailed sign-in codes and forgotten-password temporary passwords are stored only as peppered hashes and used once. |
 | 11 | Rate limit | **Done** | 6 enquiries/hour per IP on stage 1, 20 on stage 2. Returns `429` with `Retry-After`. |
 | 12 | Bot protection | **Basic** | Honeypot field. Stops naive form-fillers, not a determined attacker. |
 | 13 | Parameterise queries | **Verified** | Every query uses bound parameters. No string interpolation into SQL. |
@@ -89,15 +91,16 @@ carry a code and a request id rather than internals.
 
 ---
 
-## Still to do at deploy time
+## Deployment settings that keep it safe
 
-The code-side work is done. What remains is deployment configuration.
+Set at the 12 Nov 2026 launch. They live in Railway's variables, not the repo, so
+check them there whenever an environment is created or duplicated.
 
-### Set `CORS_ORIGINS` to the production origin
+### `CORS_ORIGINS` lists only the real origins
 
-It currently lists localhost. Set it to `https://induduzo.co.za`. It is already
-an explicit allowlist rather than `*`, which was the important half; this is
-just the deployment value.
+An explicit allowlist, never `*`: on live, the public site and the staff portal
+(`https://induduzo.co.za`, `https://induduzohome.co.za`); on internal, the
+internal site and portal addresses. Locally it lists localhost.
 
 ### Set `ENVIRONMENT` on every deployment
 
@@ -113,7 +116,8 @@ production and supply it through the environment, never a file in the repo.
 
 ### Terminate TLS in front of the API
 
-HSTS is sent but means nothing without HTTPS actually being served.
+HSTS is sent but means nothing without HTTPS actually being served. Railway
+serves `api.induduzo.co.za` over HTTPS.
 
 ---
 

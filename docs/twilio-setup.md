@@ -120,8 +120,11 @@ When it is approved, copy the **Content SID** — it starts `HX`.
 
 ## 3. Environment
 
-Set these in `backend/.env`, which is gitignored. **Never** put a real value in
-`backend/.env.example`; that file is committed to a public repository.
+Locally, set these in `backend/.env`, which is gitignored. On Railway they are
+service variables, set on **each** service that sends (`api` and `jobs`):
+Railway seals the token and does not copy it when an environment is duplicated.
+**Never** put a real value in `backend/.env.example`; that file is committed to a
+public repository.
 
 ```
 TWILIO_ACCOUNT_SID=AC...
@@ -138,15 +141,17 @@ Credentials make sending possible; `WHATSAPP_OUTBOUND` decides who may be sent
 to (`docs/feature-3-whatsapp-line.md` §7):
 
 ```
-WHATSAPP_OUTBOUND=allowlist                 # off (default) | allowlist | on
+WHATSAPP_OUTBOUND=allowlist                 # off (default) | allowlist | known | on
 WHATSAPP_TEST_RECIPIENTS=+27...,+27...      # allowlist only: staff phones, E.164
 ```
 
 - **Unset means `off`**: nothing is sent, and each skip is logged by reference.
 - **Internal** uses `allowlist`, so a test registration never messages a real
   family.
-- **Production** uses `on`.
-- A value other than these three, or an allowlist number not in E.164 form,
+- **`known`** is the allowlist plus any number a family gave us (the website
+  form or the member book), and nobody else.
+- **Production** uses `on`. Payment reminders refuse to run in any other mode.
+- A value other than these four, or an allowlist number not in E.164 form,
   stops the API starting.
 - `/health` shows the mode as `whatsapp_outbound`, never the numbers.
 

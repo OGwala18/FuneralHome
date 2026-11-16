@@ -195,7 +195,7 @@ class Settings:
     )
 
     # Passkeys. The RP ID is the portal's bare domain: localhost,
-    # portal-internal.up.railway.app or portal.induduzo.co.za. A passkey only
+    # portal-internal.up.railway.app or induduzohome.co.za. A passkey only
     # ever works on the domain it was made for, so production's is set once,
     # at launch, and never changed.
     webauthn_rp_id: str | None = os.getenv("WEBAUTHN_RP_ID") or None

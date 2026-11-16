@@ -1,7 +1,10 @@
 # Induduzo deployment and security runbook
 
 This is the source of truth for humans and AI agents deploying or diagnosing the
-Induduzo Funeral Home website.
+Induduzo Funeral Home **public website**. The staff portal is a second Netlify
+project built from `portal/` (`portal/netlify.toml`, `induduzohome.co.za`); the
+API, migrator and jobs run on Railway (`docs/railway-backend-deployment.md`,
+`docs/railway-internal-setup-explained.md`).
 
 ## Current production contract
 
@@ -258,12 +261,13 @@ Expected:
 - The header does not show **My Portal**.
 - Browser console has no uncaught errors.
 - Navigation, language buttons, phone links, WhatsApp links, and public forms
-  behave as expected. Two public phone numbers must display: `079 751 0648`
-  (primary) and `082 954 9241`. Telephone links must use `tel:+27797510648` and
-  `tel:+27829549241`; WhatsApp links must use `https://wa.me/27797510648` and
-  `https://wa.me/27829549241`. Single-number surfaces (header call button, the
-  floating WhatsApp button) use the primary number only. The public email must
-  display and link to `Info@induduzo.co.za`.
+  behave as expected. All numbers come from `frontend/src/lib/contact.ts`. Two
+  office numbers must display: `079 751 0648` (primary) and `082 954 9241`, with
+  `tel:+27797510648` and `tel:+27829549241`; the header call button uses the
+  primary only. The 24-hour line `069 706 0387` (`tel:+27697060387`) shows in
+  the footer and on Contact. Every WhatsApp link, the floating button included,
+  goes to the business line `073 731 0521` (`https://wa.me/27737310521`). The
+  public email must display and link to `info@induduzo.co.za`.
 - Test every public route at phone (390px), tablet (768px), and desktop (1440px)
   widths. Confirm there is no horizontal scrolling and the mobile/tablet menu
   exposes every public route.

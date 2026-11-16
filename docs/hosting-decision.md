@@ -1,5 +1,14 @@
 # Hosting decision
 
+> **What was actually built (live since 12 Nov 2026).** This recommendation was
+> followed with four differences, each decided later: Supabase stayed on the
+> **Free** plan (14 Sep 2026), with the daily `jobs` cron as its backup and
+> keep-alive; Railway is on the **Pro** plan; **Cloudflare was not adopted**
+> (Netlify DNS serves `induduzo.co.za`, the registrar serves the portal's
+> `induduzohome.co.za`); and uptime is a GitHub Actions workflow every 15
+> minutes (`.github/workflows/uptime.yml`), not UptimeRobot. `CLAUDE.md` holds
+> the current decisions. The rest of this file is the reasoning as written.
+
 Recommendation for taking Induduzo live, written against the real constraints:
 ~R1,000/month budget, 500 policyholders growing to 3,000, five staff,
 ~R200,000/month flowing through the system, and downtime meaning missed premium
@@ -105,7 +114,7 @@ rather than on capacity you will not use.
 3. **Set `ENVIRONMENT=production`.** This is what disables `/docs` and turns on
    HSTS. Verified: without it, `/docs` returns 200.
 4. **Set `CORS_ORIGINS`** to the real origins, e.g.
-   `https://induduzo.co.za,https://portal.induduzo.co.za`.
+   `https://induduzo.co.za,https://induduzohome.co.za`.
 5. **Turn off Supabase public sign-up** and confirm daily backups are on.
 6. **Add uptime monitoring** on `/health` with SMS or email alerts. Free, and
    the difference between five minutes of downtime and a lost weekend.

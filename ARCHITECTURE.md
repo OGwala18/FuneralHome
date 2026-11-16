@@ -10,23 +10,32 @@ If you only read one thing, read [Rules that must not be broken](#rules-that-mus
 
 ## 1. What this system is
 
-A public marketing website for a South African funeral home, plus a two-stage
-registration funnel that captures prospective policyholders into a Postgres
-database and notifies the office by email.
+A public marketing website for a South African funeral home, with a two-stage
+registration funnel that captures prospective policyholders; a separate staff
+portal where the office runs the book of business; a WhatsApp line that answers
+families from a menu; and one API behind all three. Live since 12 Nov 2026.
 
-There is **no customer portal, no login, and no payment processing**. Those are
-future work. Anything that looks like auth or payments does not exist yet — do
-not assume it does.
+Staff sign in (Supabase Auth for the password, our own second step, roles in our
+own `staff_users` table). There is **no customer login and no payment
+processing**: families never sign in, and no bank or card details are collected.
 
 ```
-Visitor ─▶ Website (React)  ─HTTP─▶  API (FastAPI)  ─SQL─▶  Postgres
-                                          │
-                                          ├──▶ Email  (office notification)
-                                          └──▶ WhatsApp (applicant confirmation)
+Visitor ─▶ Website (React) ──┐
+Staff   ─▶ Portal  (React) ──┼─HTTP─▶  API (FastAPI)  ─SQL─▶  Postgres
+Family  ─▶ WhatsApp (Twilio)─┘             ├──▶ Email    (office, staff codes)
+                                           ├──▶ WhatsApp (confirmations, menu, reminders)
+                                           └──▶ Supabase Auth (staff identity only)
 ```
 
-Three processes, one repo. The database is a separate service reached only by a
-connection string.
+| | Laptop | Internal (branch `internal`) | Live (branch `main`) |
+|---|---|---|---|
+| Site | `localhost:8080` | Railway `site` | `induduzo.co.za` (Netlify) |
+| Portal | `localhost:8090` | Railway `portal` | `induduzohome.co.za` (Netlify) |
+| API | `localhost:8000` | Railway `api` | `api.induduzo.co.za` (Railway) |
+| Database | Docker | Railway Postgres, test data only | Supabase, the real book |
+| Scheduled jobs | by hand | by hand | Railway `jobs` cron, 08:00 SAST |
+
+The database is a separate service reached only by a connection string.
 
 ---
 
@@ -37,6 +46,7 @@ FuneralHome/
 ├── README.md                  Start here: what it is, how to run it
 ├── ARCHITECTURE.md            This file: where things live, what the rules are
 ├── SECURITY.md                Security posture and pre-launch checklist
+├── CLAUDE.md                  For AI agents: decisions not to reopen, things that bite
 │
 ├── frontend/                  Public website — Vite + React + TypeScript + Tailwind
 ├── portal/                    Staff portal — separate app, never deployed with the site
@@ -48,9 +58,11 @@ FuneralHome/
 ├── Dockerfile.backend         The API image Railway deploys
 ├── .dockerignore              Deny-by-default: what may reach that image
 ├── start.ps1 / induduzo.cmd   One-command start/stop for the whole stack
-├── netlify.toml               Production hosting config + security headers
+├── netlify.toml               Public site hosting config + security headers
+│                              (the portal has its own, portal/netlify.toml)
 ├── .env.example               Infrastructure settings template
-└── .github/workflows/         CI: lint, typecheck, build, audit, API checks
+└── .github/workflows/         quality-checks (CI), uptime (every 15 min),
+                               supabase-keepalive
 ```
 
 **Rule:** the repo root holds only entry points and configuration. Business
@@ -145,8 +157,13 @@ backend/
     │   ├── payments.py        Staff: premiums overdue / due, record a payment
     │   ├── analytics.py       Owner: the live site's Plausible figures
     │   ├── password_reset.py  Public: "Forgot your password?" emails a one-use temporary password
+    │   ├── two_step.py        Staff: the second sign-in step (emailed code, trusted computers)
     │   └── whatsapp.py        Twilio's signed webhooks, and the staff WhatsApp screen
+    ├── auth.py                Verifies the Supabase token; require_staff, require_role
     ├── services/
+    │   ├── staff.py           Staff accounts and roles; the STAFF_EMAILS bootstrap; last-owner guard
+    │   ├── two_step.py        Has this session passed the second step, and until when
+    │   ├── two_step_crypto.py Codes, hashes and device tokens for the second step. Pure
     │   ├── email.py           Office notification (both stages, WhatsApp escalations)
     │   ├── whatsapp.py        Twilio sends: confirmation, menu and staff replies
     │   ├── whatsapp_content.py  ★ Every word the WhatsApp menu says, and office hours
@@ -156,11 +173,16 @@ backend/
     │   ├── password_reset.py  Temporary passwords: make, hash (never store), check, use once
     │   ├── supabase_admin.py  The only use of the service key: invites, setting a forgotten password
     │   ├── enrolment.py       Enquiry -> person, policy, lives. One transaction.
+    │   ├── welcome.py         The welcome WhatsApp and email a newly enrolled member gets
+    │   ├── banking.py         Induduzo's OWN receiving account, for paying premiums. Never a customer's
+    │   ├── payment_reminders.py  Who is due a payment-day reminder, and claiming it once
     │   └── instalments.py     The premium schedule: generate, pay, waive
     └── jobs/
         ├── daily.py                 The Railway `jobs` cron: backup, schedule, reminders.
         ├── schedule_instalments.py  Roll every live schedule forward. Idempotent.
+        ├── payment_reminders.py     WhatsApp reminders on the payment day and the day after.
         └── whatsapp_backfill.py     Re-send failed escalation emails; store missed messages.
+                                     A command; not yet on the cron.
 ```
 
 ### Endpoints
@@ -175,8 +197,9 @@ backend/
 | `POST` | `/api/auth/password/forgot` | Staff forgot their password: emails a temporary one (30 min, one use) if the address is active staff. Always the same **202** |
 | `POST` | `/api/auth/password/reset` | The temporary password as the old one, plus a new one: sets it in Supabase. Needs `SUPABASE_SERVICE_ROLE_KEY` |
 
-Staff routes all sit under `/api/admin`, behind `require_staff`; every write
-also needs `require_role("admin")`. The ones that touch the book of business:
+Staff routes all sit under `/api/admin`, behind `require_staff`, which also
+requires the second step (`/api/admin/2fa/*` is the only staff router that a
+password-only session may reach); every write also needs `require_role("admin")`. The ones that touch the book of business:
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -202,10 +225,11 @@ Interactive docs run at `/docs` in development.
 
 ## 4a. Staff portal — `portal/`
 
-An internal tool for employees to view client enquiries. **A separate Vite app
-on purpose**: the public website must never ship admin code, so a bug in the
-marketing site cannot expose client records. Different build, different deploy,
-different domain (`portal.induduzo.co.za`).
+The office's workplace: enquiries, enrolment, members, policies, payments, the
+WhatsApp hand-overs, and staff. **A separate Vite app on purpose**: the public
+website must never ship admin code, so a bug in the marketing site cannot expose
+client records. Different build, different deploy, different domain
+(`induduzohome.co.za`, deployed by its own Netlify project).
 
 ```
 portal/
@@ -225,7 +249,8 @@ portal/
     │   ├── useEnquiries.ts    One race-guarded fetch, shared by four pages.
     │   └── derive.ts          Queue grouping and growth tallies. Invents nothing.
     └── pages/
-        ├── Login.tsx          Email + password. No sign-up link, deliberately.
+        ├── Login.tsx          Email + password, and "Forgot your password?". No sign-up link.
+        ├── ConfirmItsYou.tsx  The second step: emailed code, "trust this computer for 30 days".
         ├── Today.tsx          Call desk: prioritised queue and the next person.
         ├── People.tsx         Searchable, sortable, paginated directory.
         ├── Person.tsx         One enquiry. "Add as member" starts enrolment from it.
@@ -278,8 +303,9 @@ Without it, only the root path loads and every deep link breaks.
 Employee ─▶ Portal ─▶ Supabase Auth        (issues a signed ES256 token)
                  │
                  └─▶ Our API  ── verifies the signature against Supabase's
-                                  PUBLIC key, then checks the email against
-                                  STAFF_EMAILS ──▶ Postgres
+                                  PUBLIC key, looks the email up in
+                                  staff_users, and checks the second step
+                                  (code or trusted device) ──▶ Postgres
 ```
 
 Supabase Auth proves who someone is; it holds no say over what they may do.
@@ -290,9 +316,9 @@ transaction, and the links between an enquiry and the policy it became are real
 foreign keys. The API records each read and write in `staff_events`.
 
 Locally that database is Docker's, holding test data, so the portal on a laptop
-shows the local book, not the real one. Which database production uses
-(Supabase, where the imported 61 members are today, or Railway Postgres) is
-chosen at deploy; see `docs/railway-backend-deployment.md`.
+shows the local book, not the real one. Internal uses Railway Postgres, also
+test data. Production uses Supabase Postgres, where the real book is; see
+`docs/railway-backend-deployment.md`.
 
 **Two gates, because one is not enough.** A valid Supabase token only proves
 somebody signed up somewhere; it does not prove they work here. So the API
@@ -329,8 +355,10 @@ Staff changes are written to `staff_events`, which is append-only at the
 database level, separate from the enquiry log because they are security events.
 
 The sign-in screen in `App.tsx` is a **convenience, not a security boundary**.
-Hiding a screen protects nothing: the API re-verifies the token and the
-allowlist on every single request. Auth is declared on the router
+Hiding a screen protects nothing: the API re-verifies the token, the staff row
+and the second step on every single request. With enforcement on
+(`TWO_STEP_ENFORCEMENT=on`, as in production) and the second step not fully
+configured, staff routes answer 503 rather than let a password alone in. Auth is declared on the router
 (`dependencies=[Depends(require_staff)]`) so a newly added admin route cannot
 accidentally ship unprotected.
 
@@ -345,7 +373,8 @@ key we never hold; we verify with the public key from its JWKS endpoint.
 db/
 ├── migrate.py                 Applies pending migrations to any Postgres
 ├── provision_api_role.py      Production: migrate, then let induduzo_api log in
-├── keepalive.py               Stops the free Supabase project pausing
+├── backup.py                  JSON backup of every public table (the jobs cron runs it)
+├── keepalive.py               Stops the free Supabase project pausing (fallback to the cron)
 ├── migrations/                ★ THE SCHEMA SOURCE OF TRUTH. Applied in filename order.
 │   ├── 0001_extensions_and_roles.sql
 │   ├── 0002_enums.sql
@@ -468,20 +497,18 @@ between environments needs no id remapping: `ref_member_types`,
 lead has been matched to a person.
 
 **Migrations are forward-only and immutable once run.** To change the schema,
-add `0013_*.sql`; never edit an applied file. They auto-apply on the first run
+add the next free number (`0030_*.sql` at the time of writing); never edit an
+applied file. A new table needs its `induduzo_api` grant written out: since 0026
+nothing is granted to `anon` or `authenticated` by default. They auto-apply on the first run
 of an empty volume — `docker compose down -v && docker compose up -d` rebuilds
 from scratch.
 
-> **Supabase is tracked separately.** 0008–0012 were applied to Supabase through
-> its own migration system, so `public.schema_migrations` (what `db/migrate.py`
-> reads) does not know about them there. Before running `db/migrate.py` against
-> Supabase, baseline it — `python db/migrate.py --baseline 0012_foreign_key_indexes.sql`
-> — or it will try to re-run everything and fail on the first `create type`.
-> Note that 0005 and 0007 have **not** been applied to Supabase: there is no
-> `induduzo_api` role and no `staff_users` table there yet. Every migration from
-> 0008 on guards its grants with a `pg_roles` check for exactly this reason, and
-> 0013 re-asserts the API role's grants on every 0008–0012 table, so once 0005
-> lands on Supabase a single run of 0013 brings the role level.
+> **Production applies migrations itself.** Since the 12 Nov 2026 launch,
+> Supabase's `public.schema_migrations` records every applied file, and the live
+> Railway `migrator` service (`db/provision_api_role.py`) applies anything new
+> on each deploy of `main`, then sets the `induduzo_api` password. No baseline
+> is needed any more. Before the launch some files were applied through
+> Supabase's own migration system; that history is in `CLAUDE.md`.
 
 ---
 

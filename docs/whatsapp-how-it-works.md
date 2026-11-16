@@ -1,5 +1,13 @@
 # How Induduzo's WhatsApp works today
 
+> **Out of date since the November 2026 launch; kept for the demo steps.** The
+> automatic menu, hand-overs to staff, registration confirmations, welcome
+> messages and payment reminders are **live in production**: the line's webhooks
+> point at the live API, and families get replies. The website's WhatsApp links
+> all go to 073 731 0521. Where this file says "nothing replies yet" or
+> "not yet", read `docs/feature-3-whatsapp-line.md` and `docs/twilio-setup.md`
+> instead.
+
 A plain explanation of the WhatsApp setup as it stands on **21 Oct 2026**, for
 demos and for anyone who needs the whole picture fast. The build plan for what
 comes next is `docs/feature-3-whatsapp-line.md`; the setup history is

@@ -5,7 +5,7 @@ Read `ARCHITECTURE.md` and `docs/twilio-setup.md` first.
 
 | | |
 |---|---|
-| Status | **Built** (27 Oct 2026): the inbound webhook, the menu, escalations to staff, the office email, the portal's WhatsApp screen under Growth, delivery reports and the safety-net job. **Not live yet**: Twilio's webhooks still have to point at the API (§9, W6) |
+| Status | **Built** (27 Oct 2026): the inbound webhook, the menu, escalations to staff, the office email, the portal's WhatsApp screen under Growth, delivery reports and the safety-net job. **Live in production** (Nov 2026): the line's webhooks point at the live API |
 | Code | `backend/app/services/whatsapp_content.py` (the words), `whatsapp_menu.py` (the engine), `whatsapp_line.py` (records), `routers/whatsapp.py`, migration `0018`, `portal/src/pages/WhatsApp.tsx` |
 | Tests | `backend/tests/test_whatsapp_menu.py` (every menu path, office hours, plans match the website), `test_whatsapp_line.py` (webhooks end to end) |
 
@@ -254,7 +254,8 @@ on `allowlist`.
    removed.
 7. A message from a phone not on the allowlist is stored and gets no reply.
 
-**The safety net** runs as a command until a scheduler exists (CLAUDE.md):
+**The safety net** is a command. The Railway `jobs` cron (`backend/app/jobs/daily.py`)
+does not run it yet, so run it by hand when an escalation email failed:
 
 ```bash
 python -m app.jobs.whatsapp_backfill
