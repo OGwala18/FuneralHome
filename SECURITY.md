@@ -15,7 +15,7 @@ are **not deployed**. That makes now the cheap moment to fix things.
 |---|---|---|---|
 | 1 | Hide API keys | **Done** | All settings read from environment in `backend/app/config.py`. No credential in source. |
 | 2 | Purge Git secrets | **Verified** | History scanned — no live secret found. A committed virtualenv (4,617 files) was untracked. |
-| 3 | Use public DB key | **N/A** | The browser never talks to the database. Only the API holds the connection string. |
+| 3 | Use public DB key | **Done** | The browser never talks to the database. Only the API holds the connection string. Supabase's publishable key (public, in the portal) reaches no table, view, sequence or function: migration 0026 (13 Nov 2026) removed the insert grant 0004 had left open, and stops new tables inheriting Supabase's default grants. |
 | 4 | Row-level security | **Done** | The API connects as `induduzo_api`, a non-owner role scoped by RLS policy. Verified: `rolbypassrls = false`, and DROP / DELETE / TRUNCATE / CREATE are all denied to it. |
 | 5 | Encrypt sensitive data | **Partial** | Encrypted at rest by the volume. ID numbers sit in plaintext columns. |
 | 6 | Server-side auth | **N/A** | No accounts exist. Nothing to authenticate yet. |
@@ -26,12 +26,12 @@ are **not deployed**. That makes now the cheap moment to fix things.
 | 11 | Rate limit | **Done** | 6 enquiries/hour per IP on stage 1, 20 on stage 2. Returns `429` with `Retry-After`. |
 | 12 | Bot protection | **Basic** | Honeypot field. Stops naive form-fillers, not a determined attacker. |
 | 13 | Parameterise queries | **Verified** | Every query uses bound parameters. No string interpolation into SQL. |
-| 14 | Validate all input | **Done** | Pydantic on every request: SA ID Luhn check, mobile format, lengths, enums. |
+| 14 | Validate all input | **Done** | Pydantic on every request: SA ID Luhn check, mobile format, lengths, enums. Since 13 Nov 2026 the public form also refuses control and invisible characters, a leading `=` `+` `@` (spreadsheet formulas), names without letters or with markup, and an email field naming more than one mailbox. A value Postgres cannot store is a `422` on every route, never a `500`. |
 | 15 | Escape user content | **Done** | React escapes by default; the notification email HTML-escapes every field. Verified with an `<img onerror>` payload. |
 | 16 | Restrict file uploads | **N/A** | No upload endpoint exists. |
 | 17 | Trim API responses | **Done** | `EnquiryOut` returns six fields, never the full row. |
-| 18 | Security headers | **Done** | `netlify.toml` for the site; middleware in `main.py` for the API (nosniff, DENY framing, no-referrer, CSP `default-src 'none'`, Permissions-Policy). |
-| 19 | Force HTTPS | **Ready** | HSTS on the site, and the API sends HSTS when `ENVIRONMENT=production` (suppressed in dev so it cannot pin localhost). Still needs TLS termination at deploy time. |
+| 18 | Security headers | **Done** | `netlify.toml` for the site; `app/request_context.py` for the API on every response, errors included (nosniff, DENY framing, no-referrer, CSP `default-src 'none'`, Permissions-Policy, `Cache-Control: no-store`), plus a 256 KB request-body limit (`413`) and an `X-Request-ID`. |
+| 19 | Force HTTPS | **Done** | HSTS on the site, and the API sends HSTS when deployed (suppressed in dev so it cannot pin localhost). Railway and Netlify terminate TLS. A deployed API also requires TLS to its database when the database is outside a private network (`app/db.py`, 13 Nov 2026). |
 | 20 | Scan dependencies | **Done** | CI runs `npm audit` **and** `pip-audit`. Both trees clean — see below for what the first scan found. |
 
 ---
@@ -53,6 +53,39 @@ the full end-to-end suite passes on the upgraded dependencies.
 The lesson is the scan itself, not these particular CVEs: the frontend was
 scanned and clean, the backend was never scanned and had ten. Both now run in
 CI, so this cannot silently regress.
+
+---
+
+## Review, 13 Nov 2026
+
+API, email, input and database checks, with production inspected read-only
+(Supabase advisors and catalogue queries; no personal data read). The tests
+that hold each fix in place are in `backend/tests/`.
+
+| Found | Risk | Status |
+|---|---|---|
+| Production: Supabase's public key could INSERT into `plan_enquiries` and `enquiry_events` (0004's policies, never removed) | Anyone reading the public repo could write leads into the portal and forge audit events, around all of the API's checks. No such row existed | Fixed by **0026**, run on production by hand 13 Nov 2026 after a dry run. Verified there: 0 grants and 0 policies left for the public roles, and an insert as `anon` is refused ("permission denied"); the API's access and the member book unchanged |
+| Production: `anon` held every privilege, TRUNCATE included, on the `ref_*` tables and `policy_overview`; Supabase's defaults grant `anon` and `authenticated` everything on each new table | TRUNCATE ignores row-level security; the next migration to add a table would have reopened the Data API | Fixed by **0026** (`test_database_security.py`) |
+| A NUL byte in any form field | `500` on every attempt | `422` on the field; a database-level net on every route |
+| `a,b@x.com` accepted as one email | The applicant confirmation addressed to two mailboxes | Refused |
+| A name or town starting `=`, `+`, `@`; right-to-left overrides; zero-width characters | Formulas run when the office opens an export; names that display differently from what is stored | Refused |
+| A refused applicant address was logged and stored as the raw SMTP error | Personal data in Railway's logs (rule 9) | Email failures are recorded as codes (`email_recipient_refused`) only |
+| Staff searches (names, ID numbers) travel in the query string, which Uvicorn's access log printed | ID numbers in Railway's logs | Values redacted from the access log and Sentry, and the portal now searches with `POST .../search`, so the text is in the body, which no proxy logs. The GET `search` stays only for tabs opened before the release |
+| Production: `business_phone_numbers` had row-level security, no policy and no grant for the API (0015 ran on Supabase before the API's role existed) | The first feature to read it would fail with "permission denied", in production only | Fixed by **0027**; checked with a test that the API reaches every table |
+| No request-body limit | One multi-megabyte POST read into memory | `413` above 256 KB (`MAX_REQUEST_BYTES`) |
+| psycopg's default `sslmode=prefer` to Supabase | A man in the middle can refuse TLS and read rows in transit | `require` when deployed and the host is not private |
+| Database down: bare `500 text/plain` | Nothing for the form or a ticket to act on | `503 database_unavailable`, `Retry-After: 30` |
+| Supabase's signing keys unreachable: staff told "sign in again" | A sign-in loop with no visible cause | `503 upstream_failed` |
+| Supabase Auth: leaked-password protection is off (Supabase advisor) | Staff can choose a password already in a breach | **Owner action**: needs the Pro plan. On Free, set a 12-character minimum and required character types under Authentication > Sign In / Providers > Email |
+| `db/backup.py` and `db/migrate.py` connect with the default `prefer` | The nightly backup crosses the internet | **Follow-up**: add `?sslmode=require` to the owner URLs on Railway |
+
+What the browser can see: both production bundles were scanned. They hold
+the API address, the Supabase project URL and its publishable key (public by
+design, and now able to reach nothing), Plausible and Google Maps; no secret.
+Every API call a browser makes will always show in its network tab, which is
+why nothing secret or personal may be in one: responses stay narrow
+(`EnquiryOut`), staff calls need a token checked on every request, and errors
+carry a code and a request id rather than internals.
 
 ---
 

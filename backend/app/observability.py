@@ -108,8 +108,11 @@ def _before_send(event: dict, hint: dict) -> dict | None:
                 for header in list(headers):
                     if header.lower() in {"authorization", "cookie", "x-api-key"}:
                         headers[header] = REDACTED
-            if isinstance(request.get("query_string"), str):
-                request["query_string"] = _scrub_text(request["query_string"])
+            if isinstance(request.get("query_string"), str) and request["query_string"]:
+                # Staff search by surname as well as number, and no pattern
+                # recognises a surname: keep the parameter names, drop values.
+                from .request_context import redact_query
+                request["query_string"] = redact_query("?" + request["query_string"])[1:]
 
         return _scrub(event)
     except Exception:  # noqa: BLE001

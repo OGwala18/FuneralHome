@@ -28,7 +28,7 @@ COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --requirement backend/requirements.txt
 
 COPY backend/app backend/app
-COPY db/migrate.py db/provision_api_role.py db/
+COPY db/migrate.py db/provision_api_role.py db/backup.py db/
 COPY db/migrations db/migrations
 
 # Not root. Nothing here needs to write to the filesystem.
@@ -45,4 +45,6 @@ EXPOSE 8000
 # makes it open one socket of each, so both work.
 # `exec` replaces the shell, so Railway's stop signal reaches Uvicorn and
 # in-flight registrations finish before the container goes away.
-CMD ["sh", "-c", "exec uvicorn backend.app.main:app --host '' --port \"${PORT:-8000}\""]
+# --no-server-header: a response need not tell a scanner which server and
+# version to look up advisories for.
+CMD ["sh", "-c", "exec uvicorn backend.app.main:app --host '' --port \"${PORT:-8000}\" --no-server-header"]

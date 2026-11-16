@@ -22,8 +22,6 @@ export const BANK_DETAILS = {
   accountNumber: "4127 601 408",
 } as const;
 
-/** Where families send proof of payment: the business WhatsApp line. */
-export const PROOF_OF_PAYMENT_WHATSAPP = {
-  display: "073 731 0521",
-  link: "https://wa.me/27737310521",
-} as const;
+// Must match backend/app/services/banking.py, which the WhatsApp payment
+// messages read. Proof of payment goes to the WhatsApp line and the email in
+// lib/contact.ts, so those numbers are not repeated here.

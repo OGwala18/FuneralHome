@@ -15,7 +15,9 @@ import hashlib
 import json
 import uuid
 
-from fastapi import HTTPException, Request, Response, status
+from fastapi import Request, Response, status
+
+from .errors import ApiError
 
 HEADER = "Idempotency-Key"
 REPLAYED_HEADER = "Idempotent-Replayed"
@@ -34,9 +36,9 @@ def idempotency_key(request: Request) -> str | None:
     try:
         return str(uuid.UUID(raw.strip()))
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Idempotency-Key must be a UUID.",
+        raise ApiError(
+            status.HTTP_400_BAD_REQUEST, "idempotency_key_invalid",
+            "Idempotency-Key must be a UUID.",
         ) from exc
 
 
@@ -50,10 +52,11 @@ def mark_replayed(response: Response) -> None:
     response.headers[REPLAYED_HEADER] = "true"
 
 
-def refuse_mismatch() -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        detail=(
+def refuse_mismatch() -> ApiError:
+    return ApiError(
+        422,
+        "idempotency_mismatch",
+        (
             "This form was already sent with different details. "
             "Please reload the page and start again."
         ),

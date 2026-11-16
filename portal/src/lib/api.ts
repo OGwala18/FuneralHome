@@ -33,17 +33,21 @@ export class ApiError extends Error {
   readonly fieldErrors: Record<string, string>;
   /** The API's machine code, e.g. "second_step_required". Empty when it sent none. */
   readonly code: string;
+  /** The API's X-Request-ID for this call: what a ticket quotes to find the log lines. */
+  readonly requestId: string;
   constructor(
     message: string,
     status: number,
     fieldErrors: Record<string, string> = {},
     code = "",
+    requestId = "",
   ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.fieldErrors = fieldErrors;
     this.code = code;
+    this.requestId = requestId;
   }
 }
 
@@ -116,7 +120,8 @@ const readError = async (response: Response, fallback: string) => {
   if (code === "second_step_required") {
     window.dispatchEvent(new Event(SECOND_STEP_EVENT));
   }
-  return new ApiError(detail, response.status, fieldErrors, code);
+  return new ApiError(detail, response.status, fieldErrors, code,
+    response.headers.get("X-Request-ID") ?? "");
 };
 
 /** Every admin call carries the staff token; there are no unauthenticated ones. */
@@ -171,16 +176,37 @@ export interface EnquiryQuery {
   offset?: number;
 }
 
-export const fetchEnquiries = (query: EnquiryQuery = {}) => {
-  const params = new URLSearchParams();
-  if (query.search) params.set("search", query.search);
-  if (query.status) params.set("status", query.status);
-  if (query.sort) params.set("sort", query.sort);
-  if (query.descending !== undefined) params.set("descending", String(query.descending));
-  params.set("limit", String(query.limit ?? 50));
-  params.set("offset", String(query.offset ?? 0));
-  return request<EnquiryPage>("/api/admin/enquiries", params);
+/**
+ * A list with a search box. Its filters go to `<path>/search` in a POST body,
+ * not the URL: staff search by name, mobile and ID number, and a URL is written
+ * down by every proxy and log it passes (Railway's edge included); a body is not.
+ *
+ * An API older than the /search routes answers 404 or 405, and then the old
+ * GET is used. The portal deploys a few minutes before the API, so without
+ * this, search would fail in between. Remove the fallback once both are live.
+ */
+const searchList = async <T>(path: string, filters: Record<string, unknown>): Promise<T> => {
+  try {
+    return await mutate<T>(`${path}/search`, "POST", filters);
+  } catch (error) {
+    if (!(error instanceof ApiError) || (error.status !== 404 && error.status !== 405)) throw error;
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== "") params.set(key, String(value));
+    }
+    return request<T>(path, params);
+  }
 };
+
+export const fetchEnquiries = (query: EnquiryQuery = {}) =>
+  searchList<EnquiryPage>("/api/admin/enquiries", {
+    search: query.search || undefined,
+    status: query.status || undefined,
+    sort: query.sort,
+    descending: query.descending,
+    limit: query.limit ?? 50,
+    offset: query.offset ?? 0,
+  });
 
 export interface MemberRow {
   id: string;
@@ -217,6 +243,18 @@ export interface MemberDetail extends MemberRow {
   id_number: string | null;
   date_of_birth: string | null;
   source: string;
+  /** Compliance answers from enrolment. Null for dependants and the imported book. */
+  country_of_birth: string | null;
+  citizenship: string | null;
+  passport_number: string | null;
+  employment_status: string | null;
+  employer_name: string | null;
+  industry: string | null;
+  occupation: string | null;
+  job_role: string | null;
+  source_of_funds: string | null;
+  source_of_funds_other: string | null;
+  salary_day: number | null;
   phones: { number: string; phone_type: string; is_primary: boolean }[];
   policies: MemberPolicy[];
 }
@@ -238,13 +276,12 @@ export interface PolicyRow {
   lives_covered: number;
 }
 
-export const fetchMembers = (query: { search?: string; limit?: number; offset?: number } = {}) => {
-  const params = new URLSearchParams();
-  if (query.search) params.set("search", query.search);
-  params.set("limit", String(query.limit ?? 25));
-  params.set("offset", String(query.offset ?? 0));
-  return request<MemberPage>("/api/admin/members", params);
-};
+export const fetchMembers = (query: { search?: string; limit?: number; offset?: number } = {}) =>
+  searchList<MemberPage>("/api/admin/members", {
+    search: query.search || undefined,
+    limit: query.limit ?? 25,
+    offset: query.offset ?? 0,
+  });
 
 export const fetchMember = (id: string) =>
   request<MemberDetail>(`/api/admin/members/${encodeURIComponent(id)}`);
@@ -266,7 +303,19 @@ export interface EnquiryDetail extends EnquiryRow {
   payment_preference: string | null;
   number_of_dependants: number | null;
   beneficiary_name: string | null;
+  beneficiary_mobile: string | null;
   beneficiary_relationship: string | null;
+  marital_status: string | null;
+  cover_area: string | null;
+  coffin_choice: string | null;
+  age_band: string | null;
+  next_of_kin_name: string | null;
+  next_of_kin_mobile: string | null;
+  next_of_kin_relationship: string | null;
+  best_contact_time: string | null;
+  how_heard: string | null;
+  /** The family's own note on the website form. */
+  notes: string | null;
   /** Set once the enquiry has been enrolled as a member. */
   person_id: string | null;
 }
@@ -291,6 +340,29 @@ interface PersonIn {
   language_preference?: string;
 }
 
+export type Frequency = "monthly" | "quarterly" | "annually" | "once_off";
+
+/** The three branches a family can pay at, cash or card in person (0023). */
+export type PayBranch = "edendale" | "boshoff" | "langalibalele";
+export const PAY_BRANCHES: { value: PayBranch; label: string }[] = [
+  { value: "edendale", label: "Edendale Main Road (Head Office)" },
+  { value: "boshoff", label: "161 Boshoff Street" },
+  { value: "langalibalele", label: "171 Langalibalele Street" },
+];
+
+/** A beneficiary who is not one of the policy's lives: full details. */
+export interface BeneficiaryIn extends PersonIn {
+  email?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  suburb?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postal_code?: string | null;
+  relationship?: string | null;
+  share_percent?: number | null;
+}
+
 export interface EnrolmentIn extends PersonIn {
   enquiry_id?: string | null;
   initials?: string | null;
@@ -301,22 +373,60 @@ export interface EnrolmentIn extends PersonIn {
   city?: string | null;
   province?: string | null;
   postal_code?: string | null;
+  country_of_birth: string;
+  citizenship: string;
+  passport_number?: string | null;
+  employment_status: string;
+  employer_name?: string | null;
+  industry?: string | null;
+  occupation?: string | null;
+  job_role?: string | null;
+  source_of_funds: string;
+  source_of_funds_other?: string | null;
+  salary_day?: number | null;
   policy_number: string;
-  plan_code?: string | null;
+  plan_code: string;
+  /** Which price of the plan. The API reads the premium from the price list. */
+  plan_option?: string | null;
   entry_date?: string | null;
-  premium_cents: number;
-  cover_cents?: number | null;
+  // No premium and no cover: the API reads both from the price list.
   payment_method: PaymentMethod;
+  /** Required for cash or card in person. */
+  pay_branch_code?: PayBranch | null;
+  /** 1, 25 or 31 (the last day of the month). */
   debit_day?: number | null;
-  frequency: "monthly" | "once_off";
+  frequency: Frequency;
+  /** Null: choose on the next page, e.g. one of the dependants. */
+  beneficiary: BeneficiaryIn | null;
+  /** Kept on the policy. From an enquiry: what the website asked with no field of its own. */
+  notes?: string | null;
 }
 
 export interface EnrolmentOut {
   person_id: string;
   policy_id: string;
   policy_number: string;
+  premium_cents: number;
+  cover_cents: number | null;
   instalments_scheduled: number;
 }
+
+/** One line of the price list (migration 0018). */
+export interface PlanPrice {
+  plan_code: string;
+  option_code: string;
+  option_label: string;
+  min_age: number | null;
+  max_age: number | null;
+  /** Per month when billing is monthly; the whole amount when once-off. */
+  premium_cents: number;
+  /** The cover a policy on this line gets. Null until the owner gives it. */
+  cover_cents: number | null;
+  currency: string;
+  billing: "monthly" | "once_off";
+}
+
+export const fetchPlanPrices = () => request<PlanPrice[]>("/api/admin/plans/prices");
 
 export interface DependantIn extends PersonIn {
   member_type: DependantType;
@@ -331,6 +441,25 @@ export const enrolMember = (body: EnrolmentIn) =>
 export const addDependant = (policyId: string, body: DependantIn) =>
   mutate<{ person_id: string; policy_member_id: string; existing_person: boolean }>(
     `/api/admin/policies/${encodeURIComponent(policyId)}/members`, "POST", body);
+
+/** Make one of the policy's lives the beneficiary (personId), or add someone new. */
+export const addBeneficiary = (
+  policyId: string,
+  body: { person_id?: string; person?: BeneficiaryIn; relationship?: string | null },
+) =>
+  mutate<{ beneficiary_id: string; person_id: string; covered_life: boolean }>(
+    `/api/admin/policies/${encodeURIComponent(policyId)}/beneficiaries`, "POST", body);
+
+export const removeBeneficiary = async (policyId: string, beneficiaryId: string) => {
+  const token = await getAccessToken();
+  if (!token) throw new ApiError("Your session has ended. Please sign in again.", 401);
+  const response = await fetch(
+    `${API_BASE}/api/admin/policies/${encodeURIComponent(policyId)}/beneficiaries/` +
+      `${encodeURIComponent(beneficiaryId)}/remove`,
+    { method: "POST", headers: authHeaders(token) },
+  );
+  if (!response.ok) throw await readError(response, "Could not remove the beneficiary.");
+};
 
 /* ---------------------------------------------- Policy and premiums --- */
 
@@ -361,12 +490,25 @@ export interface PolicyLife {
   joined_at: string | null;
 }
 
+export interface PolicyBeneficiary {
+  beneficiary_id: string;
+  person_id: string;
+  surname: string;
+  first_names: string;
+  id_number: string | null;
+  relationship: string | null;
+  share_percent: number | null;
+  /** Also one of the lives the policy covers. */
+  covered_life: boolean;
+}
+
 export interface PolicyDetail {
   policy_id: string;
   policy_number: string;
   status_code: string;
   status_label: string;
   plan_code: string | null;
+  plan_option: string | null;
   branch_code: string | null;
   entry_date: string | null;
   premium_cents: number | null;
@@ -375,8 +517,16 @@ export interface PolicyDetail {
   enquiry_id: string | null;
   enquiry_reference: string | null;
   dependants_expected: number | null;
+  notes: string | null;
   lives: PolicyLife[];
-  payment: { method: string; debit_day: number | null; frequency: string } | null;
+  beneficiaries: PolicyBeneficiary[];
+  payment: {
+    method: string;
+    debit_day: number | null;
+    frequency: string;
+    pay_branch_code: string | null;
+    pay_branch_label: string | null;
+  } | null;
   instalments: Instalment[];
 }
 
@@ -421,6 +571,8 @@ export interface StaffMember {
   id: string;
   email: string;
   full_name: string | null;
+  /** Their own cell number, E.164 (+27...), or null when none is on file. */
+  mobile: string | null;
   role: StaffRole;
   is_active: boolean;
   has_signed_in: boolean;
@@ -438,8 +590,13 @@ export interface StaffAdded extends StaffMember {
   invite_sent: boolean;
 }
 
-export const inviteStaff = (body: { email: string; full_name?: string; role: StaffRole }) =>
-  mutate<StaffAdded>("/api/admin/staff", "POST", body);
+export const inviteStaff = (
+  body: { email: string; full_name?: string; mobile?: string; role: StaffRole },
+) => mutate<StaffAdded>("/api/admin/staff", "POST", body);
+
+/** Set someone's cell number. Null clears it. Owner only. */
+export const setStaffMobile = (id: string, mobile: string | null) =>
+  mutate<StaffMember>(`/api/admin/staff/${id}/mobile`, "PATCH", { mobile });
 
 export const changeStaffRole = (id: string, role: StaffRole) =>
   mutate<StaffMember>(`/api/admin/staff/${id}/role`, "PATCH", { role });

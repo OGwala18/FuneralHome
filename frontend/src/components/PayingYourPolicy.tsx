@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { useLanguage } from "@/lib/i18n";
-import { BANK_DETAILS, PROOF_OF_PAYMENT_WHATSAPP } from "@/lib/banking";
-import { CONTACT_EMAIL, CONTACT_EMAIL_LINK } from "@/lib/contact";
+import { BANK_DETAILS } from "@/lib/banking";
+import { CONTACT_EMAIL, CONTACT_EMAIL_LINK, WHATSAPP_LINE, WHATSAPP_URL } from "@/lib/contact";
 import { Landmark, ShieldAlert } from "lucide-react";
 
 /**
@@ -49,9 +49,9 @@ export function PayingYourPolicy({ className = "" }: { className?: string }) {
         <ol className="mt-5 list-decimal space-y-2 pl-5">
           <li>
             {en ? "Send your proof of payment on WhatsApp " : "Thumela ubufakazi bokukhokha ku-WhatsApp "}
-            <a href={PROOF_OF_PAYMENT_WHATSAPP.link} target="_blank" rel="noopener noreferrer"
+            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
                className="font-semibold text-primary hover:underline">
-              {PROOF_OF_PAYMENT_WHATSAPP.display}
+              {WHATSAPP_LINE.display}
             </a>
             {en ? " or to " : " noma ku-"}
             <a href={CONTACT_EMAIL_LINK} className="font-semibold text-primary hover:underline">

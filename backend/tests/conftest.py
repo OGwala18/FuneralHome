@@ -232,6 +232,30 @@ def clock(monkeypatch):
 
 
 @pytest.fixture
+def smtp_sink(monkeypatch):
+    """A real SMTP conversation, login included, with tests/smtp_sink.py.
+
+    `mailbox` below proves what the API asked to send; this proves it gets
+    through smtplib to a server. sink.mode makes the server fail on purpose;
+    sink.settings is what the email module now reads, for tests that change it.
+    """
+    from smtp_sink import SmtpSink
+
+    sink = SmtpSink().start()
+    sink.settings = dataclasses.replace(
+        _real_get_settings(),
+        smtp_host=sink.host, smtp_port=sink.port,
+        smtp_username=sink.username, smtp_password=sink.password,
+        smtp_timeout=2, mail_from="website@induduzo.test", mail_to="office@induduzo.test",
+    )
+    monkeypatch.setattr(_email, "get_settings", lambda: sink.settings)
+    # Plain text to 127.0.0.1 only; the opt-out config.py keeps for mail catchers.
+    monkeypatch.setenv("SMTP_STARTTLS", "0")
+    yield sink
+    sink.stop()
+
+
+@pytest.fixture
 def mailbox(monkeypatch):
     """Every email the API sends lands in this list instead of an SMTP server."""
     sent: list = []

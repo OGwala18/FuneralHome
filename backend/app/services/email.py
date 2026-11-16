@@ -18,6 +18,8 @@ from __future__ import annotations
 import html
 import logging
 import smtplib
+import socket
+import ssl
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
@@ -30,8 +32,64 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class EmailResult:
+    """`error` is a code from app/errors.py (email_auth_required, ...), never
+    the server's text: a refused recipient's text quotes the address, and an
+    applicant's address must not reach a log or an event (rule 9).
+    `smtp_status` is the server's numeric reply, when it gave one."""
+
     sent: bool
     error: str | None = None
+    smtp_status: int | None = None
+
+
+def classify_failure(exc: BaseException) -> tuple[str, int | None]:
+    """What went wrong, as (catalog code, SMTP status). Safe to log and store."""
+    if isinstance(exc, smtplib.SMTPRecipientsRefused):
+        replies = list(exc.recipients.values())
+        status = replies[0][0] if replies else None
+        text = b" ".join(reply[1] for reply in replies if isinstance(reply[1], bytes))
+        if _mentions_auth(text):
+            return "email_auth_required", status
+        return "email_recipient_refused", status
+    if isinstance(exc, smtplib.SMTPAuthenticationError):
+        return "email_auth_failed", exc.smtp_code
+    if isinstance(exc, smtplib.SMTPConnectError):
+        # The server answered the connection with something other than 220.
+        return "email_connect_failed", exc.smtp_code
+    if isinstance(exc, smtplib.SMTPSenderRefused):
+        if _mentions_auth(exc.smtp_error):
+            return "email_auth_required", exc.smtp_code
+        return "email_sender_refused", exc.smtp_code
+    if isinstance(exc, smtplib.SMTPResponseException):
+        if exc.smtp_code == 530 or _mentions_auth(exc.smtp_error):
+            return "email_auth_required", exc.smtp_code
+        return "email_rejected", exc.smtp_code
+    if isinstance(exc, smtplib.SMTPNotSupportedError):
+        # Asked for STARTTLS or a login the server does not offer.
+        return "email_tls_failed", None
+    if isinstance(exc, ssl.SSLError):
+        return "email_tls_failed", None
+    if isinstance(exc, (TimeoutError, socket.timeout)) or isinstance(
+        exc.__context__, (TimeoutError, socket.timeout)
+    ):
+        # smtplib re-raises a read timeout as SMTPServerDisconnected; the
+        # timeout is still underneath it.
+        return "email_timeout", None
+    if isinstance(exc, smtplib.SMTPServerDisconnected):
+        return "email_connect_failed", None
+    if isinstance(exc, smtplib.SMTPException):
+        # Every smtplib error is an OSError, so this must come before the next.
+        return "email_failed", None
+    if isinstance(exc, OSError):
+        # Refused, unreachable, or the host name does not resolve.
+        return "email_connect_failed", None
+    return "email_failed", None
+
+
+def _mentions_auth(text: bytes | str | None) -> bool:
+    if isinstance(text, bytes):
+        text = text.decode("utf-8", "replace")
+    return "auth" in (text or "").lower()
 
 
 # Field label -> key in the enquiry dict. Ordered for how a human reads it.
@@ -160,16 +218,19 @@ def _send(message: EmailMessage) -> EmailResult:
                 server.login(settings.smtp_username, settings.smtp_password)
             server.send_message(message)
 
-        logger.info("Admin email sent for %s", message["X-Induduzo-Reference"])
+        logger.info("Email sent for %s", message["X-Induduzo-Reference"])
         return EmailResult(sent=True)
 
     except Exception as exc:  # noqa: BLE001 - a mail failure must not fail the request
-        # Deliberately logging neither the body nor the subject: the body is full
-        # of personal data and the subject carries the applicant's name.
+        # Deliberately logging neither the body, the subject nor the server's
+        # text: the body is full of personal data, the subject carries the
+        # applicant's name, and a refusal quotes the recipient's address.
+        code, smtp_status = classify_failure(exc)
         logger.warning(
-            "Admin email failed for %s: %s", message["X-Induduzo-Reference"], exc
+            "Email failed for %s: %s (%s, SMTP %s)", message["X-Induduzo-Reference"],
+            code, type(exc).__name__, smtp_status or "-",
         )
-        return EmailResult(sent=False, error=str(exc)[:200])
+        return EmailResult(sent=False, error=code, smtp_status=smtp_status)
 
 
 def send_new_lead(enquiry: dict) -> EmailResult:
@@ -272,6 +333,105 @@ def send_whatsapp_escalation(escalation: dict, name: str) -> EmailResult:
             urgent=urgent,
         )
     )
+
+
+# --- The applicant's own confirmation -------------------------------------------------
+
+def send_application_received(*, to_email: str, first_name: str, reference: str) -> EmailResult:
+    """Tell the person who applied on the website that we have it.
+
+    The same promise as the WhatsApp confirmation, by email, when they gave an
+    address. A notification: never raises. Goes to the applicant, not the
+    office; _send logs only the reference.
+    """
+    settings = get_settings()
+    name = (first_name or "").split(" ")[0] or "there"
+    message = EmailMessage()
+    message["Subject"] = f"We received your application ({reference})"
+    message["From"] = formataddr(("Induduzo Funeral Home", settings.mail_from))
+    message["To"] = to_email
+    message["Date"] = formatdate(localtime=True)
+    message["Message-ID"] = make_msgid(domain="induduzo.co.za")
+    message["X-Induduzo-Reference"] = reference
+    message.set_content(
+        f"Sawubona {name},\n\n"
+        "Thank you for applying for funeral cover with Induduzo Funeral Home.\n\n"
+        f"Your reference is {reference}.\n\n"
+        "What happens next:\n"
+        "1. A family liaison calls you within one working day to confirm your details.\n"
+        "2. Once you're added as a member, you'll get your policy number.\n"
+        "3. Your 3-month waiting period starts from your first payment.\n\n"
+        "We will never ask for your bank card details by phone, SMS, WhatsApp or email.\n\n"
+        "Induduzo Funeral Home - Siyazazi Izingxaki Zakho\n"
+        "WhatsApp 073 731 0521 | 082 954 9241 | info@induduzo.co.za\n"
+    )
+    message.add_alternative(
+        '<html><body style="font-family:Segoe UI,Arial,sans-serif;color:#171C21">'
+        f"<p>Sawubona {html.escape(name)},</p>"
+        "<p>Thank you for applying for funeral cover with Induduzo Funeral Home.</p>"
+        f'<p>Your reference is <strong>{html.escape(reference)}</strong>.</p>'
+        "<p><strong>What happens next</strong></p><ol>"
+        "<li>A family liaison calls you within one working day to confirm your details.</li>"
+        "<li>Once you're added as a member, you'll get your policy number.</li>"
+        "<li>Your 3-month waiting period starts from your first payment.</li></ol>"
+        '<p style="color:#526170">We will never ask for your bank card details by phone, '
+        "SMS, WhatsApp or email.</p>"
+        '<p style="color:#526170;font-size:12px">Induduzo Funeral Home &middot; '
+        "Siyazazi Izingxaki Zakho &middot; WhatsApp 073 731 0521</p></body></html>",
+        subtype="html",
+    )
+    return _send(message)
+
+
+# --- A new member's welcome --------------------------------------------------------
+
+def send_member_welcome(*, to_email: str, first_name: str, policy_number: str,
+                        review_url: str | None) -> EmailResult:
+    """Welcome a newly enrolled member by email. A notification: never raises.
+
+    Goes to the member, not the office. The policy number is the reference
+    _send logs; the address and name never reach a log.
+    """
+    settings = get_settings()
+    name = (first_name or "").split(" ")[0] or "there"
+    message = EmailMessage()
+    message["Subject"] = "Welcome to the Induduzo family"
+    message["From"] = formataddr(("Induduzo Funeral Home", settings.mail_from))
+    message["To"] = to_email
+    message["Date"] = formatdate(localtime=True)
+    message["Message-ID"] = make_msgid(domain="induduzo.co.za")
+    message["X-Induduzo-Reference"] = policy_number
+
+    review_plain = (f"\nIf you have a moment, we'd be grateful for a Google review:\n"
+                    f"{review_url}\n") if review_url else ""
+    message.set_content(
+        f"Hello {name},\n\n"
+        "You've been successfully added to the Induduzo family, and it's great to have you.\n\n"
+        f"Your policy number is {policy_number}. Please use it as the reference whenever "
+        "you pay, and keep it somewhere safe.\n\n"
+        "Your cover starts once your first premium is received, and a 3-month waiting "
+        "period applies to natural causes.\n"
+        f"{review_plain}\n"
+        "Induduzo Funeral Home - Siyazazi Izingxaki Zakho\n"
+        "WhatsApp 073 731 0521 | 082 954 9241 | info@induduzo.co.za\n"
+    )
+    review_html = (f'<p><a href="{html.escape(review_url)}">Leave us a Google review</a>'
+                   "</p>") if review_url else ""
+    message.add_alternative(
+        '<html><body style="font-family:Segoe UI,Arial,sans-serif;color:#171C21">'
+        f"<p>Hello {html.escape(name)},</p>"
+        "<p><strong>You've been successfully added to the Induduzo family</strong>, and "
+        "it's great to have you.</p>"
+        f"<p>Your policy number is <strong>{html.escape(policy_number)}</strong>. Please use "
+        "it as the reference whenever you pay, and keep it somewhere safe.</p>"
+        "<p style=\"color:#526170\">Your cover starts once your first premium is received, "
+        "and a 3-month waiting period applies to natural causes.</p>"
+        f"{review_html}"
+        '<p style="color:#526170;font-size:12px">Induduzo Funeral Home &middot; '
+        "Siyazazi Izingxaki Zakho &middot; WhatsApp 073 731 0521</p></body></html>",
+        subtype="html",
+    )
+    return _send(message)
 
 
 # --- Staff sign-in code (2FA Bit 5; plan §9 "Emailed code") ------------------------

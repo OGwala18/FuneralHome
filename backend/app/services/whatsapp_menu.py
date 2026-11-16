@@ -37,6 +37,14 @@ GREETINGS = frozenset({
 })
 MENU_WORDS = frozenset({"menu", "main menu", "0", "back to menu", "home"})
 
+# "I want to pay my policy", "how do I pay", "banking details please",
+# "ngifuna ukukhokha". Goes straight to our bank details, from anywhere in the
+# menu, so a family who just wants to pay never has to find it.
+PAY_INTENT = re.compile(
+    r"\b(pay|paying|khokha|khokhe|khokhela|ukukhokha)\b"
+    r"|\bbank(ing)? details\b|\baccount (number|details)\b"
+)
+
 _KEYCAP = re.compile("([0-9])️?⃣")
 
 
@@ -169,6 +177,10 @@ def respond(*, state: str, data: dict, misses: int, text: str | None,
     """
     words = normalise(text)
     number = choice(text or "")
+
+    if (number is None and state not in (RATING_COMMENT, LOW_RATING)
+            and PAY_INTENT.search(words)):
+        return _show("pay.bank")
 
     stale = idle_since is None or now - idle_since > RESTART_AFTER
     if state in (IDLE, ESCALATED) or stale or (state not in NODES and state not in

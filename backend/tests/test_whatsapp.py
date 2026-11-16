@@ -216,7 +216,7 @@ def test_the_api_refuses_to_start_with_an_unknown_mode():
     )
 
     assert result.returncode != 0
-    assert "WHATSAPP_OUTBOUND must be 'off', 'allowlist' or 'on'." in result.stderr
+    assert "WHATSAPP_OUTBOUND must be 'off', 'allowlist', 'known' or 'on'." in result.stderr
 
 
 @pytest.mark.parametrize("number", ["0820000001", "27820000001", "+0820000001", "+2782000000123456"])

@@ -210,7 +210,7 @@ def test_asking_for_a_person_escalates_with_the_topic(pick, channel):
     chat = Chat()
     chat.send("hi")
     chat.send("3")   # Paying my premium
-    chat.send("5")   # None of these
+    chat.send("6")   # None of these (5 is "Pay now")
     turn = chat.send(pick)
 
     assert turn.escalate == menu.Escalate(channel=channel, urgent=False, topic="pay")

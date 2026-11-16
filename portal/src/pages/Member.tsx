@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { ApiError, fetchMember, type MemberDetail } from "@/lib/api";
+import {
+  COUNTRIES, EMPLOYMENT_STATUSES, INDUSTRIES, JOB_ROLES, SOURCES_OF_FUNDS, dayLabel, labelFor,
+} from "@/lib/compliance";
 import { navigate } from "@/lib/router";
 import { Badge, Button, Empty, Fact, Notice, Skeleton } from "@/components/ui";
 
@@ -62,6 +65,25 @@ export default function Member({ id }: { id: string }) {
               : "Not recorded"}</Fact>
           </div>
         </section>
+        {(member.citizenship || member.employment_status) && (
+          <section className="card">
+            <div className="card-head"><h2 className="t-section">Citizenship and income</h2></div>
+            <div className="fact-grid">
+              <Fact label="Country of birth">{labelFor(COUNTRIES, member.country_of_birth) ?? "Not recorded"}</Fact>
+              <Fact label="Citizenship">{labelFor(COUNTRIES, member.citizenship) ?? "Not recorded"}</Fact>
+              {member.passport_number && <Fact label="Passport number">{member.passport_number}</Fact>}
+              <Fact label="Employment">{labelFor(EMPLOYMENT_STATUSES, member.employment_status) ?? "Not recorded"}</Fact>
+              {member.employer_name && <Fact label="Employer">{member.employer_name}</Fact>}
+              {member.industry && <Fact label="Industry">{labelFor(INDUSTRIES, member.industry)}</Fact>}
+              {member.occupation && <Fact label="Profession">{member.occupation}</Fact>}
+              {member.job_role && <Fact label="Role">{labelFor(JOB_ROLES, member.job_role)}</Fact>}
+              <Fact label="Source of funds">{member.source_of_funds === "other"
+                ? member.source_of_funds_other
+                : labelFor(SOURCES_OF_FUNDS, member.source_of_funds) ?? "Not recorded"}</Fact>
+              <Fact label="Salary day">{member.salary_day ? dayLabel(member.salary_day) : "Not given"}</Fact>
+            </div>
+          </section>
+        )}
         <section className="card">
           <div className="card-head"><h2 className="t-section">Policies</h2></div>
           {member.policies.length === 0 ? <p className="muted">No linked policy.</p>

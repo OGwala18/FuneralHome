@@ -24,6 +24,7 @@ from jwt import PyJWKClient
 
 from .config import get_settings
 from .db import connection
+from .errors import ApiError
 from .services import two_step
 from .services.staff import Role, resolve_or_bootstrap, role_at_least
 
@@ -88,17 +89,12 @@ class StaffUser:
         return "StaffUser(%s, %s)" % (self.email, self.role)
 
 
-class StaffGateError(HTTPException):
+class StaffGateError(ApiError):
     """An HTTPException that also carries a machine `code` (plan §8).
 
     `detail` stays a sentence for the screen; `code` is what the portal
-    branches on. main.py renders both.
+    branches on. main.py renders both. Every code is listed in app/errors.py.
     """
-
-    def __init__(self, status_code: int, code: str, detail: str,
-                 headers: dict[str, str] | None = None) -> None:
-        super().__init__(status_code=status_code, detail=detail, headers=headers)
-        self.code = code
 
 
 # The header a trusted computer sends (plan §5). Not a cookie: on Railway the
@@ -152,6 +148,15 @@ def require_staff_identity(request: Request) -> StaffUser:
         )
     except HTTPException:
         raise
+    except jwt.PyJWKClientConnectionError:
+        # Supabase's public keys could not be fetched. Not the person's fault:
+        # "sign in again" would send every member of staff round a loop.
+        logger.error("Staff sign-in: Supabase's signing keys could not be fetched")
+        raise ApiError(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "upstream_failed",
+            "We cannot reach the sign-in service just now. Please try again in a minute.",
+            headers={"Retry-After": "30"},
+        )
     except jwt.ExpiredSignatureError:
         raise _unauthorised("Your session has expired. Please sign in again.")
     except jwt.ImmatureSignatureError:

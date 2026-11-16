@@ -4,9 +4,8 @@
     python -m backend.app.jobs.schedule_instalments                # in the API image
 
 Safe to run as often as you like: an instalment that already exists for a
-policy and date is skipped, so a second run the same day adds nothing. Nothing
-wires this to a clock yet (CLAUDE.md, "Scheduler"); once a month is plenty,
-and the Railway cron that eventually runs it needs no other change.
+policy and date is skipped, so a second run the same day adds nothing. The
+Railway `jobs` cron runs it every morning through app/jobs/daily.py.
 
 Prints counts only. No names, numbers or amounts reach the output.
 """

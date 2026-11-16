@@ -51,6 +51,19 @@ def checksum(text: str) -> str:
     return hashlib.sha256(text.replace("\r\n", "\n").encode("utf-8")).hexdigest()[:16]
 
 
+# Comment-only edits made to an applied migration for a reason that outranks
+# immutability, as {filename: {old checksum: new checksum}}. The SQL each one
+# runs is unchanged, so a database holding the old checksum is simply told the
+# new one, once, and nothing is re-run. Any other change is still drift.
+#
+# 0009: the worked example in a comment was a real member's ID number, in a
+# public repository (POPIA). Replaced with the well-known fake 8001015009087
+# throughout the git history on 13 Nov 2026.
+ACCEPTED_REWRITES = {
+    "0009_people_and_contacts.sql": {"2ef86128335fadd3": "b82d50a144af13e0"},
+}
+
+
 def discover() -> list[Path]:
     if not MIGRATIONS_DIR.is_dir():
         sys.exit("No migrations directory at %s" % MIGRATIONS_DIR)
@@ -89,6 +102,22 @@ def main() -> int:
         with conn.cursor() as cur:
             cur.execute("select filename, checksum from schema_migrations")
             applied = dict(cur.fetchall())
+
+        # Adopt the accepted comment-only rewrites before checking for drift,
+        # but only when the file on disk really is the rewritten version.
+        for f in files:
+            stored = applied.get(f.name)
+            renamed = ACCEPTED_REWRITES.get(f.name, {}).get(stored or "")
+            if renamed and checksum(f.read_text(encoding="utf-8")) == renamed:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "update schema_migrations set checksum = %s "
+                        "where filename = %s and checksum = %s",
+                        (renamed, f.name, stored),
+                    )
+                conn.commit()
+                applied[f.name] = renamed
+                print("%s: recorded its comment-only rewrite (nothing re-run)" % f.name)
 
         # A migration that changed after being applied means local and
         # production no longer describe the same schema. Fail loudly.

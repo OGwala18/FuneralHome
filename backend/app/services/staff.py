@@ -115,7 +115,7 @@ def resolve_or_bootstrap(conn: Any, email: str, supabase_user_id: str) -> dict |
 def list_staff(conn: Any) -> list[dict]:
     return conn.execute(
         """
-        select id, email, full_name, role::text as role, is_active,
+        select id, email, full_name, mobile, role::text as role, is_active,
                supabase_user_id is not null as has_signed_in,
                invited_by, last_seen_at, created_at
           from staff_users
