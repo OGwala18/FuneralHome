@@ -52,12 +52,13 @@ All ten in `ARCHITECTURE.md` §7 apply. The ones most often broken in practice:
 
 ## Things that will bite you
 
-**Migration numbering.** `0001`–`0028` exist. `docs/feature-1-review-loop.md`
+**Migration numbering.** `0001`–`0029` exist. `docs/feature-1-review-loop.md`
 says its new tables go in "migration 0008". That number is taken, and so is
-every number up to 0028 (0026 closed Supabase's public `anon` key, 0027
+every number up to 0029 (0026 closed Supabase's public `anon` key, 0027
 repaired the API's access to business_phone_numbers, 0028 gave staff accounts
-a mobile number, 13 Nov 2026). It must be
-**0029**, or the next free number when it is built. A new table
+a mobile number, 13 Nov 2026; 0029 holds forgotten-password temporary
+passwords, 16 Nov 2026). It must be
+**0030**, or the next free number when it is built. A new table
 needs its `induduzo_api` grant written out; since 0026 nothing is granted to
 `anon` or `authenticated` by default.
 
@@ -122,6 +123,13 @@ ID numbers: never copy them into the repo. The schema is in `db/migrations`.
 **The daily backup is also the keep-alive.** It touches the database every day,
 so the free project never pauses. If the `jobs` cron stops, someone must run
 `python db/keepalive.py` weekly, or staff cannot sign in.
+
+**"Forgot your password?" needs the Supabase service key.** The portal's
+sign-in screen emails a one-use temporary password (`/api/auth/password`), and
+the API sets the new password through Supabase's admin API with
+`SUPABASE_SERVICE_ROLE_KEY` (an `sb_secret_...` key goes on `apikey` only).
+Without that key, `TWO_STEP_CODE_PEPPER` or SMTP, `/health` shows
+`password_reset: not_configured` and the screen says to ask the owner.
 
 **Payment reminders burn on failure.** Each is claimed before it is sent and
 never retried, so the job refuses, claiming nothing, until Twilio, both payment

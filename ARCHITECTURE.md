@@ -144,6 +144,7 @@ backend/
     │   ├── members.py         Staff: the member book, enrolment, dependants
     │   ├── payments.py        Staff: premiums overdue / due, record a payment
     │   ├── analytics.py       Owner: the live site's Plausible figures
+    │   ├── password_reset.py  Public: "Forgot your password?" emails a one-use temporary password
     │   └── whatsapp.py        Twilio's signed webhooks, and the staff WhatsApp screen
     ├── services/
     │   ├── email.py           Office notification (both stages, WhatsApp escalations)
@@ -152,6 +153,8 @@ backend/
     │   ├── whatsapp_menu.py   The menu engine. Pure: state + message in, reply out
     │   ├── whatsapp_line.py   Stores messages, runs the menu, opens escalations
     │   ├── plausible.py       Reads the live site's counts from Plausible's Stats API
+    │   ├── password_reset.py  Temporary passwords: make, hash (never store), check, use once
+    │   ├── supabase_admin.py  The only use of the service key: invites, setting a forgotten password
     │   ├── enrolment.py       Enquiry -> person, policy, lives. One transaction.
     │   └── instalments.py     The premium schedule: generate, pay, waive
     └── jobs/
@@ -169,6 +172,8 @@ backend/
 | `PATCH` | `/api/enquiries/{id}/application` | **Stage 2.** Promotes to full application |
 | `POST` | `/api/whatsapp/inbound` | Twilio: a family's WhatsApp message. Signature-checked; stored, answered by the menu |
 | `POST` | `/api/whatsapp/status` | Twilio: sent, delivered, read or failed. Signature-checked |
+| `POST` | `/api/auth/password/forgot` | Staff forgot their password: emails a temporary one (30 min, one use) if the address is active staff. Always the same **202** |
+| `POST` | `/api/auth/password/reset` | The temporary password as the old one, plus a new one: sets it in Supabase. Needs `SUPABASE_SERVICE_ROLE_KEY` |
 
 Staff routes all sit under `/api/admin`, behind `require_staff`; every write
 also needs `require_role("admin")`. The ones that touch the book of business:
@@ -369,7 +374,8 @@ db/
 │   ├── 0025_close_data_api_again.sql
 │   ├── 0026_close_the_public_key.sql   (anon reaches nothing, now or on later tables)
 │   ├── 0027_business_phones_reach_the_api.sql
-│   └── 0028_staff_mobile_numbers.sql   (optional cell number on each staff account)
+│   ├── 0028_staff_mobile_numbers.sql   (optional cell number on each staff account)
+│   └── 0029_staff_password_resets.sql  (forgotten password: one-use emailed temporary password)
 ├── seed/                      Import tooling. Scripts tracked, their data is NOT.
 │   ├── import_policy_template.py       spreadsheet  → SQL
 │   ├── export_phone_capture_sheet.sql  database     → blank capture sheet

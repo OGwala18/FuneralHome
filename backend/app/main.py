@@ -31,7 +31,16 @@ from .request_context import (  # noqa: E402
     install_logging_filters,
     security_headers,
 )
-from .routers import admin, analytics, enquiries, members, payments, two_step, whatsapp  # noqa: E402
+from .routers import (  # noqa: E402
+    admin,
+    analytics,
+    enquiries,
+    members,
+    password_reset,
+    payments,
+    two_step,
+    whatsapp,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -108,6 +117,7 @@ app.include_router(whatsapp.router)
 app.include_router(whatsapp.admin_router)
 app.include_router(analytics.router)
 app.include_router(two_step.router)
+app.include_router(password_reset.router)
 
 
 def _request_id(request: Request) -> str:
@@ -244,6 +254,10 @@ def health(response: Response) -> dict:
         "whatsapp_webhooks": "configured" if settings.public_api_url else "not_configured",
         "email": "configured" if settings.email_enabled else "not_configured",
         "staff_portal": "configured" if settings.staff_portal_enabled else "not_configured",
+        # "Forgot your password?": needs the Supabase service key, the pepper and
+        # SMTP. Names of what is missing are in the log, never here.
+        "password_reset": ("configured" if settings.password_reset_configured
+                           else "not_configured"),
         "analytics": "configured" if settings.analytics_enabled else "not_configured",
         "error_tracking": "enabled" if _sentry_enabled else "disabled",
         "release": settings.release,
