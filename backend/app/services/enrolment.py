@@ -305,13 +305,14 @@ def enrol(conn: Any, data: Any, *, staff_email: str, today: date | None = None) 
             """
             insert into policies (policy_number, policy_number_raw, status_code, plan_code,
                                   plan_option, branch_code, entry_date, premium_cents,
-                                  cover_cents, enquiry_id, source)
-            values (%s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, 'portal')
+                                  cover_cents, enquiry_id, notes, source)
+            values (%s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, %s, 'portal')
             returning id
             """,
             (data.policy_number, data.policy_number, data.plan_code, plan_option,
              data.branch_code, entry_date, premium_cents, cover_cents,
-             data.enquiry_id if enquiry else None),
+             data.enquiry_id if enquiry else None,
+             (getattr(data, "notes", None) or "").strip() or None),
         ).fetchone()["id"])
 
         conn.execute(

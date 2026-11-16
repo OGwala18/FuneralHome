@@ -21,7 +21,9 @@ import threading
 import time
 from collections import defaultdict, deque
 
-from fastapi import HTTPException, Request, status
+from fastapi import Request, status
+
+from .errors import ApiError
 
 
 class SlidingWindowLimiter:
@@ -92,9 +94,10 @@ application_limiter = SlidingWindowLimiter(limit=20, window_seconds=3600)
 def enforce(limiter: SlidingWindowLimiter, request: Request) -> None:
     allowed, retry_after = limiter.check(client_key(request))
     if not allowed:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
+        raise ApiError(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "rate_limited",
+            (
                 "We have received several enquiries from this connection. "
                 "Please phone or WhatsApp us and we will capture your details for you."
             ),

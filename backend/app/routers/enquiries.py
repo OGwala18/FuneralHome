@@ -5,19 +5,21 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Request, Response, status
 from psycopg import errors as pg_errors
 
 from ..db import connection, log_event
+from ..errors import ApiError
 from ..idempotency import fingerprint, idempotency_key, mark_replayed, refuse_mismatch
 from ..ratelimit import application_limiter, enforce, lead_limiter
 from ..schemas import ApplicationIn, EnquiryOut, LeadIn
 from ..services.email import (
+    EmailResult,
     send_application_received,
     send_completed_application,
     send_new_lead,
 )
-from ..services.whatsapp import _plain_body, send_registration_confirmation
+from ..services.whatsapp import WhatsAppResult, _plain_body, send_registration_confirmation
 from ..services.whatsapp_line import record_confirmation
 
 logger = logging.getLogger(__name__)
@@ -26,6 +28,11 @@ router = APIRouter(prefix="/api/enquiries", tags=["enquiries"])
 # The whole row: the API response uses a narrow subset (EnquiryOut), but the
 # admin notification email needs every captured field.
 _RETURNING = "*"
+
+
+def _not_found() -> ApiError:
+    return ApiError(status.HTTP_404_NOT_FOUND, "enquiry_not_found",
+                    "We could not find your registration. Please start again.")
 
 
 def _to_out(row: dict) -> EnquiryOut:
@@ -133,8 +140,24 @@ def _replay_lead(row: dict, data_fingerprint: str, response: Response) -> Enquir
 
 def _notify_new_lead(row: dict) -> None:
     """Email the office about a stage-1 enquiry, and record the outcome."""
-    result = send_new_lead(row)
+    result = _attempt(send_new_lead, row)
     _record_email_outcome(row["id"], "lead_email", result)
+
+
+def _attempt(send, *args, **kwargs):
+    """Call a sender that promises never to raise, and hold it to that.
+
+    A sender that does raise (a bug building the message, say) would otherwise
+    end the background task with nothing recorded: the lead saved, the office
+    never told, and no trace of why. It becomes a coded failure instead.
+    """
+    try:
+        return send(*args, **kwargs)
+    except Exception as exc:  # noqa: BLE001 - a notification failure never costs a lead
+        logger.error("Notification sender raised %s", type(exc).__name__)
+        if send is send_registration_confirmation:
+            return WhatsAppResult(sent=False, error="whatsapp_failed")
+        return EmailResult(sent=False, error="email_failed")
 
 
 def _record_email_outcome(enquiry_id: str, kind: str, result) -> None:
@@ -144,7 +167,8 @@ def _record_email_outcome(enquiry_id: str, kind: str, result) -> None:
                 conn,
                 str(enquiry_id),
                 "%s_sent" % kind if result.sent else "%s_failed" % kind,
-                {"error": result.error},
+                # error: a code from app/errors.py, never the server's text.
+                {"error": result.error, "smtp_status": result.smtp_status},
                 actor="system",
             )
     except Exception:  # noqa: BLE001
@@ -169,10 +193,7 @@ def submit_application(
     try:
         uuid.UUID(enquiry_id)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="We could not find your registration. Please start again.",
-        ) from exc
+        raise _not_found() from exc
 
     data = payload.model_dump()
     data["application_fingerprint"] = fingerprint(data)
@@ -243,24 +264,17 @@ def submit_application(
             # The partial unique index on id_number caught a second application
             # for a person we already hold.
             logger.info("Duplicate ID number on %s", enquiry_id)
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "We already have an application with this ID number. "
-                    "Please phone us and we will find your record."
-                ),
+            raise ApiError(
+                status.HTTP_409_CONFLICT,
+                "duplicate_id_number",
+                "We already have an application with this ID number. "
+                "Please phone us and we will find your record.",
             ) from exc
         except pg_errors.InvalidTextRepresentation as exc:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="We could not find your registration. Please start again.",
-            ) from exc
+            raise _not_found() from exc
 
         if row is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="We could not find your registration. Please start again.",
-            )
+            raise _not_found()
 
         log_event(
             conn,
@@ -289,22 +303,21 @@ def submit_application(
 
 def _confirm_to_applicant(row: dict) -> None:
     """Email the applicant their reference, as the WhatsApp confirmation does."""
-    result = send_application_received(to_email=row["email"], first_name=row["first_name"],
-                                       reference=row["reference"])
+    result = _attempt(send_application_received, to_email=row["email"],
+                      first_name=row["first_name"], reference=row["reference"])
     _record_email_outcome(row["id"], "applicant_email", result)
 
 
 def _notify_completed_application(row: dict) -> None:
     """Email the office the full application. Separate from the stage-1 mail so
     the office sees both the early lead and the finished form."""
-    result = send_completed_application(row)
+    result = _attempt(send_completed_application, row)
     _record_email_outcome(row["id"], "application_email", result)
 
 
 def _send_confirmation(enquiry_id: str, mobile: str, first_name: str, reference: str) -> None:
-    result = send_registration_confirmation(
-        to_mobile=mobile, first_name=first_name, reference=reference
-    )
+    result = _attempt(send_registration_confirmation,
+                      to_mobile=mobile, first_name=first_name, reference=reference)
     try:
         with connection() as conn:
             if result.sent:

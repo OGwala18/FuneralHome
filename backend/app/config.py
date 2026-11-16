@@ -66,6 +66,12 @@ class Settings:
         )
     )
 
+    # The largest request body accepted, in bytes. The biggest real one, a
+    # stage-2 application with full notes, is under 10 KB; 256 KB leaves room
+    # for the staff screens while refusing a multi-megabyte body before it is
+    # read into memory (app/request_context.py).
+    max_request_bytes: int = int(os.getenv("MAX_REQUEST_BYTES", str(256 * 1024)))
+
     # Twilio WhatsApp. Absent in dev -> confirmations are logged, not sent, and
     # the registration still succeeds. A messaging outage must never cost a lead.
     twilio_account_sid: str | None = os.getenv("TWILIO_ACCOUNT_SID")

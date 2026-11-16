@@ -35,9 +35,20 @@ export const [PRIMARY_PHONE] = CONTACT_PHONES;
 export const CONTACT_PHONE_DISPLAY = PRIMARY_PHONE.display;
 export const CONTACT_PHONE_E164 = PRIMARY_PHONE.e164;
 export const CONTACT_PHONE_LINK = PRIMARY_PHONE.link;
-export const WHATSAPP_URL = PRIMARY_PHONE.whatsapp;
 
-export const CONTACT_EMAIL = "Info@induduzo.co.za";
+/** The business WhatsApp line (the menu, payments, proof of payment). */
+export const WHATSAPP_LINE = { display: "073 731 0521", e164: "+27737310521" };
+export const WHATSAPP_URL = "https://wa.me/27737310521";
+
+/** The 24-hour line, for a death at any hour. Not a phone() entry on purpose:
+ *  the WhatsApp menu's sync test reads only the office numbers above. */
+export const TWENTY_FOUR_HOUR_LINE = {
+  display: "069 706 0387",
+  e164: "+27697060387",
+  link: "tel:+27697060387",
+};
+
+export const CONTACT_EMAIL = "info@induduzo.co.za";
 export const CONTACT_EMAIL_LINK = `mailto:${CONTACT_EMAIL}`;
 
 /**
