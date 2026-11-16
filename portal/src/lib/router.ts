@@ -23,6 +23,10 @@ export type Route =
   | { name: "policies" }
   /** `addLives` opens the dependant form straight away, as it is after enrolment. */
   | { name: "policy"; id: string; addLives?: boolean }
+  /** Correct the policy's main member: the enrolment form, with what identifies the policy locked. */
+  | { name: "editMember"; id: string }
+  /** Move the policy to another plan, option or frequency. Same family, same number. */
+  | { name: "changePlan"; id: string }
   | { name: "payments" }
   | { name: "applications" }
   | { name: "growth" }
@@ -46,6 +50,8 @@ const parse = (pathname: string, search: string): Route => {
       }
       return parts[1] ? { name: "member", id: decodeURIComponent(parts[1]) } : { name: "members" };
     case "policies":
+      if (parts[1] && parts[2] === "edit") return { name: "editMember", id: decodeURIComponent(parts[1]) };
+      if (parts[1] && parts[2] === "plan") return { name: "changePlan", id: decodeURIComponent(parts[1]) };
       return parts[1]
         ? { name: "policy", id: decodeURIComponent(parts[1]), addLives: query.has("add") }
         : { name: "policies" };
@@ -82,6 +88,8 @@ export const hrefFor = (route: Route): string => {
     case "policies": return "/policies";
     case "policy":
       return `/policies/${encodeURIComponent(route.id)}${route.addLives ? "?add" : ""}`;
+    case "editMember": return `/policies/${encodeURIComponent(route.id)}/edit`;
+    case "changePlan": return `/policies/${encodeURIComponent(route.id)}/plan`;
     case "payments": return "/payments";
     case "applications": return "/applications";
     case "growth": return "/growth";

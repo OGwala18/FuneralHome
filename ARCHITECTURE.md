@@ -187,6 +187,9 @@ also needs `require_role("admin")`. The ones that touch the book of business:
 | `GET` | `/api/admin/policies`, `/policies/{id}` | Policies; one policy with its lives and schedule |
 | `GET` | `/api/admin/policies/next-number` | The next free AA number, as a suggestion |
 | `POST` | `/api/admin/policies/{id}/members` | Add a spouse, child, extended family member or beneficiary |
+| `GET`, `PATCH` | `/api/admin/policies/{id}/member` | **Correct the main member**: identity, contact, address, FICA answers, how they pay, notes. Not the policy number, plan, start date, frequency, premium or cover (a 422). A new payment day moves the unpaid premiums still to come |
+| `POST` | `/api/admin/policies/{id}/plan` | **Change plan**: another plan, option or frequency, priced from the price list at today's age. Same person, number, lives and payment history; unpaid premiums from today are replaced at the new amount |
+| `GET` | `/api/admin/policies/{id}/history` | What the policy and its main member's record used to say, from `member_book_history`. Any staff role |
 | `GET` | `/api/admin/instalments?view=overdue\|upcoming` | Premiums owed, from `instalments_outstanding` |
 | `POST` | `/api/admin/instalments/{id}/payment`, `/waive` | Record a premium paid (the first one activates the policy) or waived |
 | `GET` | `/api/admin/whatsapp/escalations`, `/escalations/{id}` | WhatsApp families who asked for a person, and one conversation |
@@ -232,6 +235,10 @@ portal/
         ├── Members.tsx        The member book. "New member" for walk-ins.
         ├── Member.tsx         One person and the policies they are on.
         ├── Enrol.tsx          Enrol a main member, pre-filled from an enquiry.
+        ├── EditMember.tsx     /policies/<id>/edit: the SAME form (components/MemberForm.tsx),
+        │                      policy number, member id, plan and start date greyed out;
+        │                      the change history below it (components/ChangeHistory.tsx).
+        ├── ChangePlan.tsx     /policies/<id>/plan: another plan without enrolling again.
         ├── Policies.tsx       Every policy.
         ├── Policy.tsx         Lives covered, add dependants, the premium schedule.
         ├── Payments.tsx       Overdue, and due in the next 7 days.
@@ -252,7 +259,7 @@ them and a control that silently does nothing is worse than no control:
 | Missing | Needs |
 |---|---|
 | Recording a call outcome | `POST /api/admin/enquiries/{id}/outcome` |
-| Editing an enquiry | An update route on the admin router |
+| Editing an enquiry | An update route on the admin router (members, by contrast, can be corrected: `EditMember.tsx`) |
 | Call history on a record | `enquiry_events` exposed through the admin API |
 | Office details, integrations | Nothing in the schema or API supports them |
 
@@ -375,7 +382,9 @@ db/
 │   ├── 0026_close_the_public_key.sql   (anon reaches nothing, now or on later tables)
 │   ├── 0027_business_phones_reach_the_api.sql
 │   ├── 0028_staff_mobile_numbers.sql   (optional cell number on each staff account)
-│   └── 0029_staff_password_resets.sql  (forgotten password: one-use emailed temporary password)
+│   ├── 0029_staff_password_resets.sql  (forgotten password: one-use emailed temporary password)
+│   ├── 0030_password_reset_passes_second_step.sql
+│   └── 0031_member_book_history.sql    (every change to the member book, with the old values)
 ├── seed/                      Import tooling. Scripts tracked, their data is NOT.
 │   ├── import_policy_template.py       spreadsheet  → SQL
 │   ├── export_phone_capture_sheet.sql  database     → blank capture sheet
@@ -463,6 +472,19 @@ between environments needs no id remapping: `ref_member_types`,
   conversations the office is emailed about or shown.** One open per
   conversation.
 - **`whatsapp_feedback`** — 1-5 ratings and the comments that came with them.
+
+*History (0031)* —
+
+- **`member_book_history`** — one row per insert, update or delete on people,
+  phones, addresses, policies, lives, beneficiaries and payment arrangements
+  (and changes to premiums): the columns that changed with their old and new
+  values, when, and who. Written **by trigger**, so nothing that writes the
+  book can skip it. The API names the staff member with
+  `db.staff_connection(email)`; anything else (an import, the cron) is
+  recorded under its database login. The trigger function is `SECURITY
+  DEFINER`, so `induduzo_api` may only **read** it: it cannot forge, edit or
+  delete a line. This is not a backup: it keeps what a value used to be, not
+  the database. A restore from `db/backup.py` is still unproven.
 
 `plan_enquiries.person_id` is the seam between the two halves: null until a
 lead has been matched to a person.

@@ -9,7 +9,7 @@ transaction. Each read and write is recorded in staff_events.
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -18,9 +18,9 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from ..auth import StaffUser, require_role, require_staff
-from ..db import connection
+from ..db import connection, staff_connection
 from ..schemas import _MOBILE_RE, LanguageCode, normalise_mobile, valid_sa_id
-from ..services import enrolment, welcome
+from ..services import enrolment, member_edit, welcome
 from ..services.staff import log_staff_event
 from .payments import Instalment, PaymentMethod
 
@@ -282,8 +282,11 @@ class BeneficiaryIn(_PersonIn):
         return value
 
 
-class EnrolmentIn(_PersonIn):
-    enquiry_id: UUID | None = None
+class _MainMemberIn(_PersonIn):
+    """Everything asked of a main member about themselves: identity, contact,
+    address and the compliance questions. Shared by enrolment and by correcting
+    a member afterwards, so both forms are held to exactly the same rules."""
+
     initials: str | None = Field(default=None, max_length=10)
     email: str | None = Field(default=None, max_length=255)
 
@@ -307,49 +310,6 @@ class EnrolmentIn(_PersonIn):
     source_of_funds_other: str | None = Field(default=None, max_length=150,
                                               validate_default=True)
     salary_day: int | None = Field(default=None, ge=1, le=31)
-
-    policy_number: str
-    plan_code: BookPlan
-    # Which price of the plan, e.g. 'single_casket' on Plan C. May be left out
-    # for a plan with only one. The premium itself is read from the price list.
-    plan_option: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{1,39}$")
-    # One branch is in the reference table today. More arrive with their codes.
-    branch_code: Literal["pmburg"] = "pmburg"
-    entry_date: date | None = None
-    # No premium and no cover here, on purpose: both are read from the price
-    # list for the plan, option and age (0020, 0021). Sending either is a 422.
-    # Free text kept on the policy: started from an enquiry, the portal fills it
-    # with what the website asked that has no field of its own (next of kin,
-    # marital status, coffin, the family's own note).
-    notes: str | None = Field(default=None, max_length=4000)
-
-    payment_method: PaymentMethod = "undecided"
-    # The branch, for cash or card in person. Required for those, refused
-    # otherwise. After payment_method, so its check can see it.
-    pay_branch_code: PayBranch | None = Field(default=None, validate_default=True)
-    frequency: Frequency = "monthly"
-    # The payment day (1st, 25th or 30th) for every method, not only debit
-    # orders. Required unless the plan is paid once-off. After `frequency`, so
-    # its check can see it.
-    debit_day: int | None = Field(default=None, validate_default=True)
-
-    # None: choose on the next page, e.g. one of the dependants.
-    beneficiary: BeneficiaryIn | None = None
-
-    @field_validator("pay_branch_code")
-    @classmethod
-    def _pay_branch(cls, value: str | None, info: ValidationInfo) -> str | None:
-        in_person = info.data.get("payment_method") in IN_PERSON_METHODS
-        if in_person and value is None:
-            raise ValueError("Choose the branch they will pay at")
-        return value if in_person else None
-
-    @field_validator("debit_day")
-    @classmethod
-    def _payment_day_needed(cls, value: int | None, info: ValidationInfo) -> int | None:
-        if value is None and info.data.get("frequency", "monthly") != "once_off":
-            raise ValueError("Choose the payment day: the 1st, the 25th or the last day")
-        return value
 
     @field_validator("country_of_birth", "citizenship")
     @classmethod
@@ -396,13 +356,6 @@ class EnrolmentIn(_PersonIn):
             raise ValueError("Say where the money comes from")
         return value
 
-    @field_validator("debit_day")
-    @classmethod
-    def _debit_day(cls, value: int | None) -> int | None:
-        if value is not None and value not in PAYMENT_DAYS:
-            raise ValueError("Choose the 1st, the 25th or the last day of the month")
-        return value
-
     @field_validator("email")
     @classmethod
     def _email(cls, value: str | None) -> str | None:
@@ -419,6 +372,60 @@ class EnrolmentIn(_PersonIn):
             return None
         if not re.fullmatch(r"[0-9]{4}", value):
             raise ValueError("A postal code is 4 digits")
+        return value
+
+
+class EnrolmentIn(_MainMemberIn):
+    enquiry_id: UUID | None = None
+
+    policy_number: str
+    plan_code: BookPlan
+    # Which price of the plan, e.g. 'single_casket' on Plan C. May be left out
+    # for a plan with only one. The premium itself is read from the price list.
+    plan_option: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{1,39}$")
+    # One branch is in the reference table today. More arrive with their codes.
+    branch_code: Literal["pmburg"] = "pmburg"
+    entry_date: date | None = None
+    # No premium and no cover here, on purpose: both are read from the price
+    # list for the plan, option and age (0020, 0021). Sending either is a 422.
+    # Free text kept on the policy: started from an enquiry, the portal fills it
+    # with what the website asked that has no field of its own (next of kin,
+    # marital status, coffin, the family's own note).
+    notes: str | None = Field(default=None, max_length=4000)
+
+    payment_method: PaymentMethod = "undecided"
+    # The branch, for cash or card in person. Required for those, refused
+    # otherwise. After payment_method, so its check can see it.
+    pay_branch_code: PayBranch | None = Field(default=None, validate_default=True)
+    frequency: Frequency = "monthly"
+    # The payment day (1st, 25th or 30th) for every method, not only debit
+    # orders. Required unless the plan is paid once-off. After `frequency`, so
+    # its check can see it.
+    debit_day: int | None = Field(default=None, validate_default=True)
+
+    # None: choose on the next page, e.g. one of the dependants.
+    beneficiary: BeneficiaryIn | None = None
+
+    @field_validator("pay_branch_code")
+    @classmethod
+    def _pay_branch(cls, value: str | None, info: ValidationInfo) -> str | None:
+        in_person = info.data.get("payment_method") in IN_PERSON_METHODS
+        if in_person and value is None:
+            raise ValueError("Choose the branch they will pay at")
+        return value if in_person else None
+
+    @field_validator("debit_day")
+    @classmethod
+    def _payment_day_needed(cls, value: int | None, info: ValidationInfo) -> int | None:
+        if value is None and info.data.get("frequency", "monthly") != "once_off":
+            raise ValueError("Choose the payment day: the 1st, the 25th or the last day")
+        return value
+
+    @field_validator("debit_day")
+    @classmethod
+    def _debit_day(cls, value: int | None) -> int | None:
+        if value is not None and value not in PAYMENT_DAYS:
+            raise ValueError("Choose the 1st, the 25th or the last day of the month")
         return value
 
     @field_validator("policy_number")
@@ -442,6 +449,185 @@ class DependantIn(_PersonIn):
                 and not info.data.get("id_number"):
             raise ValueError("A beneficiary needs a date of birth or a valid ID number")
         return value
+
+
+def _in_person_branch(value: str | None, info: ValidationInfo) -> str | None:
+    in_person = info.data.get("payment_method") in IN_PERSON_METHODS
+    if in_person and value is None:
+        raise ValueError("Choose the branch they will pay at")
+    return value if in_person else None
+
+
+class MemberEditIn(_MainMemberIn):
+    """Correcting a main member after enrolment: the enrolment form's member,
+    citizenship, income and payment sections, held to the same rules.
+
+    Deliberately absent: the policy number, the plan, its option, the start
+    date and the frequency (plan changes have their own route, which re-prices
+    and re-schedules), the premium and cover (always from the price list), and
+    the beneficiary (managed on the policy page). Sending any of them is a 422.
+    """
+
+    # Required at enrolment, optional here: 61 members came in from the paper
+    # book before these questions were asked, and fixing one's phone number
+    # must not wait for their employer's name.
+    country_of_birth: str | None = None
+    citizenship: str | None = None
+    employment_status: EmploymentStatus | None = None
+    source_of_funds: SourceOfFunds | None = None
+
+    payment_method: PaymentMethod
+    pay_branch_code: PayBranch | None = Field(default=None, validate_default=True)
+    # Required unless the policy is paid once-off. The API knows the frequency;
+    # this form does not change it.
+    debit_day: int | None = None
+    notes: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("country_of_birth", "citizenship")
+    @classmethod
+    def _country(cls, value: str | None) -> str | None:
+        if not value:
+            return None
+        code = value.upper()
+        if not re.fullmatch(r"[A-Z]{2}", code):
+            raise ValueError("Choose a country")
+        return code
+
+    @field_validator("id_number")
+    @classmethod
+    def _id_number(cls, value: str | None) -> str | None:
+        # Lenient here, unlike at enrolment: an imported member whose ID number
+        # fails its checksum must still be able to have their address fixed.
+        # The API refuses an ID number that is CHANGED to an invalid one.
+        if not value:
+            return None
+        digits = re.sub(r"\s", "", value)
+        if not re.fullmatch(r"[0-9]{6,13}", digits):
+            raise ValueError("That ID number is not valid. Please check all 13 digits")
+        return digits
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def _date_of_birth(cls, value: date | None, info: ValidationInfo) -> date | None:
+        if value is None:
+            return None
+        if value > date.today():
+            raise ValueError("Date of birth cannot be in the future")
+        id_number = info.data.get("id_number")
+        if id_number and valid_sa_id(id_number):
+            born, _ = enrolment.decode_id(id_number)
+            if born is not None and born != value:
+                raise ValueError("This date of birth does not match the ID number")
+        return value
+
+    @field_validator("pay_branch_code")
+    @classmethod
+    def _pay_branch(cls, value: str | None, info: ValidationInfo) -> str | None:
+        return _in_person_branch(value, info)
+
+    @field_validator("debit_day")
+    @classmethod
+    def _debit_day(cls, value: int | None) -> int | None:
+        if value is not None and value not in PAYMENT_DAYS:
+            raise ValueError("Choose the 1st, the 25th or the last day of the month")
+        return value
+
+
+class MemberEditOut(BaseModel):
+    """What the edit form starts from: the main member and the parts of their
+    policy the form shows, editable or not."""
+
+    policy_id: UUID
+    policy_number: str
+    status_code: str
+    status_label: str
+    plan_code: str | None = None
+    plan_option: str | None = None
+    entry_date: date | None = None
+    premium_cents: int | None = None
+    cover_cents: int | None = None
+    currency: str
+    notes: str | None = None
+
+    person_id: UUID
+    surname: str
+    first_names: str
+    initials: str | None = None
+    id_number: str | None = None
+    id_number_status: str
+    date_of_birth: date | None = None
+    gender: str
+    language_preference: str
+    email: str | None = None
+    mobile: str | None = None
+    address_line1: str | None = None
+    address_line2: str | None = None
+    suburb: str | None = None
+    city: str | None = None
+    province: str | None = None
+    postal_code: str | None = None
+    country_of_birth: str | None = None
+    citizenship: str | None = None
+    passport_number: str | None = None
+    employment_status: str | None = None
+    employer_name: str | None = None
+    industry: str | None = None
+    occupation: str | None = None
+    job_role: str | None = None
+    source_of_funds: str | None = None
+    source_of_funds_other: str | None = None
+    salary_day: int | None = None
+
+    payment_method: str | None = None
+    debit_day: int | None = None
+    frequency: str | None = None
+    pay_branch_code: str | None = None
+
+
+class PlanChangeIn(BaseModel):
+    """Move a policy to another plan, option or frequency. Same person, same
+    policy number, same lives and payment history; a new premium from today."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    plan_code: BookPlan
+    plan_option: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{1,39}$")
+    frequency: Frequency
+    # Needed only when the policy has no payment day yet (it was once-off).
+    debit_day: int | None = None
+
+    @field_validator("debit_day")
+    @classmethod
+    def _debit_day(cls, value: int | None) -> int | None:
+        if value is not None and value not in PAYMENT_DAYS:
+            raise ValueError("Choose the 1st, the 25th or the last day of the month")
+        return value
+
+
+class PlanChangeOut(BaseModel):
+    policy_id: UUID
+    plan_code: str
+    plan_option: str
+    frequency: str
+    premium_cents: int
+    cover_cents: int | None
+    # Unpaid future premiums at the old amount, cancelled and replaced.
+    instalments_replaced: int
+    instalments_scheduled: int
+
+
+class HistoryChange(BaseModel):
+    field: str
+    old: str | None = None
+    new: str | None = None
+
+
+class HistoryEntry(BaseModel):
+    changed_at: datetime
+    changed_by: str
+    table_name: str
+    operation: str
+    changes: list[HistoryChange]
 
 
 class EnrolmentOut(BaseModel):
@@ -590,7 +776,7 @@ def enrol_member(payload: EnrolmentIn, background: BackgroundTasks,
     the background, so a messaging outage never costs an enrolment.
     """
     try:
-        with connection() as conn:
+        with staff_connection(staff.email) as conn:
             result = enrolment.enrol(conn, payload, staff_email=staff.email)
     except (enrolment.Conflict, enrolment.NotFound, enrolment.Invalid) as exc:
         _raise_for(exc)
@@ -767,7 +953,7 @@ def add_dependant(policy_id: UUID, payload: DependantIn,
                   staff: StaffUser = Depends(require_role("admin"))) -> DependantOut:
     """Add a spouse, child, extended family member or beneficiary to a policy."""
     try:
-        with connection() as conn:
+        with staff_connection(staff.email) as conn:
             result = enrolment.add_dependant(conn, str(policy_id), payload,
                                              staff_email=staff.email)
     except (enrolment.Conflict, enrolment.NotFound) as exc:
@@ -781,7 +967,7 @@ def add_beneficiary(policy_id: UUID, payload: BeneficiaryChoiceIn,
                     staff: StaffUser = Depends(require_role("admin"))) -> BeneficiaryOut:
     """Make one of the policy's lives the beneficiary, or add someone who isn't covered."""
     try:
-        with connection() as conn:
+        with staff_connection(staff.email) as conn:
             result = enrolment.add_beneficiary(
                 conn, str(policy_id), staff_email=staff.email,
                 person_id=str(payload.person_id) if payload.person_id else None,
@@ -797,8 +983,68 @@ def add_beneficiary(policy_id: UUID, payload: BeneficiaryChoiceIn,
 def remove_beneficiary(policy_id: UUID, beneficiary_id: UUID,
                        staff: StaffUser = Depends(require_role("admin"))) -> None:
     try:
-        with connection() as conn:
+        with staff_connection(staff.email) as conn:
             enrolment.remove_beneficiary(conn, str(policy_id), str(beneficiary_id),
                                          staff_email=staff.email)
     except enrolment.NotFound as exc:
         _raise_for(exc)
+
+
+# ---------------------------------------------------------------------------
+# Correcting a member, changing plan, and what the record used to say
+# ---------------------------------------------------------------------------
+
+@router.get("/policies/{policy_id}/member", response_model=MemberEditOut)
+def get_member_for_edit(policy_id: UUID,
+                        staff: StaffUser = Depends(require_staff)) -> MemberEditOut:
+    """The policy's main member as the edit form shows them."""
+    with connection() as conn:
+        row = member_edit.load(conn, str(policy_id))
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such policy, or it has no main member.")
+    _audit(staff, "member_edit_viewed", subject=str(row["person_id"]),
+           payload={"policy_number": row["policy_number"]})
+    return MemberEditOut(**row)
+
+
+@router.patch("/policies/{policy_id}/member", response_model=MemberEditOut)
+def update_member(policy_id: UUID, payload: MemberEditIn,
+                  staff: StaffUser = Depends(require_role("admin"))) -> MemberEditOut:
+    """Correct the main member: identity, contact, address, citizenship and
+    income, how the policy is paid, and its notes. One transaction. Every value
+    it overwrites is kept in member_book_history (0031)."""
+    try:
+        with staff_connection(staff.email) as conn:
+            row = member_edit.update(conn, str(policy_id), payload, staff_email=staff.email)
+    except (enrolment.Conflict, enrolment.NotFound, enrolment.Invalid) as exc:
+        _raise_for(exc)
+    return MemberEditOut(**row)
+
+
+@router.post("/policies/{policy_id}/plan", response_model=PlanChangeOut)
+def change_plan(policy_id: UUID, payload: PlanChangeIn,
+                staff: StaffUser = Depends(require_role("admin"))) -> PlanChangeOut:
+    """Move the policy to another plan, option or frequency, priced from the
+    price list at the main member's age today. The family keeps their policy
+    number, lives and payment history; unpaid premiums from today are replaced
+    at the new amount."""
+    try:
+        with staff_connection(staff.email) as conn:
+            result = member_edit.change_plan(conn, str(policy_id), payload,
+                                             staff_email=staff.email)
+    except (enrolment.Conflict, enrolment.NotFound, enrolment.Invalid) as exc:
+        _raise_for(exc)
+    return PlanChangeOut(**result)
+
+
+@router.get("/policies/{policy_id}/history", response_model=list[HistoryEntry])
+def policy_history(policy_id: UUID,
+                   staff: StaffUser = Depends(require_staff)) -> list[HistoryEntry]:
+    """What the policy and its main member's record used to say, newest first."""
+    with connection() as conn:
+        entries = member_edit.history(conn, str(policy_id))
+    if entries is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such policy.")
+    _audit(staff, "policy_history_viewed", subject=str(policy_id),
+           payload={"rows": len(entries)})
+    return [HistoryEntry(**e) for e in entries]
