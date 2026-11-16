@@ -40,6 +40,15 @@ container:
 
 Both scratch databases were dropped and the backup file deleted.
 
+**Re-run the same evening, after 0031 (`member_book_history`) shipped:** a
+backup of the dev book (at 0019) restored and was brought forward through 0031
+with no history rows invented by the load. Two edits were then made in that
+copy, so it held history rows, and it was backed up and restored again into a
+second empty database: 35 tables, 481 rows, every table identical to the file;
+`people` and `member_book_history` matched on an MD5 of every row, and the
+history table's id counter was moved past the restored rows. Both scratch
+databases were dropped and the files deleted.
+
 **A drill against a real production backup has not been done.** It needs the
 owner: they hold the Railway login, and the file contains members' ID numbers.
 

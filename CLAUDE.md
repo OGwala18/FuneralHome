@@ -133,7 +133,7 @@ so the free project never pauses. If the `jobs` cron stops, someone must run
 **The backup restores; proven locally only.** `db/restore.py` loads a backup
 into an empty database (it refuses one with any people, policies, enquiries or
 staff) and checks every table row by row before committing. Proven against the
-local Docker database on 16 Nov 2026: every table matched on count and
+local Docker database on 16 Nov 2026, and again after 0031: every table matched on count and
 checksum. A drill with a real production backup still needs the owner, who
 holds the Railway login. Steps: `docs/restore-drill.md`.
 
