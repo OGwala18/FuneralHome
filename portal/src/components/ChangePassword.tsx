@@ -7,10 +7,9 @@ import { supabase } from "@/lib/supabase";
  * "Change password" button on Settings, as a small card, and closed again once
  * the new password is saved or the person cancels.
  *
- * Why here and not a reset email: staff sign in as firstname@induduzo.co.za,
- * and most of those addresses have no mailbox, so a reset link would go
- * nowhere. An owner creates the account with a temporary password, tells the
- * person by phone or in person, and they replace it here on first sign-in.
+ * For someone signed in who wants a different password. Someone who has
+ * FORGOTTEN theirs uses "Forgot your password?" on the sign-in screen instead
+ * (pages/Login.tsx), which emails a one-use temporary password.
  *
  * Reaching this screen already took the password AND the second step, so the
  * session itself is the proof of identity. Supabase stores the new password;

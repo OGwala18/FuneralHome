@@ -313,6 +313,29 @@ class Settings:
     def two_step_configured(self) -> bool:
         return not self.two_step_missing
 
+    @property
+    def password_reset_missing(self) -> list[str]:
+        """What "Forgot your password?" needs and lacks, by name (never values).
+
+        The service key sets the new password in Supabase, the pepper keys the
+        temporary password's hash, and SMTP delivers it. Without any one of
+        them the feature answers 503 rather than half-working.
+        """
+        missing = []
+        if not self.supabase_url:
+            missing.append("SUPABASE_URL")
+        if not self.supabase_service_role_key:
+            missing.append("SUPABASE_SERVICE_ROLE_KEY")
+        if len((self.two_step_code_pepper or "").encode("utf-8")) < MIN_PEPPER_BYTES:
+            missing.append("TWO_STEP_CODE_PEPPER")
+        if not self.email_enabled:
+            missing.append("SMTP_HOST")
+        return missing
+
+    @property
+    def password_reset_configured(self) -> bool:
+        return not self.password_reset_missing
+
 
 @lru_cache
 def get_settings() -> Settings:

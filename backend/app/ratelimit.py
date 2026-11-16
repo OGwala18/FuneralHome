@@ -91,15 +91,26 @@ lead_limiter = SlidingWindowLimiter(limit=6, window_seconds=3600)
 application_limiter = SlidingWindowLimiter(limit=20, window_seconds=3600)
 
 
-def enforce(limiter: SlidingWindowLimiter, request: Request) -> None:
+# A forgotten staff password (routers/password_reset.py). Asking is cheap for a
+# stranger and sends an email, so it gets a tight ceiling per connection on top
+# of the per-person limits in the database. Trying a temporary password is a
+# little looser: a whole office may share one connection.
+password_forgot_limiter = SlidingWindowLimiter(limit=10, window_seconds=3600)
+password_reset_limiter = SlidingWindowLimiter(limit=30, window_seconds=3600)
+
+_ENQUIRY_LIMIT_MESSAGE = (
+    "We have received several enquiries from this connection. "
+    "Please phone or WhatsApp us and we will capture your details for you."
+)
+
+
+def enforce(limiter: SlidingWindowLimiter, request: Request,
+            message: str = _ENQUIRY_LIMIT_MESSAGE) -> None:
     allowed, retry_after = limiter.check(client_key(request))
     if not allowed:
         raise ApiError(
             status.HTTP_429_TOO_MANY_REQUESTS,
             "rate_limited",
-            (
-                "We have received several enquiries from this connection. "
-                "Please phone or WhatsApp us and we will capture your details for you."
-            ),
+            message,
             headers={"Retry-After": str(retry_after)},
         )

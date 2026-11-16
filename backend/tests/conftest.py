@@ -49,7 +49,12 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from app.auth import StaffUser, require_staff  # noqa: E402
 from app.main import app  # noqa: E402
-from app.ratelimit import application_limiter, lead_limiter  # noqa: E402
+from app.ratelimit import (  # noqa: E402
+    application_limiter,
+    lead_limiter,
+    password_forgot_limiter,
+    password_reset_limiter,
+)
 
 
 @pytest.fixture(scope="session")
@@ -66,6 +71,8 @@ def _fresh_rate_limits():
     # seventh lead in a run is refused and the failure looks like a real bug.
     lead_limiter._hits.clear()
     application_limiter._hits.clear()
+    password_forgot_limiter._hits.clear()
+    password_reset_limiter._hits.clear()
 
 
 @pytest.fixture
