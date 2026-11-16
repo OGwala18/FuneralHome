@@ -798,3 +798,46 @@ export const verifyEmailCode = async (challengeId: string, code: string, trustDe
   if (passed.device_token) storeDeviceToken(passed.device_token);
   return passed;
 };
+
+// ---------------------------------------------------------------------------
+// A forgotten password: the only calls made before anyone is signed in
+// ---------------------------------------------------------------------------
+
+/**
+ * POST without a staff token. Only for /api/auth/password, whose callers have
+ * forgotten their password and so have no token to send.
+ */
+const publicPost = async <T>(path: string, body: unknown): Promise<T> => {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError("Could not reach the server. Check your connection and try again.", 0);
+  }
+  if (!response.ok) throw await readError(response, "Something went wrong. Please try again.");
+  return (await response.json()) as T;
+};
+
+/**
+ * Email a one-use temporary password to this address, if it is active staff.
+ * The API answers the same way whether it is or not, so this resolves with the
+ * same sentence for everyone.
+ */
+export const requestTemporaryPassword = (email: string) =>
+  publicPost<{ detail: string }>("/api/auth/password/forgot", { email });
+
+/** Set a new password, with the emailed temporary password as the old one. */
+export const resetPasswordWithTemporary = (
+  email: string,
+  temporaryPassword: string,
+  newPassword: string,
+) =>
+  publicPost<{ reset: boolean }>("/api/auth/password/reset", {
+    email,
+    temporary_password: temporaryPassword,
+    new_password: newPassword,
+  });

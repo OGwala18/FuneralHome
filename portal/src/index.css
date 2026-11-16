@@ -533,6 +533,29 @@ tbody tr.clickable:hover { background: var(--paper); }
 .login-card p.sub { margin: 0 0 var(--s24); color: var(--muted); }
 .login-card .field { margin-bottom: var(--s16); }
 .login-card .field input { width: 100%; }
+.login-card .login-notice { margin-bottom: var(--s16); }
+.login-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s8) var(--s16);
+  margin-top: var(--s16);
+}
+/* A button that reads as a link: it changes the screen, it submits nothing. */
+.link-button {
+  background: none;
+  border: 0;
+  padding: var(--s4) 0;
+  min-height: 44px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--navy);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.link-button:hover { color: var(--gold); }
+.link-button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
 .login-card code {
   font-family: var(--mono);
   font-size: 14px;

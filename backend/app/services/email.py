@@ -478,3 +478,67 @@ def send_sign_in_code(to_email: str, code: str, expires_at: datetime) -> EmailRe
         subtype="html",
     )
     return _send(message)
+
+
+# --- A forgotten staff password (routers/password_reset.py) ------------------------
+
+def send_temporary_password(to_email: str, temporary: str, expires_at: datetime,
+                            reset_url: str | None) -> EmailResult:
+    """Email a staff member the temporary password they asked for.
+
+    Sent only to the address on the staff record. The subject never contains
+    the password (lock-screen previews), and nothing is logged except the fixed
+    reference "password-reset". `reset_url` is our own portal's page for
+    typing it in; with no PORTAL_URL set the email describes the way there.
+    """
+    settings = get_settings()
+    until = expires_at.astimezone(_SAST).strftime("%H:%M")
+    where = (
+        f"Open {reset_url}"
+        if reset_url
+        else "Open the staff portal, choose \"Forgot your password?\", then "
+             "\"I have a temporary password\","
+    )
+
+    message = EmailMessage()
+    message["Subject"] = "Your temporary Induduzo password"
+    message["From"] = formataddr(("Induduzo Staff Portal", settings.mail_from))
+    message["To"] = to_email
+    message["Date"] = formatdate(localtime=True)
+    message["Message-ID"] = make_msgid(domain="induduzo.co.za")
+    # What _send logs. Never the address or the password.
+    message["X-Induduzo-Reference"] = "password-reset"
+
+    message.set_content(
+        "Someone asked to reset your Induduzo staff portal password.\n\n"
+        "Your temporary password is:\n\n"
+        f"    {temporary}\n\n"
+        f"It works once, until {until} (30 minutes).\n\n"
+        f"{where} and type it as the temporary password, then choose your own "
+        "new password. You'll sign in with the new one straight away.\n\n"
+        "Your old password keeps working until you do this. If you didn't ask, "
+        "ignore this email and tell the owner.\n"
+    )
+    place = (
+        f'<a href="{html.escape(reset_url)}" style="color:#B7352F">{html.escape(reset_url)}</a>'
+        if reset_url
+        else "the staff portal, choose <strong>Forgot your password?</strong>, then "
+             "<strong>I have a temporary password</strong>,"
+    )
+    message.add_alternative(
+        '<html><body style="font-family:Segoe UI,Arial,sans-serif;color:#171C21">'
+        '<p style="margin:0 0 12px">Someone asked to reset your Induduzo staff portal '
+        "password. Your temporary password is:</p>"
+        '<p style="font-size:26px;letter-spacing:3px;font-weight:700;margin:0 0 12px;'
+        'font-family:Consolas,Menlo,monospace">'
+        f"{html.escape(temporary)}</p>"
+        f'<p style="color:#526170;margin:0 0 12px">It works once, until {html.escape(until)} '
+        "(30 minutes).</p>"
+        f'<p style="margin:0 0 12px">Open {place} and type it as the temporary password, '
+        "then choose your own new password. You'll sign in with the new one straight "
+        "away.</p>"
+        '<p style="color:#B7352F;margin:0">Your old password keeps working until you do '
+        "this. If you didn't ask, ignore this email and tell the owner.</p></body></html>",
+        subtype="html",
+    )
+    return _send(message)
