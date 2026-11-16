@@ -243,3 +243,22 @@ def test_a_failed_send_is_recorded_and_not_retried(client, staff_as, api_conn):
     assert api_conn.execute(
         "select status from payment_reminders where instalment_id = %s and kind = 'upcoming'",
         (due["id"],)).fetchone()["status"] == "failed"
+
+
+def test_the_website_shows_the_same_account():
+    """The public Contact page and the WhatsApp payment messages must show one
+    account. A different number on either is how payment fraud starts."""
+    from pathlib import Path
+
+    site = Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "banking.ts"
+    if not site.exists():
+        pytest.skip("frontend/src/lib/banking.ts is not in this checkout")
+    text = site.read_text(encoding="utf-8")
+    shown = dict(re.findall(r'^\s*(\w+): "([^"]*)",', text, flags=re.MULTILINE))
+    assert shown == {
+        "bank": banking.BANK,
+        "accountName": banking.ACCOUNT_NAME,
+        "accountType": banking.ACCOUNT_TYPE,
+        "branchCode": banking.BRANCH_CODE,
+        "accountNumber": banking.ACCOUNT_NUMBER,
+    }
