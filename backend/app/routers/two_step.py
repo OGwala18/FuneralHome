@@ -21,7 +21,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Request, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..auth import (
     DEVICE_HEADER,
@@ -32,6 +32,7 @@ from ..auth import (
 )
 from ..config import get_settings
 from ..db import connection
+from ..services import password_reset as resets
 from ..services import two_step
 from ..services.email import send_sign_in_code
 from ..services.two_step_crypto import code_matches, hash_code, mask_email, new_code
@@ -274,6 +275,48 @@ def email_verify(
     if locked:
         raise _locked(locked)
     raise StaffGateError(status.HTTP_400_BAD_REQUEST, outcome, _CODE_MESSAGES[outcome])
+
+
+# --- Straight after a password reset (0030) ------------------------------------------
+
+class ResetPassIn(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    proof: str = Field(min_length=20, max_length=100)
+
+
+@router.post("/password-reset", response_model=VerifiedOut)
+def password_reset_pass(
+    body: ResetPassIn, staff: StaffUser = Depends(require_staff_identity)
+) -> VerifiedOut:
+    """Spend the token a finished password reset gave the browser.
+
+    The temporary password that reset used was emailed to the same address an
+    emailed code would go to, so it is the same proof: this session passes as
+    "email_code". Once per reset, within ten minutes, only for the person whose
+    password it was. A lockout from wrong codes still applies.
+    """
+    session_id = _needs_session(staff)
+    at = two_step.now()
+    passed = None
+    with connection() as conn:
+        locked = two_step.locked_for(conn, staff.email, at)
+        if not locked and resets.spend_second_step(conn, staff.staff_id, body.proof, at):
+            passed = two_step.record_verification(
+                conn, staff.staff_id, session_id, "email_code", at
+            )
+            two_step.log_event(conn, staff.email, "2fa_passed", staff.email, at,
+                               {"method": "email_code", "via": "password_reset"})
+
+    if passed is not None:
+        return VerifiedOut(verified=True, verified_by="email_code",
+                           verified_until=passed["expires_at"])
+    if locked:
+        raise _locked(locked)
+    raise StaffGateError(
+        status.HTTP_400_BAD_REQUEST, "reset_pass_invalid",
+        "Confirm it's you with a code from your email.",
+    )
 
 
 # --- Trusted computers (strict: the second step must already be done) ---------------

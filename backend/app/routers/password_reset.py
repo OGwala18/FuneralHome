@@ -12,8 +12,10 @@ token to send:
   POST /reset   {email, temporary_password, new_password}
       The temporary password works as the "old password": right, live and
       unused, it lets the new password be set in Supabase, once. The portal then
-      signs the person in with the new password, and the second step follows as
-      on any sign-in.
+      signs the person in with the new password. The answer carries a one-time
+      token that counts as that sign-in's second step (/api/admin/2fa/
+      password-reset): the temporary password already came from the mailbox the
+      emailed code would go to, so asking again proves nothing new.
 
 Not under /api/admin: those routes all need a signed-in staff token and the
 second step (tests/test_two_step_gate.py), and these exist for people who
@@ -80,6 +82,10 @@ class ResetIn(BaseModel):
 
 class ResetOut(BaseModel):
     reset: bool
+    # One-time token for the sign-in that follows: the portal sends it to
+    # /api/admin/2fa/password-reset in place of an emailed code (0030). None if
+    # it could not be stored; the person then confirms by code as usual.
+    second_step_proof: str | None = None
 
 
 def _not_configured() -> ApiError:
@@ -172,6 +178,7 @@ def reset(body: ResetIn, request: Request) -> ResetOut:
     at = resets.now()
     outcome = "invalid"
     refused: str | None = None
+    proof: str | None = None
 
     with connection() as conn:
         staff = resets.find_staff(conn, body.email.strip())
@@ -204,6 +211,7 @@ def reset(body: ResetIn, request: Request) -> ResetOut:
                 resets.mark_used(conn, row["id"], at)
                 two_step.log_event(conn, staff["email"], "password_reset_done",
                                    staff["email"], at)
+                proof = resets.issue_second_step(conn, str(row["id"]))
                 outcome = "done"
             elif result.rejected:
                 # The temporary password stays alive: the person tries another.
@@ -214,7 +222,7 @@ def reset(body: ResetIn, request: Request) -> ResetOut:
 
     if outcome == "done":
         logger.info("Password reset completed for staff %s", staff["id"])
-        return ResetOut(reset=True)
+        return ResetOut(reset=True, second_step_proof=proof)
     if outcome == "rejected":
         raise ApiError(
             422, "password_rejected",

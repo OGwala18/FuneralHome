@@ -28,6 +28,7 @@ SECOND_STEP_ALLOWLIST = {
     ("GET", "/api/admin/2fa/status"),
     ("POST", "/api/admin/2fa/email/send"),
     ("POST", "/api/admin/2fa/email/verify"),
+    ("POST", "/api/admin/2fa/password-reset"),
 }
 
 
