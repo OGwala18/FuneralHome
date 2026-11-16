@@ -20,13 +20,16 @@ Every time comes from two_step.now(), the one clock the tests move.
 
 from __future__ import annotations
 
+import logging
 import secrets
 import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
 from . import two_step
-from .two_step_crypto import hash_code
+from .two_step_crypto import hash_code, hash_device_token, new_device_token
+
+logger = logging.getLogger(__name__)
 
 LIFETIME = timedelta(minutes=30)
 ATTEMPTS = 5
@@ -153,6 +156,60 @@ def mark_used(conn: Any, reset_id: str, at: datetime) -> None:
         "update staff_password_resets set used_at = %s where id = %s",
         (at, reset_id),
     )
+
+
+# --- The sign-in straight after a reset (0030) ---------------------------------
+#
+# The temporary password came from the same mailbox as the emailed sign-in code,
+# so asking for a code straight after a reset asks twice for the same proof. A
+# finished reset therefore gives the browser a one-time token; the sign-in that
+# follows may spend it, once and within ten minutes, as its second step.
+
+SECOND_STEP_WINDOW = timedelta(minutes=10)
+
+
+def issue_second_step(conn: Any, reset_id: str) -> str | None:
+    """A one-time token for the sign-in after this reset. Only its hash is kept.
+
+    In its own savepoint: if the column is missing (the API deployed a moment
+    before migration 0030), the reset still succeeds and the person simply gets
+    the usual "Confirm it's you" screen.
+    """
+    token = new_device_token()
+    try:
+        with conn.transaction():
+            conn.execute(
+                "update staff_password_resets set second_step_hash = %s where id = %s",
+                (hash_device_token(token), reset_id),
+            )
+    except Exception as exc:  # noqa: BLE001 - a missing shortcut, not a failure
+        logger.warning("Reset second-step token not stored: %s", type(exc).__name__)
+        return None
+    return token
+
+
+def spend_second_step(conn: Any, staff_id: str, token: str, at: datetime) -> bool:
+    """True, once, for this person's token within ten minutes of their reset."""
+    row = conn.execute(
+        """
+        select id from staff_password_resets
+         where staff_user_id = %s
+           and second_step_hash = %s
+           and second_step_used_at is null
+           and used_at is not null
+           and used_at <= %s
+           and used_at > %s
+         for update
+        """,
+        (staff_id, hash_device_token(token), at, at - SECOND_STEP_WINDOW),
+    ).fetchone()
+    if row is None:
+        return False
+    conn.execute(
+        "update staff_password_resets set second_step_used_at = %s where id = %s",
+        (at, row["id"]),
+    )
+    return True
 
 
 def now() -> datetime:

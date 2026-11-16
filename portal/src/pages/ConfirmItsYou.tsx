@@ -3,6 +3,8 @@ import { Button } from "@/components/ui";
 import {
   ApiError,
   fetchTwoStepStatus,
+  passSecondStepWithResetProof,
+  peekResetProof,
   sendEmailCode,
   verifyEmailCode,
   type EmailCodeSent,
@@ -33,15 +35,43 @@ export default function ConfirmItsYou({
   const [sending, setSending] = useState(false);
   const [checking, setChecking] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  // Straight after "Forgot your password?" the reset's one-time token stands in
+  // for the emailed code (the temporary password came from that same mailbox),
+  // so there is nothing to fill in while it is spent.
+  const [usingReset, setUsingReset] = useState(() => peekResetProof() !== null);
 
   useEffect(() => {
-    fetchTwoStepStatus()
-      .then((status) => {
-        // Already passed (another tab, or a trusted computer): nothing to ask.
-        if (status.session_verified || !status.enforced) onDone();
-        else setHint(status.email_hint);
-      })
-      .catch(() => setHint(null));
+    let cancelled = false;
+    const ask = () =>
+      fetchTwoStepStatus()
+        .then((status) => {
+          if (cancelled) return;
+          // Already passed (another tab, or a trusted computer): nothing to ask.
+          if (status.session_verified || !status.enforced) onDone();
+          else setHint(status.email_hint);
+        })
+        .catch(() => {
+          if (!cancelled) setHint(null);
+        });
+
+    const proof = peekResetProof();
+    if (proof) {
+      void passSecondStepWithResetProof(proof).then((passed) => {
+        if (cancelled) return;
+        if (passed) {
+          onDone();
+          return;
+        }
+        // Too late or already spent: confirm by code as usual.
+        setUsingReset(false);
+        void ask();
+      });
+    } else {
+      void ask();
+    }
+    return () => {
+      cancelled = true;
+    };
   }, [onDone]);
 
   // A once-a-second tick for the countdown and the resend button.
@@ -90,6 +120,8 @@ export default function ConfirmItsYou({
   const until = sent
     ? new Date(sent.expires_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "";
+
+  if (usingReset) return <div className="loading">Signing you in…</div>;
 
   return (
     <div className="login-wrap">
