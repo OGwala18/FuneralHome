@@ -1,7 +1,12 @@
 import { useState, type FormEvent } from "react";
 import logo from "@/assets/logo.png";
 import { Button } from "@/components/ui";
-import { ApiError, requestTemporaryPassword, resetPasswordWithTemporary } from "@/lib/api";
+import {
+  ApiError,
+  holdResetProof,
+  requestTemporaryPassword,
+  resetPasswordWithTemporary,
+} from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -116,7 +121,10 @@ export default function Login() {
     setBusy(true);
     setError(null);
     try {
-      await resetPasswordWithTemporary(email.trim(), temporary, next);
+      const saved = await resetPasswordWithTemporary(email.trim(), temporary, next);
+      // Lets the sign-in below skip "Confirm it's you": the temporary password
+      // already proved this mailbox, which is all the emailed code would prove.
+      holdResetProof(saved.second_step_proof);
     } catch (failure) {
       setError(
         failure instanceof ApiError && failure.code === "validation_failed"
