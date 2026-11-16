@@ -461,6 +461,126 @@ export const removeBeneficiary = async (policyId: string, beneficiaryId: string)
   if (!response.ok) throw await readError(response, "Could not remove the beneficiary.");
 };
 
+/* ------------------------------------- Correcting a member, plan change --- */
+
+/** The policy's main member as the edit form starts from them. */
+export interface MemberEdit {
+  policy_id: string;
+  policy_number: string;
+  status_code: string;
+  status_label: string;
+  plan_code: string | null;
+  plan_option: string | null;
+  entry_date: string | null;
+  premium_cents: number | null;
+  cover_cents: number | null;
+  currency: string;
+  notes: string | null;
+  person_id: string;
+  surname: string;
+  first_names: string;
+  initials: string | null;
+  id_number: string | null;
+  id_number_status: string;
+  date_of_birth: string | null;
+  gender: string;
+  language_preference: string;
+  email: string | null;
+  mobile: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  suburb: string | null;
+  city: string | null;
+  province: string | null;
+  postal_code: string | null;
+  country_of_birth: string | null;
+  citizenship: string | null;
+  passport_number: string | null;
+  employment_status: string | null;
+  employer_name: string | null;
+  industry: string | null;
+  occupation: string | null;
+  job_role: string | null;
+  source_of_funds: string | null;
+  source_of_funds_other: string | null;
+  salary_day: number | null;
+  payment_method: string | null;
+  debit_day: number | null;
+  frequency: Frequency | null;
+  pay_branch_code: string | null;
+}
+
+/**
+ * What the edit form sends. No policy number, plan, start date, frequency,
+ * premium, cover or beneficiary: the API refuses them here.
+ */
+export interface MemberEditIn extends PersonIn {
+  initials?: string | null;
+  email?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  suburb?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postal_code?: string | null;
+  country_of_birth?: string | null;
+  citizenship?: string | null;
+  passport_number?: string | null;
+  employment_status?: string | null;
+  employer_name?: string | null;
+  industry?: string | null;
+  occupation?: string | null;
+  job_role?: string | null;
+  source_of_funds?: string | null;
+  source_of_funds_other?: string | null;
+  salary_day?: number | null;
+  payment_method: PaymentMethod;
+  pay_branch_code?: PayBranch | null;
+  debit_day?: number | null;
+  notes?: string | null;
+}
+
+export interface PlanChangeIn {
+  plan_code: string;
+  plan_option?: string | null;
+  frequency: Frequency;
+  debit_day?: number | null;
+}
+
+export interface PlanChangeOut {
+  policy_id: string;
+  plan_code: string;
+  plan_option: string;
+  frequency: Frequency;
+  premium_cents: number;
+  cover_cents: number | null;
+  instalments_replaced: number;
+  instalments_scheduled: number;
+}
+
+/** One line of member_book_history: what a record used to say, and who changed it. */
+export interface HistoryEntry {
+  changed_at: string;
+  changed_by: string;
+  table_name: string;
+  operation: "insert" | "update" | "delete";
+  changes: { field: string; old: string | null; new: string | null }[];
+}
+
+const policyPath = (id: string) => `/api/admin/policies/${encodeURIComponent(id)}`;
+
+export const fetchMemberForEdit = (policyId: string) =>
+  request<MemberEdit>(`${policyPath(policyId)}/member`);
+
+export const updateMember = (policyId: string, body: MemberEditIn) =>
+  mutate<MemberEdit>(`${policyPath(policyId)}/member`, "PATCH", body);
+
+export const changePlan = (policyId: string, body: PlanChangeIn) =>
+  mutate<PlanChangeOut>(`${policyPath(policyId)}/plan`, "POST", body);
+
+export const fetchPolicyHistory = (policyId: string) =>
+  request<HistoryEntry[]>(`${policyPath(policyId)}/history`);
+
 /* ---------------------------------------------- Policy and premiums --- */
 
 export interface Instalment {

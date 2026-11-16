@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..auth import StaffUser, require_role, require_staff
-from ..db import connection
+from ..db import connection, staff_connection
 from ..services import instalments
 from ..services.staff import log_staff_event
 
@@ -121,7 +121,7 @@ def _not_due(conn, instalment_id: UUID) -> HTTPException:
 def record_payment(instalment_id: UUID, payload: PaymentIn,
                    staff: StaffUser = Depends(require_role("admin"))) -> Instalment:
     """Mark an instalment paid. The first payment on a pending policy activates it."""
-    with connection() as conn:
+    with staff_connection(staff.email) as conn:
         row = instalments.record_payment(
             conn, str(instalment_id), paid_on=payload.paid_on,
             amount_cents=payload.amount_cents, method=payload.method,
@@ -137,7 +137,7 @@ def record_payment(instalment_id: UUID, payload: PaymentIn,
 @router.post("/instalments/{instalment_id}/waive", response_model=Instalment)
 def waive_instalment(instalment_id: UUID, payload: WaiveIn,
                      staff: StaffUser = Depends(require_role("admin"))) -> Instalment:
-    with connection() as conn:
+    with staff_connection(staff.email) as conn:
         row = instalments.waive(conn, str(instalment_id), reason=payload.reason,
                                 staff_email=staff.email)
         if row is None:

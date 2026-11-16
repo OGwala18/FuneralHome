@@ -232,8 +232,14 @@ export default function Policy({ id, canEdit, addLives }:
             {policy.enquiry_reference && <> · from enquiry <span className="ref">{policy.enquiry_reference}</span></>}
           </p>
         </div>
-        {canEdit && !adding && (
-          <Button variant="primary" onClick={() => { setAdding(true); setAdded(null); }}>Add dependant</Button>
+        {canEdit && (
+          <div className="row">
+            {main && <Button onClick={() => navigate({ name: "editMember", id })}>Edit member</Button>}
+            {main && <Button onClick={() => navigate({ name: "changePlan", id })}>Change plan</Button>}
+            {!adding && (
+              <Button variant="primary" onClick={() => { setAdding(true); setAdded(null); }}>Add dependant</Button>
+            )}
+          </div>
         )}
       </div>
 

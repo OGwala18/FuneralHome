@@ -15,6 +15,8 @@ import Member from "@/pages/Member";
 import Policies from "@/pages/Policies";
 import Policy from "@/pages/Policy";
 import Enrol from "@/pages/Enrol";
+import EditMember from "@/pages/EditMember";
+import ChangePlan from "@/pages/ChangePlan";
 import Payments from "@/pages/Payments";
 import Applications from "@/pages/Applications";
 import Growth from "@/pages/Growth";
@@ -154,12 +156,19 @@ export default function App() {
         {route.name === "people" && <People />}
         {route.name === "person" && <Person id={route.id} canEdit={canEdit} />}
         {route.name === "members" && <Members canEdit={canEdit} />}
-        {route.name === "member" && <Member id={route.id} />}
+        {route.name === "member" && <Member id={route.id} canEdit={canEdit} />}
         {route.name === "enrol" && (canEdit
           ? <Enrol key={route.enquiryId ?? "walk-in"} enquiryId={route.enquiryId} />
           : <Members canEdit={false} />)}
         {route.name === "policies" && <Policies />}
         {route.name === "policy" && <Policy key={route.id} id={route.id} canEdit={canEdit} addLives={route.addLives} />}
+        {/* A viewer who types the address sees the policy instead. The API refuses their save too. */}
+        {route.name === "editMember" && (canEdit
+          ? <EditMember key={route.id} policyId={route.id} />
+          : <Policy key={route.id} id={route.id} canEdit={false} />)}
+        {route.name === "changePlan" && (canEdit
+          ? <ChangePlan key={route.id} policyId={route.id} />
+          : <Policy key={route.id} id={route.id} canEdit={false} />)}
         {route.name === "payments" && <Payments canEdit={canEdit} />}
         {route.name === "applications" && <Applications />}
         {route.name === "growth" && <Growth />}

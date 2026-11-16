@@ -29,6 +29,8 @@ const PARENT: Partial<Record<Route["name"], Route["name"]>> = {
   enrol: "members",
   person: "people",
   policy: "policies",
+  editMember: "members",
+  changePlan: "policies",
   whatsapp: "growth",
 };
 
