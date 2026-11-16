@@ -178,7 +178,8 @@ def test_the_temporary_password_sets_a_new_one_once(client, clock, mailbox, supa
 
     done = _reset(client, email, temporary)
     assert done.status_code == 200, done.text
-    assert done.json() == {"reset": True}
+    assert done.json()["reset"] is True
+    assert len(done.json()["second_step_proof"]) >= 40
     assert supabase.calls == [(user_id, NEW)]
 
     again = _reset(client, email, temporary, "another long password 43")
@@ -445,3 +446,77 @@ def test_finding_a_user_matches_the_whole_address(admin_api):
     ]})
     assert supabase_admin.find_user_id("nelly@induduzo.test") == "2"
     assert supabase_admin.find_user_id("nobody@induduzo.test") is None
+
+
+# --- The sign-in straight after a reset skips the emailed code (0030) --------------
+
+PASS = "/api/admin/2fa/password-reset"
+
+
+@pytest.fixture
+def after_reset(client, clock, mailbox, supabase, signed_in, db):
+    """A staff member who has just reset their password and signed in again."""
+    def run():
+        headers, staff_id, _ = signed_in("admin")
+        email = db.execute("select email from staff_users where id = %s",
+                           (staff_id,)).fetchone()[0]
+        mailbox.clear()
+        _forgot(client, email)
+        done = _reset(client, email, _temporary_in(mailbox[-1]))
+        assert done.status_code == 200, done.text
+        return headers, staff_id, done.json()["second_step_proof"]
+    return run
+
+
+def test_the_sign_in_after_a_reset_needs_no_emailed_code(client, after_reset, mailbox, db):
+    headers, staff_id, proof = after_reset()
+    assert proof
+    assert client.get("/api/admin/me", headers=headers).status_code == 403
+
+    passed = client.post(PASS, headers=headers, json={"proof": proof})
+    assert passed.status_code == 200, passed.text
+    assert passed.json()["verified_by"] == "email_code"
+    assert client.get("/api/admin/me", headers=headers).status_code == 200
+    # No sign-in code was emailed: only the temporary password went out.
+    assert [m["Subject"] for m in mailbox] == ["Your temporary Induduzo password"]
+    stored = db.execute("select second_step_hash from staff_password_resets "
+                        "where staff_user_id = %s and used_at is not null", (staff_id,)).fetchone()
+    assert proof.encode() not in bytes(stored[0])
+
+
+def test_the_token_works_once(client, after_reset, signed_in, db):
+    headers, staff_id, proof = after_reset()
+    assert client.post(PASS, headers=headers, json={"proof": proof}).status_code == 200
+    email = db.execute("select email from staff_users where id = %s", (staff_id,)).fetchone()[0]
+    second_session, _, _ = signed_in("admin", email=email)
+    again = client.post(PASS, headers=second_session, json={"proof": proof})
+    assert again.status_code == 400
+    assert again.json()["code"] == "reset_pass_invalid"
+
+
+def test_the_token_lasts_ten_minutes(client, clock, after_reset):
+    headers, _, proof = after_reset()
+    clock.advance(minutes=10)
+    late = client.post(PASS, headers=headers, json={"proof": proof})
+    assert late.status_code == 400
+    assert late.json()["code"] == "reset_pass_invalid"
+
+
+def test_the_token_is_only_for_the_person_who_reset(client, clock, after_reset, signed_in):
+    _, _, proof = after_reset()
+    someone_else, _, _ = signed_in("admin")
+    stolen = client.post(PASS, headers=someone_else, json={"proof": proof})
+    assert stolen.status_code == 400
+    assert client.get("/api/admin/me", headers=someone_else).status_code == 403
+
+
+def test_a_made_up_token_passes_nothing(client, after_reset):
+    headers, _, _ = after_reset()
+    made_up = client.post(PASS, headers=headers, json={"proof": "x" * 43})
+    assert made_up.status_code == 400
+    assert client.get("/api/admin/me", headers=headers).status_code == 403
+
+
+def test_it_needs_a_signed_in_password(client, after_reset):
+    _, _, proof = after_reset()
+    assert client.post(PASS, json={"proof": proof}).status_code == 401

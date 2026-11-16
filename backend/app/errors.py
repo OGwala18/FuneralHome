@@ -184,6 +184,12 @@ CATALOG: dict[str, ErrorInfo] = _entries(
               "Supabase > Authentication > Users > Add user (Auto Confirm), same address.",
               "owner"),
 
+    ErrorInfo("reset_pass_invalid", 400, "two-step after a password reset",
+              "The token from a finished reset was unknown, spent, another person's, or "
+              "more than 10 minutes old, so it did not count as the second step.",
+              "The person waited too long after resetting, or reloaded the page.",
+              "Nothing: the portal falls back to the emailed code.", "staff"),
+
     # --- Email (recorded on *_email_failed events; app/services/email.py) -------
     ErrorInfo("email_not_configured", None, "email",
               "No SMTP_HOST on this server, so nothing was sent.",

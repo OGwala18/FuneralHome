@@ -830,14 +830,52 @@ const publicPost = async <T>(path: string, body: unknown): Promise<T> => {
 export const requestTemporaryPassword = (email: string) =>
   publicPost<{ detail: string }>("/api/auth/password/forgot", { email });
 
-/** Set a new password, with the emailed temporary password as the old one. */
+/**
+ * Set a new password, with the emailed temporary password as the old one.
+ * `second_step_proof` stands in for the emailed code on the sign-in that
+ * follows (see holdResetProof below); null if the API could not issue one.
+ */
 export const resetPasswordWithTemporary = (
   email: string,
   temporaryPassword: string,
   newPassword: string,
 ) =>
-  publicPost<{ reset: boolean }>("/api/auth/password/reset", {
+  publicPost<{ reset: boolean; second_step_proof: string | null }>("/api/auth/password/reset", {
     email,
     temporary_password: temporaryPassword,
     new_password: newPassword,
   });
+
+/**
+ * The sign-in straight after a reset skips "Confirm it's you": the temporary
+ * password already came from the mailbox the code would go to. The reset's
+ * one-time token is held here, in memory only (never storage), for the few
+ * seconds between the reset and the second-step screen, which spends it.
+ * The API accepts it once, within ten minutes, for that person only.
+ */
+const RESET_PROOF_LIFETIME_MS = 10 * 60 * 1000;
+let resetProof: { value: string; heldAt: number } | null = null;
+// One request per token, shared: React runs effects twice in development, and
+// a token spent by the first call would fail the second.
+let resetPass: Promise<boolean> | null = null;
+
+export const holdResetProof = (value: string | null) => {
+  resetProof = value ? { value, heldAt: Date.now() } : null;
+  if (value) resetPass = null;
+};
+
+/** The held token if it is still young enough to try. */
+export const peekResetProof = (): string | null =>
+  resetProof && Date.now() - resetProof.heldAt < RESET_PROOF_LIFETIME_MS
+    ? resetProof.value
+    : null;
+
+/** Spend the reset's token as this session's second step. Never rejects. */
+export const passSecondStepWithResetProof = (proof: string): Promise<boolean> => {
+  resetPass ??= mutate<SecondStepPassed>("/api/admin/2fa/password-reset", "POST", { proof })
+    .then(() => true, () => false)
+    .finally(() => {
+      resetProof = null;
+    });
+  return resetPass;
+};
