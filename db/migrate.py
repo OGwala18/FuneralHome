@@ -7,6 +7,7 @@ the schema reaches production.
     python db/migrate.py                    # apply anything outstanding
     python db/migrate.py --status           # show what is applied
     python db/migrate.py --dry-run          # show what WOULD run
+    python db/migrate.py --upto 0019_enquiry_idempotency.sql   # stop after this file
 
 Reads DATABASE_URL, or --database-url.
 
@@ -86,6 +87,15 @@ def main() -> int:
             "this runner existed."
         ),
     )
+    parser.add_argument(
+        "--upto",
+        metavar="FILENAME",
+        help=(
+            "Apply outstanding migrations only up to and including this file. "
+            "db/restore.py uses it to build the schema a backup was taken at, "
+            "load the rows, and only then run the newer migrations over them."
+        ),
+    )
     args = parser.parse_args()
 
     if not args.database_url:
@@ -134,6 +144,12 @@ def main() -> int:
             return 1
 
         pending = [f for f in files if f.name not in applied]
+
+        if args.upto:
+            if args.upto not in [f.name for f in files]:
+                print("ERROR: %s is not a migration." % args.upto)
+                return 1
+            pending = [f for f in pending if f.name <= args.upto]
 
         if args.baseline:
             names = [f.name for f in files]

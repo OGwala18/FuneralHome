@@ -353,6 +353,8 @@ db/
 ├── migrate.py                 Applies pending migrations to any Postgres
 ├── provision_api_role.py      Production: migrate, then let induduzo_api log in
 ├── keepalive.py               Stops the free Supabase project pausing
+├── backup.py                  Daily JSON backup of every public table (the jobs cron)
+├── restore.py                 Loads one backup into an EMPTY database; see docs/restore-drill.md
 ├── migrations/                ★ THE SCHEMA SOURCE OF TRUTH. Applied in filename order.
 │   ├── 0001_extensions_and_roles.sql
 │   ├── 0002_enums.sql
