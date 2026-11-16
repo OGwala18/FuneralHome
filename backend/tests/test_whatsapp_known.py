@@ -91,3 +91,29 @@ def test_someone_who_applied_gets_the_menu(client, known_mode):
         conn.rollback()
 
     assert delivery.replies and "1." in delivery.replies[0][0]
+
+
+# --- Business-started messages need a template outside the 24-hour window -------------
+
+@pytest.fixture
+def twilio_on(monkeypatch):
+    settings = dataclasses.replace(
+        get_settings(), whatsapp_outbound="on", twilio_account_sid="ACtest",
+        twilio_auth_token="test", twilio_whatsapp_from="+27737310521",
+        twilio_welcome_sid=None, twilio_payment_due_sid=None, twilio_payment_missed_sid=None)
+    monkeypatch.setattr(whatsapp, "get_settings", lambda: settings)
+    return settings
+
+
+def test_a_welcome_without_a_template_is_not_sent_into_a_closed_window(twilio_on):
+    # WhatsApp would silently refuse it (63016) after Twilio said "queued".
+    result = whatsapp.send_welcome(to_mobile="+27760000000", body="hello",
+                                   first_name="Test", policy_number="AA1", window_open=False)
+    assert result.sent is False and result.error == "needs_template"
+
+
+def test_a_reminder_without_a_template_is_not_either(twilio_on):
+    result = whatsapp.send_payment_reminder(kind="due", to_mobile="+27760000000", body="x",
+                                            first_name="Test", amount="R1.00",
+                                            policy_number="AA1", window_open=False)
+    assert result.error == "needs_template"

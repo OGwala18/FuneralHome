@@ -100,19 +100,54 @@ def test_a_dependant_can_be_made_the_beneficiary(client, staff_as):
     staff_as("admin")
     enrolled = _enrol(client, beneficiary=None)
     policy = enrolled["policy_id"]
-    child = client.post(f"/api/admin/policies/{policy}/members", json={
-        "surname": "Testperson", "first_names": "Lwazi", "member_type": "child",
-        "date_of_birth": "2012-04-05"}).json()
+    sister = client.post(f"/api/admin/policies/{policy}/members", json={
+        "surname": "Testperson", "first_names": "Zanele", "member_type": "extended",
+        "date_of_birth": "1985-04-05"}).json()
 
     response = client.post(f"/api/admin/policies/{policy}/beneficiaries",
-                           json={"person_id": child["person_id"], "relationship": "Son"})
+                           json={"person_id": sister["person_id"], "relationship": "Sister"})
 
     assert response.status_code == 201, response.text
     detail = client.get(f"/api/admin/policies/{policy}").json()
     assert [(b["first_names"], b["covered_life"], b["relationship"])
-            for b in detail["beneficiaries"]] == [("Lwazi", True, "Son")]
+            for b in detail["beneficiaries"]] == [("Zanele", True, "Sister")]
     # Still a covered life, once.
-    assert sum(1 for life in detail["lives"] if life["person_id"] == child["person_id"]) == 1
+    assert sum(1 for life in detail["lives"] if life["person_id"] == sister["person_id"]) == 1
+
+
+# The application form, section 8: each beneficiary must be 18 or older.
+
+def test_a_child_cannot_be_made_the_beneficiary(client, staff_as):
+    staff_as("admin")
+    enrolled = _enrol(client, beneficiary=None)
+    policy = enrolled["policy_id"]
+    child = client.post(f"/api/admin/policies/{policy}/members", json={
+        "surname": "Testperson", "first_names": "Lwazi", "member_type": "child",
+        "date_of_birth": "2015-04-05"}).json()
+
+    response = client.post(f"/api/admin/policies/{policy}/beneficiaries",
+                           json={"person_id": child["person_id"]})
+
+    assert response.status_code == 422
+    assert "18" in response.json()["field_errors"]["person_id"]
+
+
+def test_an_outside_beneficiary_under_18_is_refused(client, staff_as):
+    staff_as("admin")
+    enrolled = _enrol(client, beneficiary=None)
+    response = client.post(f"/api/admin/policies/{enrolled['policy_id']}/beneficiaries", json={
+        "person": {"surname": "Testperson", "first_names": "Young",
+                   "date_of_birth": "2012-01-01"}})
+    assert response.status_code == 422
+    assert "person.date_of_birth" in response.json()["field_errors"]
+
+
+def test_enrolling_with_a_beneficiary_under_18_is_refused(client, staff_as):
+    staff_as("admin")
+    response = client.post("/api/admin/members", json=_enrolment(beneficiary={
+        "surname": "Testperson", "first_names": "Young", "date_of_birth": "2012-01-01"}))
+    assert response.status_code == 422
+    assert "beneficiary.date_of_birth" in response.json()["field_errors"]
 
 
 def test_someone_not_covered_can_be_the_beneficiary_with_full_details(client, staff_as, api_conn):

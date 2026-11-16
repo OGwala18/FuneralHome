@@ -162,19 +162,28 @@ def send_registration_confirmation(
 
 
 def send_welcome(*, to_mobile: str, body: str, first_name: str,
-                 policy_number: str) -> WhatsAppResult:
+                 policy_number: str, window_open: bool = False) -> WhatsAppResult:
     """The welcome a new member gets. Template when configured. Never raises."""
     return _send_business_message(
         purpose="welcome", to_mobile=to_mobile, body=body,
         template=get_settings().twilio_welcome_sid,
-        variables={"1": first_name, "2": policy_number})
+        variables={"1": first_name, "2": policy_number}, window_open=window_open)
 
 
 def _send_business_message(*, purpose: str, to_mobile: str, body: str,
-                           template: str | None, variables: dict) -> WhatsAppResult:
+                           template: str | None, variables: dict,
+                           window_open: bool = False) -> WhatsAppResult:
     """A message the business starts: an approved template when one is set,
-    otherwise `body` (sandbox, or a conversation open in the last 24 hours)."""
+    otherwise `body`, but only inside a conversation the family opened in the
+    last 24 hours. Outside it WhatsApp silently refuses plain text (Twilio
+    63016) after Twilio has accepted it, so it is not sent at all and the
+    outcome says why: 'needs_template'.
+    """
     settings = get_settings()
+    if not template and not window_open:
+        logger.info("WhatsApp %s not sent: no approved template and no open conversation",
+                    purpose)
+        return WhatsAppResult(sent=False, error="needs_template")
     if not settings.whatsapp_enabled:
         logger.info("WhatsApp not configured; would send a %s message", purpose)
         return WhatsAppResult(sent=False, error="whatsapp_not_configured")
@@ -212,7 +221,8 @@ def _send_business_message(*, purpose: str, to_mobile: str, body: str,
 
 
 def send_payment_reminder(*, kind: str, to_mobile: str, body: str, first_name: str,
-                          amount: str, policy_number: str) -> WhatsAppResult:
+                          amount: str, policy_number: str,
+                          window_open: bool = False) -> WhatsAppResult:
     """A payment reminder ('due' or 'missed'). Never raises.
 
     Uses the approved template for `kind` when one is configured, because a
@@ -238,6 +248,10 @@ def send_payment_reminder(*, kind: str, to_mobile: str, body: str, first_name: s
 
     template = (settings.twilio_payment_due_sid if kind == "due"
                 else settings.twilio_payment_missed_sid)
+    if not template and not window_open:
+        logger.info("Payment reminder (%s) not sent: no approved template and no open "
+                    "conversation", kind)
+        return WhatsAppResult(sent=False, error="needs_template")
     try:
         import json
 
