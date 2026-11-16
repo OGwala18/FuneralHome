@@ -130,6 +130,13 @@ ID numbers: never copy them into the repo. The schema is in `db/migrations`.
 so the free project never pauses. If the `jobs` cron stops, someone must run
 `python db/keepalive.py` weekly, or staff cannot sign in.
 
+**The backup restores; proven locally only.** `db/restore.py` loads a backup
+into an empty database (it refuses one with any people, policies, enquiries or
+staff) and checks every table row by row before committing. Proven against the
+local Docker database on 16 Nov 2026: every table matched on count and
+checksum. A drill with a real production backup still needs the owner, who
+holds the Railway login. Steps: `docs/restore-drill.md`.
+
 **"Forgot your password?" needs the Supabase service key.** The portal's
 sign-in screen emails a one-use temporary password (`/api/auth/password`), and
 the API sets the new password through Supabase's admin API with
