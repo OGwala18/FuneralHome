@@ -5,7 +5,9 @@
 
 Run once a day, in the morning (the Railway `jobs` cron runs it through
 app/jobs/daily.py on the days in REMINDER_DAYS). It refuses, claiming nothing,
-until WhatsApp and the approved templates are configured (not_ready). Safe to run again: every reminder is claimed
+until WhatsApp and the approved templates are configured (not_ready), and
+while Twilio refuses this service's credentials (whatsapp.credentials_problem,
+which sends nothing). Safe to run again: every reminder is claimed
 in payment_reminders before it is sent, so nothing goes out twice
 (app/services/payment_reminders.py).
 
@@ -26,7 +28,7 @@ import psycopg  # noqa: E402
 from psycopg.rows import dict_row  # noqa: E402
 
 from ..config import get_settings  # noqa: E402
-from ..services import payment_reminders  # noqa: E402
+from ..services import payment_reminders, whatsapp  # noqa: E402
 from ..services.whatsapp_content import SAST  # noqa: E402
 
 
@@ -38,6 +40,14 @@ def main() -> int:
         print(f"Payment reminders for {today} not sent; WhatsApp is not ready: "
               + ", ".join(missing) + ". Nothing was claimed.")
         return 0
+    problem = whatsapp.credentials_problem(get_settings())
+    if problem:
+        # Every send would fail on these credentials, and each failure would use
+        # up that reminder for good. Exit 1, so the run shows as failed: once the
+        # token is fixed, run this again with today's date to send them.
+        print(f"Payment reminders for {today} not sent; Twilio refused this service's "
+              f"credentials ({problem}). Nothing was claimed.")
+        return 1
     with psycopg.connect(get_settings().database_url, row_factory=dict_row) as conn:
         counts = payment_reminders.run(conn, today)
     print(f"Payment reminders for {today}: {counts or 'none due'}")

@@ -13,10 +13,15 @@ WHAT IT RUNS
    idle; db/keepalive.py is no longer something a person has to remember.
 2. The premium schedule (schedule_instalments), every day. Forward-only and
    idempotent, so a daily run only adds what a new policy or a new month needs.
-3. Payment reminders (payment_reminders), only on the days of the month in
+3. The Twilio credentials check (twilio_credentials), every day the line is
+   configured. It asks Twilio for the account, which sends nothing, so a
+   wrong or revoked token fails a morning run (Railway shows the run as
+   failed) long before the 25th, instead of costing that month's reminders.
+4. Payment reminders (payment_reminders), only on the days of the month in
    REMINDER_DAYS (default "25", the owner's choice on 13 Nov 2026). That job
    refuses, claiming nothing, until WhatsApp and its approved templates are
-   configured, so running it early costs no reminder.
+   configured and Twilio accepts the credentials, so running it early or with
+   a bad token costs no reminder.
 
 One step failing never stops the next. The run exits 1 if any step failed, so
 Railway shows the run as failed and the owner can look.
@@ -38,6 +43,8 @@ from dotenv import load_dotenv
 # Before app.config is imported: it reads the environment once, at import.
 load_dotenv()
 
+from ..config import get_settings  # noqa: E402
+from ..services import whatsapp  # noqa: E402
 from ..services.whatsapp_content import SAST  # noqa: E402
 from . import payment_reminders, schedule_instalments  # noqa: E402
 
@@ -56,9 +63,22 @@ def backup() -> int:
     return subprocess.run([sys.executable, str(ROOT / "db" / "backup.py")], check=False).returncode
 
 
+def twilio_credentials() -> int:
+    settings = get_settings()
+    if not settings.whatsapp_enabled:
+        # Not set up here (a laptop, or before launch): not_ready says so on
+        # the reminder days, and nothing could be sent anyway.
+        print("twilio credentials: not configured, skipped")
+        return 0
+    problem = whatsapp.credentials_problem(settings)
+    print("twilio credentials: " + (f"refused ({problem})" if problem else "accepted"))
+    return 1 if problem else 0
+
+
 def main() -> int:
     today = datetime.now(SAST).date()
-    steps = [("backup", backup), ("premium schedule", schedule_instalments.main)]
+    steps = [("backup", backup), ("premium schedule", schedule_instalments.main),
+             ("twilio credentials", twilio_credentials)]
     if today.day in reminder_days():
         steps.append(("payment reminders", payment_reminders.main))
 

@@ -125,7 +125,12 @@ so the free project never pauses. If the `jobs` cron stops, someone must run
 
 **Payment reminders burn on failure.** Each is claimed before it is sent and
 never retried, so the job refuses, claiming nothing, until Twilio, both payment
-templates and `WHATSAPP_OUTBOUND=on` are set (`payment_reminders.not_ready`).
+templates and `WHATSAPP_OUTBOUND=on` are set (`payment_reminders.not_ready`),
+and while Twilio refuses the `jobs` service's own token
+(`whatsapp.credentials_problem`, a read that sends nothing). The daily run
+makes that check every morning too, so a wrong token shows up as a failed run
+long before the 25th. Railway seals the token and does not copy it when an
+environment is duplicated: `/health` cannot tell a wrong token from a right one.
 
 **The repo is public.** Check for secrets and personal data before every push.
 `db/seed/` scripts are tracked; the CSV/XLSX/SQL data they read and write is

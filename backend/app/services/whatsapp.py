@@ -100,6 +100,35 @@ def _failure_code(exc: Exception) -> str:
     return type(exc).__name__
 
 
+def credentials_problem(settings: Settings | None = None) -> str | None:
+    """Whether Twilio accepts this service's account SID and auth token right
+    now. None means it does; otherwise a code that is safe to print, such as
+    twilio_20003 (wrong token) or twilio_account_suspended.
+
+    It asks Twilio for the account itself: a read that sends nothing, messages
+    nobody and costs nothing. /health and not_ready() only see that the
+    variables exist, and Railway seals the token, so this is the only way to
+    learn a pasted token is wrong before a send fails on it. Never raises.
+    """
+    settings = settings or get_settings()
+    if not settings.whatsapp_enabled:
+        return "whatsapp_not_configured"
+    try:
+        from twilio.rest import Client
+    except ImportError:
+        return "twilio_sdk_missing"
+    try:
+        client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
+        account = client.api.v2010.accounts(settings.twilio_account_sid).fetch()
+    except Exception as exc:  # noqa: BLE001 - a check must report, never raise
+        return _failure_code(exc)
+    # A suspended or closed account accepts the login and then refuses every send.
+    status = getattr(account, "status", None)
+    if isinstance(status, str) and status != "active":
+        return f"twilio_account_{status}"
+    return None
+
+
 def send_registration_confirmation(
     *, to_mobile: str, first_name: str, reference: str
 ) -> WhatsAppResult:
