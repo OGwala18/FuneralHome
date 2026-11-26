@@ -10,6 +10,7 @@ import {
   WHATSAPP_URL,
 } from "@/lib/contact";
 import { GUARANTEED_PAYOUTS, PLANS } from "@/data/plans";
+import { bannerImageUrl, useSiteBanner } from "@/lib/site";
 
 const services = [
   {
@@ -52,14 +53,24 @@ const services = [
 
 export default function Home() {
   const { language, t } = useLanguage();
+  // The banner staff set in the portal (Settings > Website settings). Each
+  // blank line falls back to the site's own wording; no photo, its own photo.
+  const { banner, ready } = useSiteBanner();
+  const inLanguage = (en: string | null | undefined, zu: string | null | undefined) =>
+    (language === "zu" ? zu || en : en) || null;
+  const heroTitle = inLanguage(banner?.headline_en, banner?.headline_zu) ?? t("hero_title");
+  const heroSubtitle = inLanguage(banner?.message_en, banner?.message_zu) ?? t("hero_subtitle");
+  const heroPhoto = bannerImageUrl(banner) ?? heroImage;
 
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
-      <section className="relative flex min-h-[560px] items-center justify-center overflow-hidden py-16 md:h-[600px] md:py-0">
-        <div 
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${heroImage})` }}
+      <section className="relative flex min-h-[560px] items-center justify-center overflow-hidden bg-navy py-16 md:h-[600px] md:py-0">
+        <div
+          className={`absolute inset-0 bg-navy bg-cover bg-center transition-opacity duration-500 ${
+            ready ? "opacity-100" : "opacity-0"
+          }`}
+          style={{ backgroundImage: `url(${heroPhoto})` }}
         >
           {/* Flat 48% rather than a gradient, so the photo is exposed the same
               way in both themes and the hero text contrast never shifts. */}
@@ -68,8 +79,10 @@ export default function Home() {
         
         <div className="relative container z-10 text-white hero-text">
           <div className="max-w-2xl">
-            <h1 className="mb-6">{t("hero_title")}</h1>
-            <p className="text-xl mb-8 leading-relaxed">{t("hero_subtitle")}</p>
+            <div className={`transition-opacity duration-500 ${ready ? "opacity-100" : "opacity-0"}`}>
+              <h1 className="mb-6">{heroTitle}</h1>
+              <p className="text-xl mb-8 leading-relaxed">{heroSubtitle}</p>
+            </div>
             
             <div className="flex flex-wrap gap-4">
               <Button size="lg" asChild>

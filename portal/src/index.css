@@ -642,3 +642,64 @@ tbody tr.clickable:hover { background: var(--paper); }
   margin: 0;
   transform: translateY(2px);
 }
+
+/* ------------------------------------------------------------ Settings --- */
+
+.settings-sections { display: flex; flex-wrap: wrap; gap: var(--s8); margin: var(--s12) 0; }
+.settings-sections .btn { text-decoration: none; }
+
+/* The homepage banner, previewed as families see it: the photo under a flat
+   48% shade (as on the website), white words over it. */
+.banner-previews { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: var(--s16); align-items: end; }
+.banner-previews figure { margin: 0; }
+.banner-preview {
+  position: relative;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border-radius: var(--r8);
+  background-color: var(--navy);
+  background-size: cover;
+  background-position: center;
+}
+.banner-preview::before { content: ""; position: absolute; inset: 0; background: rgb(0 0 0 / 0.48); }
+.banner-preview-wide { aspect-ratio: 1920 / 800; }
+.banner-preview-phone { aspect-ratio: 375 / 560; }
+.banner-preview-text {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 8%;
+  color: var(--white);
+  max-width: 70%;
+}
+.banner-preview-text strong { font: 600 clamp(14px, 2.2vw, 26px)/1.2 var(--serif); }
+.banner-preview-text span { font-size: clamp(10px, 1vw, 14px); line-height: 1.4; }
+.banner-preview-phone .banner-preview-text { max-width: 100%; }
+.banner-preview-phone .banner-preview-text strong { font-size: 14px; }
+.banner-preview-phone .banner-preview-text span { font-size: 10px; }
+@media (max-width: 720px) { .banner-previews { grid-template-columns: 1fr; } }
+
+.feedback-link { display: flex; gap: var(--s24); align-items: flex-start; flex-wrap: wrap; }
+.feedback-url {
+  display: block;
+  padding: var(--s8) var(--s12);
+  border-radius: var(--r8);
+  background: var(--soft);
+  font: 14px/20px var(--mono);
+  word-break: break-all;
+}
+.feedback-qr { margin: 0; display: flex; flex-direction: column; align-items: center; gap: var(--s8); }
+.feedback-qr img { border: 1px solid var(--line); border-radius: var(--r8); background: var(--white); }
+
+.question-edit {
+  border: 1px solid var(--line);
+  border-radius: var(--r8);
+  padding: var(--s12) var(--s16);
+  margin: 0;
+}
+.question-edit legend { padding: 0 var(--s4); font-weight: 600; }
+
+.answers { display: grid; gap: var(--s12); margin: 0; }
+.answers dd { margin: var(--s4) 0 0; white-space: pre-wrap; }

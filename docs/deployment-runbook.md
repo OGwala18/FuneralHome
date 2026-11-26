@@ -258,11 +258,12 @@ Expected:
 - The header does not show **My Portal**.
 - Browser console has no uncaught errors.
 - Navigation, language buttons, phone links, WhatsApp links, and public forms
-  behave as expected. Two public phone numbers must display: `079 751 0648`
-  (primary) and `082 954 9241`. Telephone links must use `tel:+27797510648` and
-  `tel:+27829549241`; WhatsApp links must use `https://wa.me/27797510648` and
-  `https://wa.me/27829549241`. Single-number surfaces (header call button, the
-  floating WhatsApp button) use the primary number only. The public email must
+  behave as expected. Two public phone numbers must display: `069 706 0387`
+  (the 24-hour line, primary) and `082 954 9241`. Telephone links must use
+  `tel:+27697060387` and `tel:+27829549241`. WhatsApp links go to the business
+  line, `https://wa.me/27737310521`. Single-number surfaces (header call button,
+  the hero's call button) use the primary number only. `079 751 0648` was
+  retired on 26 Nov 2026 and must not appear anywhere. The public email must
   display and link to `Info@induduzo.co.za`.
 - Test every public route at phone (390px), tablet (768px), and desktop (1440px)
   widths. Confirm there is no horizontal scrolling and the mobile/tablet menu

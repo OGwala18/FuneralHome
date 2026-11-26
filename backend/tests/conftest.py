@@ -51,6 +51,9 @@ from app.auth import StaffUser, require_staff  # noqa: E402
 from app.main import app  # noqa: E402
 from app.ratelimit import (  # noqa: E402
     application_limiter,
+    feedback_open_limiter,
+    feedback_rating_limiter,
+    feedback_send_limiter,
     lead_limiter,
     password_forgot_limiter,
     password_reset_limiter,
@@ -73,6 +76,9 @@ def _fresh_rate_limits():
     application_limiter._hits.clear()
     password_forgot_limiter._hits.clear()
     password_reset_limiter._hits.clear()
+    feedback_open_limiter._hits.clear()
+    feedback_send_limiter._hits.clear()
+    feedback_rating_limiter._hits.clear()
 
 
 @pytest.fixture

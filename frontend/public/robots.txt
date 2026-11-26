@@ -1,16 +1,21 @@
 User-agent: Googlebot
 Allow: /
+Disallow: /feedback/
 
 User-agent: Bingbot
 Allow: /
+Disallow: /feedback/
 
 User-agent: Twitterbot
 Allow: /
+Disallow: /feedback/
 
 User-agent: facebookexternalhit
 Allow: /
+Disallow: /feedback/
 
 User-agent: *
 Allow: /
+Disallow: /feedback/
 
 Sitemap: https://induduzo.co.za/sitemap.xml

@@ -174,6 +174,11 @@ backend/
 | `POST` | `/api/whatsapp/status` | Twilio: sent, delivered, read or failed. Signature-checked |
 | `POST` | `/api/auth/password/forgot` | Staff forgot their password: emails a temporary one (30 min, one use) if the address is active staff. Always the same **202** |
 | `POST` | `/api/auth/password/reset` | The temporary password as the old one, plus a new one: sets it in Supabase. Needs `SUPABASE_SERVICE_ROLE_KEY` |
+| `GET` | `/api/site/banner` | The homepage banner staff set in the portal: words and photo, all null for the site's own. Cached 60 s |
+| `GET` | `/api/site/banner/images/{id}` | A banner photo, only one a saved banner used. Cached a year (each photo has its own address) |
+| `GET` | `/api/feedback/{code}` | The private questionnaire's questions. A wrong or closed code is a plain 404. Rate-limited |
+| `POST` | `/api/feedback/{code}/responses` | Name, surname, mobile, answers, `contact_consent`. Saved before the rating is asked |
+| `POST` | `/api/feedback/responses/{id}/rating` | The 1-5 rating, once, within two hours of the response |
 
 Staff routes all sit under `/api/admin`, behind `require_staff`; every write
 also needs `require_role("admin")`. The ones that touch the book of business:
@@ -198,6 +203,10 @@ also needs `require_role("admin")`. The ones that touch the book of business:
 | `GET` | `/api/admin/whatsapp/messages/{id}/media/{n}` | A photo a family sent, fetched from Twilio. Escalated conversations only |
 | `GET` | `/api/admin/whatsapp/stats` | Growth: usage, topics and ratings. No numbers |
 | `GET` | `/api/admin/analytics?period=day\|7d\|28d\|91d` | **Owner only.** The LIVE site's Plausible figures, on every environment. Cached 5 min; needs `PLAUSIBLE_API_KEY` |
+| `GET`, `POST` | `/api/admin/website/banner` | Settings > Website settings: the live banner and its last ten changes; save a new one (admin, owner). Append-only history |
+| `POST` | `/api/admin/website/banner/images` | Upload a banner photo as the raw body, up to `MAX_BANNER_IMAGE_BYTES` (2 MB, this route only). Type and size read from the bytes |
+| `GET` | `/api/admin/feedback` | The questionnaire's link (built from `PUBLIC_SITE_URL`), questions, responses and average rating. Any staff role |
+| `PATCH` | `/api/admin/feedback/survey`; `POST` `/survey/new-link` | Change the questions or open/close it; replace the link, retiring every printed QR code (admin, owner) |
 
 Interactive docs run at `/docs` in development.
 

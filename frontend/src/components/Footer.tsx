@@ -1,6 +1,7 @@
 import { NavLink } from "@/lib/navigation";
 import { Clock, Mail, MessageCircle, Phone } from "lucide-react";
 
+import { BrandLogo } from "@/components/BrandLogo";
 import { OfficeMap } from "@/components/OfficeMap";
 import { useLanguage } from "@/lib/i18n";
 import {
@@ -16,7 +17,9 @@ export const Footer = () => {
       <div className="container py-12">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
-            <h3 className="font-semibold text-lg mb-4">Induduzo Funeral Home</h3>
+            <h3 className="mb-4">
+              <BrandLogo className="h-24" />
+            </h3>
             <p className="text-muted-foreground text-base">
               {t("footer_tagline")}
             </p>
@@ -46,21 +49,20 @@ export const Footer = () => {
           <div>
             <h4 className="font-semibold mb-4">{t("footer_contact_info")}</h4>
             <div className="space-y-3 text-base">
-              {CONTACT_PHONES.map((p) => (
-                <a
-                  key={p.e164}
-                  href={p.link}
-                  className="flex items-center hover:text-primary transition-colors"
-                >
-                  <Phone className="h-5 w-5 mr-2" />
-                  {p.display}
-                </a>
-              ))}
-              <a href={TWENTY_FOUR_HOUR_LINE.link}
-                className="flex items-center hover:text-primary transition-colors">
-                <Clock className="h-5 w-5 mr-2" />
-                {TWENTY_FOUR_HOUR_LINE.display} (24 hours)
-              </a>
+              {CONTACT_PHONES.map((p) => {
+                const allHours = p.e164 === TWENTY_FOUR_HOUR_LINE.e164;
+                const Icon = allHours ? Clock : Phone;
+                return (
+                  <a
+                    key={p.e164}
+                    href={p.link}
+                    className="flex items-center hover:text-primary transition-colors"
+                  >
+                    <Icon className="h-5 w-5 mr-2" />
+                    {p.display}{allHours && " (24 hours)"}
+                  </a>
+                );
+              })}
               <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
                 className="flex items-center hover:text-primary transition-colors">
                 <MessageCircle className="h-5 w-5 mr-2" />

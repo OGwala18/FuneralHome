@@ -191,6 +191,12 @@ CATALOG: dict[str, ErrorInfo] = _entries(
               "Nothing: the portal falls back to the emailed code.", "staff"),
 
     # --- Email (recorded on *_email_failed events; app/services/email.py) -------
+    ErrorInfo("image_not_accepted", 422, "homepage banner photo (app/routers/website.py)",
+              "The uploaded file is not a JPEG, PNG or WebP of a usable size.",
+              "A file that is not a photo, one too small for the banner, or over 2 MB.",
+              "Choose a photo at least 1200 pixels wide. The portal crops and resizes it "
+              "to 1920 x 800 itself; a different client must do the same.", "staff"),
+
     ErrorInfo("email_not_configured", None, "email",
               "No SMTP_HOST on this server, so nothing was sent.",
               "Expected on a laptop. On Railway: SMTP_* variables missing.",

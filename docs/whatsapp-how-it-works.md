@@ -124,7 +124,7 @@ break everything above.
 | Office emails | Yes, to admin@induduzo.co.za | — |
 | WhatsApp confirmation | Yes: all four Twilio settings are on the internal API (20 Oct). Delivers once Meta approves the template | — |
 | Messages to the line | Stored in Twilio only | — |
-| Website "WhatsApp us" button | Still 079 751 0648 (answered by staff in the WhatsApp app) | Still 079 751 0648 |
+| Website "WhatsApp us" button | 073 731 0521, the business line (079 751 0648 retired 26 Nov 2026) | 073 731 0521 |
 
 Important while testing on internal: **the confirmation goes to whatever mobile
 number is typed on the form.** Only use your own numbers there.

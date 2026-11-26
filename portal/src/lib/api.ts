@@ -999,3 +999,144 @@ export const passSecondStepWithResetProof = (proof: string): Promise<boolean> =>
     });
   return resetPass;
 };
+
+// ---------------------------------------------------------------------------
+// Website settings: the homepage banner (/api/admin/website)
+// ---------------------------------------------------------------------------
+
+export interface WebsiteBanner {
+  headline_en: string | null;
+  headline_zu: string | null;
+  message_en: string | null;
+  message_zu: string | null;
+  image_id: string | null;
+  image_url: string | null;
+  image_width: number | null;
+  image_height: number | null;
+  updated_at: string | null;
+}
+
+export interface WebsiteBannerChange extends WebsiteBanner {
+  id: string;
+  saved_by: string;
+}
+
+export interface WebsiteBannerAdmin {
+  current: WebsiteBanner;
+  history: WebsiteBannerChange[];
+  can_edit: boolean;
+  recommended_width: number;
+  recommended_height: number;
+}
+
+export interface BannerIn {
+  headline_en: string | null;
+  headline_zu: string | null;
+  message_en: string | null;
+  message_zu: string | null;
+  image_id: string | null;
+}
+
+export interface UploadedImage {
+  id: string;
+  content_type: string;
+  width: number;
+  height: number;
+  byte_size: number;
+}
+
+export const fetchWebsiteBanner = () => request<WebsiteBannerAdmin>("/api/admin/website/banner");
+
+export const saveWebsiteBanner = (body: BannerIn) =>
+  mutate<WebsiteBanner>("/api/admin/website/banner", "POST", body);
+
+/** The photo's bytes as the body: the API reads the type and size from them. */
+export const uploadBannerImage = async (photo: Blob): Promise<UploadedImage> => {
+  const token = await getAccessToken();
+  if (!token) throw new ApiError("Your session has ended. Please sign in again.", 401);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/api/admin/website/banner/images`, {
+      method: "POST",
+      headers: authHeaders(token, { "Content-Type": photo.type || "application/octet-stream" }),
+      body: photo,
+    });
+  } catch {
+    throw new ApiError("Could not reach the server.", 0);
+  }
+  if (!response.ok) throw await readError(response, "The photo could not be uploaded.");
+  return (await response.json()) as UploadedImage;
+};
+
+/** A stored photo, saved or not, as a Blob for an object URL (an <img> cannot
+ *  send the staff token). */
+export const fetchBannerImage = async (imageId: string): Promise<Blob> => {
+  const token = await getAccessToken();
+  if (!token) throw new ApiError("Your session has ended. Please sign in again.", 401);
+  let response: Response;
+  try {
+    response = await fetch(
+      `${API_BASE}/api/admin/website/banner/images/${encodeURIComponent(imageId)}`,
+      { headers: authHeaders(token) },
+    );
+  } catch {
+    throw new ApiError("Could not reach the server.", 0);
+  }
+  if (!response.ok) throw await readError(response, "Could not load the photo.");
+  return response.blob();
+};
+
+// ---------------------------------------------------------------------------
+// Website settings: the private feedback questionnaire (/api/admin/feedback)
+// ---------------------------------------------------------------------------
+
+export type FeedbackQuestionKind = "text" | "yes_no" | "scale";
+
+export interface FeedbackQuestion {
+  id: string;
+  kind: FeedbackQuestionKind;
+  text_en: string;
+  text_zu: string | null;
+}
+
+export interface FeedbackSurvey {
+  link_code: string;
+  link: string;
+  is_open: boolean;
+  questions: FeedbackQuestion[];
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface FeedbackResponseRow {
+  id: string;
+  first_name: string;
+  surname: string;
+  mobile: string;
+  answers: { id: string; kind: FeedbackQuestionKind; question: string; answer: string }[];
+  source: "qr" | "link";
+  language: "en" | "zu";
+  rating: number | null;
+  rating_comment: string | null;
+  created_at: string;
+}
+
+export interface FeedbackOverview {
+  survey: FeedbackSurvey;
+  summary: {
+    responses: number;
+    rated: number;
+    average_rating: number | null;
+    by_rating: Record<string, number>;
+  };
+  responses: FeedbackResponseRow[];
+  can_edit: boolean;
+}
+
+export const fetchFeedback = () => request<FeedbackOverview>("/api/admin/feedback");
+
+export const updateFeedbackSurvey = (body: { questions?: FeedbackQuestion[]; is_open?: boolean }) =>
+  mutate<FeedbackSurvey>("/api/admin/feedback/survey", "PATCH", body);
+
+export const replaceFeedbackLink = () =>
+  mutate<FeedbackSurvey>("/api/admin/feedback/survey/new-link", "POST", {});

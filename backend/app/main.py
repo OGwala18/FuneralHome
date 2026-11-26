@@ -35,10 +35,12 @@ from .routers import (  # noqa: E402
     admin,
     analytics,
     enquiries,
+    feedback,
     members,
     password_reset,
     payments,
     two_step,
+    website,
     whatsapp,
 )
 
@@ -107,6 +109,8 @@ app.add_middleware(
     RequestContextMiddleware,
     max_body_bytes=settings.max_request_bytes,
     deployed=_is_deployed,
+    # The banner photo is the one body bigger than a form (routers/website.py).
+    larger_bodies={website.IMAGE_UPLOAD_PATH: settings.max_banner_image_bytes},
 )
 
 app.include_router(enquiries.router)
@@ -118,6 +122,10 @@ app.include_router(whatsapp.admin_router)
 app.include_router(analytics.router)
 app.include_router(two_step.router)
 app.include_router(password_reset.router)
+app.include_router(website.public_router)
+app.include_router(website.admin_router)
+app.include_router(feedback.public_router)
+app.include_router(feedback.admin_router)
 
 
 def _request_id(request: Request) -> str:
