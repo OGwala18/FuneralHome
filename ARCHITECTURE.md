@@ -207,6 +207,8 @@ also needs `require_role("admin")`. The ones that touch the book of business:
 | `POST` | `/api/admin/website/banner/images` | Upload a banner photo as the raw body, up to `MAX_BANNER_IMAGE_BYTES` (2 MB, this route only). Type and size read from the bytes |
 | `GET` | `/api/admin/feedback` | The questionnaire's link (built from `PUBLIC_SITE_URL`), questions, responses and average rating. Any staff role |
 | `PATCH` | `/api/admin/feedback/survey`; `POST` `/survey/new-link` | Change the questions or open/close it; replace the link, retiring every printed QR code (admin, owner) |
+| `POST` | `/api/admin/member-upload/check` | Settings > User upload: the filled-in template (.xlsx, raw body, 2 MB) checked row by row. Policies come back ready, needing fixing (row, column, reason) or already in the book. Admin, owner. Bank columns refused |
+| `POST` | `/api/admin/member-upload/import?checksum=` | The same file again: checked from scratch, then each ready policy added in its own savepoint (premium and cover from the sheet, `source` `import:portal_upload`). Template: `portal/public/templates/`, built by `db/seed/make_member_upload_template.py` |
 
 Interactive docs run at `/docs` in development.
 

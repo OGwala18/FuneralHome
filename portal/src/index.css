@@ -703,3 +703,9 @@ tbody tr.clickable:hover { background: var(--paper); }
 
 .answers { display: grid; gap: var(--s12); margin: 0; }
 .answers dd { margin: var(--s4) 0 0; white-space: pre-wrap; }
+
+.upload-steps { margin: 0; padding-left: var(--s20); display: grid; gap: var(--s16); }
+.upload-steps li { padding-left: var(--s4); }
+.upload-policy { border: 1px solid var(--line); border-radius: var(--r8); padding: var(--s12) var(--s16); display: grid; gap: var(--s8); }
+.upload-policy p { margin: 0; }
+.verify-box { border-top: 1px solid var(--line); padding-top: var(--s16); }

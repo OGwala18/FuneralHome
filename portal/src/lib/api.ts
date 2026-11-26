@@ -1140,3 +1140,75 @@ export const updateFeedbackSurvey = (body: { questions?: FeedbackQuestion[]; is_
 
 export const replaceFeedbackLink = () =>
   mutate<FeedbackSurvey>("/api/admin/feedback/survey/new-link", "POST", {});
+
+// ---------------------------------------------------------------------------
+// Settings > User upload: members from the spreadsheet (/api/admin/member-upload)
+// ---------------------------------------------------------------------------
+
+export interface UploadProblem {
+  row: number;
+  column: string;
+  message: string;
+}
+
+export interface UploadPolicy {
+  policy_number: string;
+  /** ready: will be added. fix: a row failed. exists: already in the book. */
+  state: "ready" | "fix" | "exists";
+  first_row: number;
+  last_row: number;
+  main_member: string | null;
+  lives: { row: number; member_type: string | null; name: string; id_number_given: boolean;
+    date_of_birth: string | null }[];
+  product: string | null;
+  entry_date: string | null;
+  premium_cents: number | null;
+  cover_cents: number | null;
+  currency: string;
+  status: string;
+  problems: UploadProblem[];
+}
+
+export interface UploadCheck {
+  checksum: string;
+  rows: number;
+  policies: UploadPolicy[];
+  file_problems: UploadProblem[];
+  ignored_columns: string[];
+  ready: number;
+  to_fix: number;
+  already_in_book: number;
+}
+
+export interface UploadImport {
+  added: string[];
+  failed: Record<string, string>;
+  check: UploadCheck;
+}
+
+const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+const postFile = async <T>(path: string, file: Blob, fallback: string): Promise<T> => {
+  const token = await getAccessToken();
+  if (!token) throw new ApiError("Your session has ended. Please sign in again.", 401);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: authHeaders(token, { "Content-Type": XLSX_TYPE }),
+      body: file,
+    });
+  } catch {
+    throw new ApiError("Could not reach the server.", 0);
+  }
+  if (!response.ok) throw await readError(response, fallback);
+  return (await response.json()) as T;
+};
+
+export const checkMemberUpload = (file: Blob) =>
+  postFile<UploadCheck>("/api/admin/member-upload/check", file, "The sheet could not be checked.");
+
+export const importMemberUpload = (file: Blob, checksum: string) =>
+  postFile<UploadImport>(
+    `/api/admin/member-upload/import?checksum=${encodeURIComponent(checksum)}`, file,
+    "The policies could not be added.");

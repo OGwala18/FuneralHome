@@ -36,6 +36,7 @@ from .routers import (  # noqa: E402
     analytics,
     enquiries,
     feedback,
+    member_upload,
     members,
     password_reset,
     payments,
@@ -110,7 +111,11 @@ app.add_middleware(
     max_body_bytes=settings.max_request_bytes,
     deployed=_is_deployed,
     # The banner photo is the one body bigger than a form (routers/website.py).
-    larger_bodies={website.IMAGE_UPLOAD_PATH: settings.max_banner_image_bytes},
+    larger_bodies={
+        website.IMAGE_UPLOAD_PATH: settings.max_banner_image_bytes,
+        member_upload.CHECK_PATH: settings.max_banner_image_bytes,
+        member_upload.IMPORT_PATH: settings.max_banner_image_bytes,
+    },
 )
 
 app.include_router(enquiries.router)
@@ -126,6 +131,7 @@ app.include_router(website.public_router)
 app.include_router(website.admin_router)
 app.include_router(feedback.public_router)
 app.include_router(feedback.admin_router)
+app.include_router(member_upload.router)
 
 
 def _request_id(request: Request) -> str:

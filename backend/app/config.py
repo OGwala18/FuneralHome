@@ -72,8 +72,9 @@ class Settings:
     # read into memory (app/request_context.py).
     max_request_bytes: int = int(os.getenv("MAX_REQUEST_BYTES", str(256 * 1024)))
 
-    # The one upload: a homepage banner photo, already cropped and resized by
-    # the portal to 1920 x 800 (usually 200-400 KB). Allowed on that route only.
+    # The two uploads: a homepage banner photo, already cropped and resized by
+    # the portal to 1920 x 800 (usually 200-400 KB), and the member spreadsheet
+    # (Settings > User upload; 5,000 rows is well under 1 MB). On those routes only.
     max_banner_image_bytes: int = int(os.getenv("MAX_BANNER_IMAGE_BYTES", str(2_000_000)))
 
     # Twilio WhatsApp. Absent in dev -> confirmations are logged, not sent, and

@@ -6,6 +6,7 @@ import Staff from "./Staff";
 import ChangePassword from "@/components/ChangePassword";
 import BannerEditor from "@/components/settings/BannerEditor";
 import FeedbackSettings from "@/components/settings/FeedbackSettings";
+import UserUpload from "@/components/settings/UserUpload";
 
 /**
  * Settings: where the office runs its own system without asking a developer
@@ -100,12 +101,7 @@ export default function Settings({ me, section = "team" }: { me: StaffIdentity; 
           </>
         )}
 
-        {active.id === "uploads" && (
-          <Notice
-            title="Adding members from a spreadsheet is being built"
-            detail="This is where you will upload a spreadsheet of policies and their people, check each row, and add them to the member book in one go. Until it is ready, enrol members one at a time from Members."
-          />
-        )}
+        {active.id === "uploads" && <UserUpload canEdit={me.role === "admin" || isOwner} />}
 
         {active.id === "portal" && (
           <Notice
