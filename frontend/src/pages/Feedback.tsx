@@ -1,120 +1,108 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Star } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type Ref } from "react";
 
 import { BrandLogo } from "@/components/BrandLogo";
 import { Field } from "@/components/form/Field";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { TWENTY_FOUR_HOUR_LINE } from "@/lib/contact";
+import { TWENTY_FOUR_HOUR_LINE, WHATSAPP_LINE, WHATSAPP_URL } from "@/lib/contact";
 import { useLanguage, type Language } from "@/lib/i18n";
 import { isValidMobile, normaliseMobile } from "@/lib/registration";
 import {
   fetchQuestionnaire,
   sendFeedback,
-  sendRating,
   SiteError,
+  type FeedbackAnswer,
+  type FeedbackChoice,
   type FeedbackQuestion,
+  type Questionnaire,
 } from "@/lib/site";
 import NotFound from "./NotFound";
 
 /**
- * The private feedback questionnaire, at /feedback/<code>.
+ * The owner's post-funeral survey, at /feedback/<code> (and ?v=short for the
+ * five-question version).
  *
  * Not linked from anywhere on the site, not in the sitemap, disallowed in
  * robots.txt and marked noindex. It opens only from its own link, which the
- * office shares and prints as a QR code (Settings > Website settings in the
- * portal). A wrong or retired code shows the site's ordinary 404.
+ * office sends with its WhatsApp condolence message or prints as a QR code
+ * (Settings > Website settings in the portal). A wrong or retired code shows
+ * the site's ordinary 404.
  *
- * Name, surname and number first; then the questions one at a time, which is
- * kinder on a phone held after a scan; then thanks, and the 1-5 rating. The
- * answers are saved before the rating is asked, so leaving at that point still
- * counts.
+ * The introduction, then the questions one at a time (kinder on a phone, after
+ * a loss), then an optional name and number, then thanks. Answering is
+ * voluntary: Next always works unless staff marked a question as required.
  *
- * isiZulu wording here is a first draft for the office to check.
+ * The wording of the questions comes from the API (staff edit it). The page's
+ * own words below are the owner's draft, English and isiZulu.
  */
 
-type Step = "details" | "questions" | "rate" | "done";
+type Step = "intro" | "question" | "contact" | "done";
 
 const COPY = {
   en: {
-    title: "Tell us how we did",
-    intro: "It takes about two minutes. Your answers help us care for every family better.",
-    aboutYou: "About you",
-    name: "Name",
-    surname: "Surname",
-    mobile: "Mobile number",
-    mobileHint: "So we can follow up if you would like us to.",
-    consent: "I agree that Induduzo Funeral Home may keep my answers and contact me about them.",
     start: "Start",
     next: "Next",
-    back: "Back",
-    send: "Send my answers",
-    sending: "Sending…",
-    of: (n: number, total: number) => `Question ${n} of ${total}`,
-    yes: "Yes",
-    no: "No",
-    poor: "Poor",
-    excellent: "Excellent",
-    typeHere: "Type your answer here (optional)",
-    thanks: (name: string) => `Thank you, ${name}.`,
-    received: "Your answers have reached us.",
-    rateAsk: "How would you rate our service?",
-    stars: (n: number) => `${n} out of 5`,
-    addMore: "Anything you would like to add? (optional)",
-    sendRating: "Send rating",
     skip: "Skip",
-    doneTitle: "Thank you for helping us care for families.",
-    doneBody: "If you need us, day or night:",
-    needName: "Please enter your name",
-    needSurname: "Please enter your surname",
-    needMobile: "Enter a valid South African mobile number, e.g. 082 123 4567",
-    needConsent: "Please tick the box so we may keep your answers",
-    needChoice: "Please choose an answer",
-    needStars: "Please choose from 1 to 5 stars",
+    back: "Back",
+    of: (n: number, total: number) => `Question ${n} of ${total}`,
+    typeHere: "Type your answer here",
+    contactTitle: "Would you like us to contact you? (optional)",
+    contactBody: "Leave blank to stay anonymous. By giving your details you agree that Induduzo may contact you about your feedback.",
+    name: "Your name",
+    mobile: "Your cellphone number",
+    send: "Send",
+    sending: "Sending…",
+    thanksTitle: "Thank you. Siyabonga.",
+    thanksBody: "If you need assistance, call our 24-hour line on",
+    orWhatsApp: "or WhatsApp",
+    needAnswer: "Please answer this question",
+    needAll: "Please choose one answer for each line",
+    needMobile: "Enter a valid South African cellphone number, e.g. 082 123 4567",
+    needSomething: "Please answer at least one question before sending.",
     loadFailed: "We could not open this page. Please check your connection and try again, or phone us on",
     tryAgain: "Try again",
+    language: "Language",
+    optional: "Optional",
+    requiredSr: "(required)",
+    stale: "These questions have just been changed. Please reload the page to see the latest ones; your answers so far are kept.",
+    reload: "Reload the page",
+    sendFailed: "We could not send your answers just now. Please try again, or phone us on",
+    invalidAnswer: null as string | null,   // English shows the server's own words
+    invalidName: null as string | null,
   },
   zu: {
-    title: "Sitshele ukuthi sikwenze kanjani",
-    intro: "Kuthatha cishe imizuzu emibili. Izimpendulo zakho zisisiza ukuthi sinakekele yonke imindeni kangcono.",
-    aboutYou: "Mayelana nawe",
-    name: "Igama",
-    surname: "Isibongo",
-    mobile: "Inombolo yocingo",
-    mobileHint: "Ukuze sikwazi ukukulandela uma ufisa.",
-    consent: "Ngiyavuma ukuthi i-Induduzo Funeral Home ingagcina izimpendulo zami futhi ixhumane nami ngazo.",
     start: "Qala",
     next: "Okulandelayo",
-    back: "Emuva",
-    send: "Thumela izimpendulo zami",
-    sending: "Iyathumela…",
-    of: (n: number, total: number) => `Umbuzo ${n} kwangu-${total}`,
-    yes: "Yebo",
-    no: "Cha",
-    poor: "Kubi",
-    excellent: "Kuhle kakhulu",
-    typeHere: "Bhala impendulo yakho lapha (akuphoqelekile)",
-    thanks: (name: string) => `Siyabonga, ${name}.`,
-    received: "Izimpendulo zakho sizitholile.",
-    rateAsk: "Ungayilinganisa kanjani insizakalo yethu?",
-    stars: (n: number) => `${n} kwangu-5`,
-    addMore: "Ingabe kukhona ofuna ukukwengeza? (akuphoqelekile)",
-    sendRating: "Thumela isilinganiso",
     skip: "Yeqa",
-    doneTitle: "Siyabonga ngokusisiza ukunakekela imindeni.",
-    doneBody: "Uma usidinga, emini noma ebusuku:",
-    needName: "Sicela ufake igama lakho",
-    needSurname: "Sicela ufake isibongo sakho",
-    needMobile: "Faka inombolo yeselula yaseNingizimu Afrika evumelekile, isb. 082 123 4567",
-    needConsent: "Sicela ukhethe ibhokisi ukuze sikwazi ukugcina izimpendulo zakho",
-    needChoice: "Sicela ukhethe impendulo",
-    needStars: "Sicela ukhethe kusuka ku-1 kuya ku-5",
+    back: "Emuva",
+    of: (n: number, total: number) => `Umbuzo ${n} kwangu-${total}`,
+    typeHere: "Bhala impendulo yakho lapha",
+    contactTitle: "Ungathanda ukuthi sikuthinte? (akuphoqelekile)",
+    contactBody: "Shiya kungenalutho uma ufuna ukungaziwa. Ngokunikeza imininingwane yakho uyavuma ukuthi i-Induduzo ingakuthinta mayelana nombono wakho.",
+    name: "Igama lakho",
+    mobile: "Inombolo yakho kamakhalekhukhwini",
+    send: "Thumela",
+    sending: "Iyathumela…",
+    thanksTitle: "Siyabonga.",
+    thanksBody: "Uma udinga usizo, shayela inombolo yethu esebenza amahora angu-24 ethi",
+    orWhatsApp: "noma usithumelele i-WhatsApp ku-",
+    needAnswer: "Sicela uphendule lo mbuzo",
+    needAll: "Sicela ukhethe impendulo eyodwa emugqeni ngamunye",
+    needMobile: "Faka inombolo kamakhalekhukhwini yaseNingizimu Afrika evumelekile, isb. 082 123 4567",
+    needSomething: "Sicela uphendule okungenani umbuzo owodwa ngaphambi kokuthumela.",
     loadFailed: "Asikwazanga ukuvula leli khasi. Sicela uhlole uxhumano lwakho uzame futhi, noma usishayele ku-",
     tryAgain: "Zama futhi",
+    language: "Ulimi",
+    optional: "Akuphoqelekile",
+    requiredSr: "(kuyaphoqeleka)",
+    stale: "Le mibuzo isanda kushintshwa. Sicela ulayishe kabusha ikhasi ukuze ubone emisha; izimpendulo zakho ezikhona zigciniwe.",
+    reload: "Layisha kabusha ikhasi",
+    sendFailed: "Asikwazanga ukuthumela izimpendulo zakho manje. Sicela uzame futhi, noma usishayele ku-",
+    invalidAnswer: "Sicela uhlole impendulo yakho kulo mbuzo." as string | null,
+    invalidName: "Sicela usebenzise izinhlamvu egameni lakho." as string | null,
   },
-} as const;
+};
 
 /** Keeps the page out of search results for as long as it is open. */
 const useNoIndex = () => {
@@ -132,8 +120,30 @@ const useNoIndex = () => {
   }, []);
 };
 
-const questionText = (q: FeedbackQuestion, language: Language) =>
-  (language === "zu" && q.text_zu) || q.text_en;
+/** The answers given so far, kept in this tab so a reload (or a changed
+ *  questionnaire) does not lose them. Answers only: never the name or number. */
+const draftKey = (code: string, version: string) => `induduzo-feedback-${code}-${version}`;
+
+const readDraft = (code: string, version: string): Record<string, FeedbackAnswer> => {
+  try {
+    const raw = sessionStorage.getItem(draftKey(code, version));
+    return raw ? (JSON.parse(raw) as Record<string, FeedbackAnswer>) : {};
+  } catch {
+    return {};
+  }
+};
+
+const pick = (en: string | null, zu: string | null, language: Language) =>
+  (language === "zu" && zu) || en || "";
+
+const label = (choice: FeedbackChoice, language: Language) => pick(choice.en, choice.zu, language);
+
+const isAnswered = (q: FeedbackQuestion, answer: FeedbackAnswer | undefined) => {
+  if (answer === undefined || answer === "") return false;
+  if (q.kind === "grid") return typeof answer === "object" && Object.keys(answer).length > 0;
+  if (q.kind === "text") return typeof answer === "string" && answer.trim() !== "";
+  return true;
+};
 
 export default function Feedback({ code }: { code: string }) {
   useNoIndex();
@@ -141,30 +151,56 @@ export default function Feedback({ code }: { code: string }) {
   // Its own switch, without the site's reload: a reload here would lose answers.
   const [language, setLanguage] = useState<Language>(siteLanguage);
   const c = COPY[language];
-  const source = useMemo<"qr" | "link">(
-    () => (new URLSearchParams(window.location.search).get("via") === "qr" ? "qr" : "link"), []);
+  const params = useMemo(() => new URLSearchParams(window.location.search), []);
+  const source: "qr" | "link" = params.get("via") === "qr" ? "qr" : "link";
+  const version: "full" | "short" = params.get("v") === "short" ? "short" : "full";
 
-  const [questions, setQuestions] = useState<FeedbackQuestion[] | null>(null);
+  const [survey, setSurvey] = useState<Questionnaire | null>(null);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "missing" | "failed">("loading");
   const [attempt, setAttempt] = useState(0);
 
-  const [step, setStep] = useState<Step>("details");
+  const [step, setStep] = useState<Step>("intro");
   const [index, setIndex] = useState(0);
-  const [details, setDetails] = useState({ first_name: "", surname: "", mobile: "", consent: false, website: "" });
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, FeedbackAnswer>>(() => readDraft(code, version));
+  const [contact, setContact] = useState({ name: "", mobile: "", website: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [sendError, setSendError] = useState<string | null>(null);
+  // The API refused an answer to a question this page no longer has.
+  const [stale, setStale] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [responseId, setResponseId] = useState<string | null>(null);
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState("");
+  // Where focus goes when the step or question changes, so a screen reader
+  // hears the new question rather than staying on the button just pressed.
+  const headingRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    try {
+      if (step === "done") sessionStorage.removeItem(draftKey(code, version));
+      else sessionStorage.setItem(draftKey(code, version), JSON.stringify(answers));
+    } catch {
+      /* private browsing: answers are simply not kept across a reload */
+    }
+  }, [answers, step, code, version]);
+
+  // The document's language follows this page's switch, so screen readers
+  // pronounce isiZulu as isiZulu. Put back on the way out.
+  useEffect(() => {
+    const previous = document.documentElement.lang;
+    document.documentElement.lang = language;
+    return () => {
+      document.documentElement.lang = previous;
+    };
+  }, [language]);
+
+  useEffect(() => {
+    if (step !== "intro" || index !== 0) headingRef.current?.focus();
+  }, [step, index]);
 
   useEffect(() => {
     let cancelled = false;
-    fetchQuestionnaire(code)
-      .then(({ questions: qs }) => {
+    fetchQuestionnaire(code, version)
+      .then((next) => {
         if (cancelled) return;
-        setQuestions(qs);
+        setSurvey(next);
         setLoadState("ready");
       })
       .catch((error) => {
@@ -174,99 +210,99 @@ export default function Feedback({ code }: { code: string }) {
     return () => {
       cancelled = true;
     };
-  }, [code, attempt]);
+  }, [code, version, attempt]);
 
   if (loadState === "missing") return <NotFound />;
 
-  const total = questions?.length ?? 0;
-  const current = questions?.[index];
+  const questions = survey?.questions ?? [];
+  const total = questions.length;
+  const current = questions[index];
 
-  const checkDetails = () => {
-    const next: Record<string, string> = {};
-    if (!details.first_name.trim()) next.first_name = c.needName;
-    if (!details.surname.trim()) next.surname = c.needSurname;
-    if (!isValidMobile(details.mobile)) next.mobile = c.needMobile;
-    if (!details.consent) next.consent = c.needConsent;
-    setErrors(next);
-    return Object.keys(next).length === 0;
+  const go = (next: Step, at = index) => {
+    setErrors({});
+    setSendError(null);
+    setStep(next);
+    setIndex(at);
+    window.scrollTo(0, 0);
+  };
+
+  const setAnswer = (id: string, value: FeedbackAnswer) => {
+    setAnswers((all) => ({ ...all, [id]: value }));
+    setErrors({});
   };
 
   const checkCurrent = () => {
-    if (!current || current.kind === "text" || answers[current.id]) {
-      setErrors({});
-      return true;
+    if (!current || !current.required) return true;
+    const answer = answers[current.id];
+    if (!isAnswered(current, answer)) {
+      setErrors({ [current.id]: c.needAnswer });
+      return false;
     }
-    setErrors({ [current.id]: c.needChoice });
-    return false;
-  };
-
-  const submitAnswers = async () => {
-    if (!questions) return;
-    setBusy(true);
-    setSendError(null);
-    try {
-      const { id } = await sendFeedback(code, {
-        first_name: details.first_name.trim(),
-        surname: details.surname.trim(),
-        mobile: normaliseMobile(details.mobile),
-        answers: questions.map((q) => ({ id: q.id, answer: (answers[q.id] ?? "").trim() })),
-        contact_consent: details.consent,
-        source,
-        language,
-        website: details.website,
-      });
-      setResponseId(id);
-      setStep("rate");
-      window.scrollTo(0, 0);
-    } catch (error) {
-      if (error instanceof SiteError && Object.keys(error.fieldErrors).length) {
-        // A detail or an answer the API refused: go back to where it is.
-        const fields = error.fieldErrors;
-        const answerKey = Object.keys(fields).find((k) => k.startsWith("answers."));
-        if (answerKey) {
-          const qIndex = questions.findIndex((q) => `answers.${q.id}` === answerKey);
-          if (qIndex >= 0) {
-            setIndex(qIndex);
-            setErrors({ [questions[qIndex].id]: fields[answerKey] });
-          }
-        } else {
-          setErrors(fields);
-          setStep("details");
-        }
-      }
-      setSendError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setBusy(false);
+    if (current.kind === "grid" && Object.keys(answer as Record<string, string>).length
+        < (current.rows?.length ?? 0)) {
+      setErrors({ [current.id]: c.needAll });
+      return false;
     }
+    return true;
   };
 
   const onNext = (event: FormEvent) => {
     event.preventDefault();
-    if (step === "details") {
-      if (checkDetails()) {
-        setStep("questions");
-        setIndex(0);
-      }
-      return;
-    }
     if (!checkCurrent()) return;
-    if (index < total - 1) setIndex(index + 1);
-    else void submitAnswers();
+    if (index < total - 1) go("question", index + 1);
+    else go("contact");
   };
 
-  const onRate = async (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!rating) {
-      setErrors({ rating: c.needStars });
+    const answered = questions.filter((q) => isAnswered(q, answers[q.id]));
+    if (answered.length === 0) {
+      setSendError(c.needSomething);
       return;
     }
-    if (!responseId) return;
+    if (contact.mobile.trim() && !isValidMobile(contact.mobile)) {
+      setErrors({ mobile: c.needMobile });
+      return;
+    }
     setBusy(true);
     setSendError(null);
     try {
-      await sendRating(responseId, rating, comment);
-      setStep("done");
+      await sendFeedback(code, {
+        answers: answered.map((q) => {
+          const value = answers[q.id];
+          return { id: q.id, answer: typeof value === "string" ? value.trim() : value };
+        }),
+        name: contact.name.trim() || null,
+        mobile: contact.mobile.trim() ? normaliseMobile(contact.mobile) : null,
+        version,
+        source,
+        language,
+        website: contact.website,
+      });
+      go("done");
     } catch (error) {
+      const fields = error instanceof SiteError ? error.fieldErrors : {};
+      const answerKeys = Object.keys(fields).filter((k) => k.startsWith("answers."));
+      // The first refused answer to a question on this page: go back to it.
+      const qIndex = questions.findIndex((q) => answerKeys.includes(`answers.${q.id}`));
+      if (answerKeys.some((k) => !questions.some((q) => `answers.${q.id}` === k))) {
+        // Staff changed the questions while this family was answering.
+        setStale(true);
+      } else if (qIndex >= 0) {
+        const q = questions[qIndex];
+        go("question", qIndex);
+        setErrors({ [q.id]: c.invalidAnswer ?? fields[`answers.${q.id}`] });
+        return;
+      } else if (fields.mobile || fields.name) {
+        setErrors({
+          ...(fields.mobile ? { mobile: c.needMobile } : {}),
+          ...(fields.name ? { name: c.invalidName ?? fields.name } : {}),
+        });
+        return;
+      } else if (language === "zu" || !(error instanceof SiteError) || error.status === 0) {
+        setSendError(`${c.sendFailed} ${TWENTY_FOUR_HOUR_LINE.display}.`);
+        return;
+      }
       setSendError(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
@@ -278,7 +314,8 @@ export default function Feedback({ code }: { code: string }) {
       <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col px-5 py-8">
         <div className="mb-6 flex items-start justify-between gap-4">
           <BrandLogo className="h-20" />
-          <div className="flex gap-1 rounded-md border bg-background p-1 text-sm" role="group" aria-label="Language">
+          <div className="flex gap-1 rounded-md border bg-background p-1 text-sm" role="group"
+            aria-label={c.language}>
             {(["en", "zu"] as const).map((lang) => (
               <button
                 key={lang}
@@ -320,166 +357,96 @@ export default function Feedback({ code }: { code: string }) {
             </div>
           )}
 
-          {loadState === "ready" && step === "details" && (
-            <form onSubmit={onNext} noValidate className="space-y-5">
+          {loadState === "ready" && survey && step === "intro" && (
+            <div className="space-y-6">
+              <h1 className="text-2xl font-semibold sm:text-3xl">
+                {pick(survey.title_en, survey.title_zu, language)}
+              </h1>
+              <p className="whitespace-pre-line leading-relaxed text-muted-foreground">
+                {pick(survey.intro_en, survey.intro_zu, language)}
+              </p>
+              <Button size="lg" className="w-full" onClick={() => go("question", 0)}>{c.start}</Button>
+            </div>
+          )}
+
+          {stale && step !== "done" && (
+            <div role="alert" className="mb-6 space-y-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
+              <p className="text-sm font-medium">{c.stale}</p>
+              <Button type="button" size="sm" onClick={() => window.location.reload()}>{c.reload}</Button>
+            </div>
+          )}
+
+          {loadState === "ready" && step === "question" && current && (
+            <form onSubmit={onNext} noValidate className="space-y-6">
               <div>
-                <h1 className="mb-2 text-2xl font-semibold sm:text-3xl">{c.title}</h1>
-                <p className="text-muted-foreground">{c.intro}</p>
+                <p className="mb-2 text-sm font-medium text-muted-foreground">{c.of(index + 1, total)}</p>
+                <div className="h-1.5 w-full overflow-hidden rounded bg-secondary" aria-hidden="true">
+                  <div className="h-full bg-primary" style={{ width: `${((index + 1) / total) * 100}%` }} />
+                </div>
               </div>
-              <h2 className="text-lg font-semibold">{c.aboutYou}</h2>
+
+              <QuestionField
+                headingRef={headingRef}
+                requiredSr={c.requiredSr}
+                question={current}
+                language={language}
+                answer={answers[current.id]}
+                error={errors[current.id]}
+                placeholder={c.typeHere}
+                onChange={(value) => setAnswer(current.id, value)}
+              />
+
+              <div className="flex gap-3">
+                <Button type="button" variant="outline" size="lg"
+                  onClick={() => (index === 0 ? go("intro", 0) : go("question", index - 1))}>
+                  {c.back}
+                </Button>
+                <Button type="submit" size="lg" className="flex-1">
+                  {isAnswered(current, answers[current.id]) || current.required ? c.next : c.skip}
+                </Button>
+              </div>
+            </form>
+          )}
+
+          {loadState === "ready" && step === "contact" && (
+            <form onSubmit={submit} noValidate className="space-y-5">
+              <div>
+                <h2 ref={headingRef as Ref<HTMLHeadingElement>} tabIndex={-1}
+                  className="mb-2 text-xl font-semibold focus:outline-none">{c.contactTitle}</h2>
+                <p className="text-sm leading-relaxed text-muted-foreground">{c.contactBody}</p>
+              </div>
 
               {/* Honeypot: hidden from people, filled by bots. */}
               <div className="absolute -left-[9999px] h-px w-px overflow-hidden" aria-hidden="true">
                 <label htmlFor="fb-website">Website</label>
                 <input id="fb-website" name="website" type="text" tabIndex={-1} autoComplete="off"
-                  value={details.website}
-                  onChange={(e) => setDetails({ ...details, website: e.target.value })} />
+                  value={contact.website}
+                  onChange={(e) => setContact({ ...contact, website: e.target.value })} />
               </div>
 
-              <Field label={c.name} required error={errors.first_name}>
+              <Field label={c.name} error={errors.name} optionalLabel={c.optional}>
                 {(props) => (
-                  <Input {...props} autoComplete="given-name" autoCapitalize="words" maxLength={80}
-                    value={details.first_name}
-                    onChange={(e) => setDetails({ ...details, first_name: e.target.value })} />
+                  <Input {...props} autoComplete="name" autoCapitalize="words" maxLength={120}
+                    value={contact.name}
+                    onChange={(e) => setContact({ ...contact, name: e.target.value })} />
                 )}
               </Field>
-              <Field label={c.surname} required error={errors.surname}>
-                {(props) => (
-                  <Input {...props} autoComplete="family-name" autoCapitalize="words" maxLength={80}
-                    value={details.surname}
-                    onChange={(e) => setDetails({ ...details, surname: e.target.value })} />
-                )}
-              </Field>
-              <Field label={c.mobile} required error={errors.mobile} hint={c.mobileHint}>
+              <Field label={c.mobile} error={errors.mobile} optionalLabel={c.optional}>
                 {(props) => (
                   <Input {...props} type="tel" inputMode="tel" autoComplete="tel" placeholder="082 123 4567"
-                    value={details.mobile}
-                    onChange={(e) => setDetails({ ...details, mobile: e.target.value })} />
+                    value={contact.mobile}
+                    onChange={(e) => setContact({ ...contact, mobile: e.target.value })} />
                 )}
               </Field>
-
-              <div className="space-y-2">
-                <div className="flex items-start gap-3">
-                  <Checkbox id="fb-consent" checked={details.consent} className="mt-1"
-                    aria-invalid={Boolean(errors.consent)}
-                    aria-describedby={errors.consent ? "fb-consent-error" : undefined}
-                    onCheckedChange={(v) => setDetails({ ...details, consent: v === true })} />
-                  <label htmlFor="fb-consent" className="text-sm leading-relaxed">
-                    {c.consent}
-                    <span className="ml-1 text-primary" aria-hidden="true">*</span>
-                  </label>
-                </div>
-                {errors.consent && (
-                  <p id="fb-consent-error" role="alert" className="text-sm font-medium text-destructive">
-                    {errors.consent}
-                  </p>
-                )}
-              </div>
-
-              {sendError && <p role="alert" className="text-sm font-medium text-destructive">{sendError}</p>}
-              <Button type="submit" size="lg" className="w-full">{c.start}</Button>
-            </form>
-          )}
-
-          {loadState === "ready" && step === "questions" && current && (
-            <form onSubmit={onNext} noValidate className="space-y-6">
-              <div>
-                <p className="mb-2 text-sm font-medium text-muted-foreground">{c.of(index + 1, total)}</p>
-                <div className="h-1.5 w-full overflow-hidden rounded bg-secondary" aria-hidden="true">
-                  <div className="h-full bg-primary transition-all" style={{ width: `${((index + 1) / total) * 100}%` }} />
-                </div>
-              </div>
-
-              <fieldset className="space-y-4">
-                <legend className="text-xl font-semibold leading-snug">{questionText(current, language)}</legend>
-                {current.kind === "text" && (
-                  <Textarea rows={4} maxLength={1000} placeholder={c.typeHere}
-                    aria-label={questionText(current, language)}
-                    value={answers[current.id] ?? ""}
-                    onChange={(e) => setAnswers({ ...answers, [current.id]: e.target.value })} />
-                )}
-                {current.kind === "yes_no" && (
-                  <div className="grid grid-cols-2 gap-3">
-                    {(["yes", "no"] as const).map((value) => (
-                      <Choice key={value} name={current.id} value={value}
-                        label={value === "yes" ? c.yes : c.no}
-                        checked={answers[current.id] === value}
-                        onChange={() => setAnswers({ ...answers, [current.id]: value })} />
-                    ))}
-                  </div>
-                )}
-                {current.kind === "scale" && (
-                  <div>
-                    <div className="grid grid-cols-5 gap-2">
-                      {["1", "2", "3", "4", "5"].map((value) => (
-                        <Choice key={value} name={current.id} value={value} label={value}
-                          checked={answers[current.id] === value}
-                          onChange={() => setAnswers({ ...answers, [current.id]: value })} />
-                      ))}
-                    </div>
-                    <div className="mt-2 flex justify-between text-sm text-muted-foreground" aria-hidden="true">
-                      <span>{c.poor}</span>
-                      <span>{c.excellent}</span>
-                    </div>
-                  </div>
-                )}
-                {errors[current.id] && (
-                  <p role="alert" className="text-sm font-medium text-destructive">{errors[current.id]}</p>
-                )}
-              </fieldset>
 
               {sendError && <p role="alert" className="text-sm font-medium text-destructive">{sendError}</p>}
               <div className="flex gap-3">
                 <Button type="button" variant="outline" size="lg" disabled={busy}
-                  onClick={() => {
-                    setErrors({});
-                    if (index === 0) setStep("details");
-                    else setIndex(index - 1);
-                  }}>
+                  onClick={() => go("question", total - 1)}>
                   {c.back}
                 </Button>
                 <Button type="submit" size="lg" className="flex-1" disabled={busy}>
-                  {busy ? c.sending : index < total - 1 ? c.next : c.send}
-                </Button>
-              </div>
-            </form>
-          )}
-
-          {step === "rate" && (
-            <form onSubmit={onRate} noValidate className="space-y-6">
-              <div>
-                <h1 className="mb-2 text-2xl font-semibold sm:text-3xl">{c.thanks(details.first_name.trim())}</h1>
-                <p className="text-muted-foreground">{c.received}</p>
-              </div>
-              <fieldset>
-                <legend className="mb-3 text-xl font-semibold">{c.rateAsk}</legend>
-                <div className="flex gap-2" role="radiogroup" aria-label={c.rateAsk}>
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <button key={n} type="button" role="radio" aria-checked={rating === n}
-                      aria-label={c.stars(n)}
-                      className="rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      onClick={() => {
-                        setRating(n);
-                        setErrors({});
-                      }}>
-                      <Star className={`h-10 w-10 ${n <= rating ? "fill-primary text-primary" : "text-muted-foreground"}`} />
-                    </button>
-                  ))}
-                </div>
-                {errors.rating && <p role="alert" className="mt-2 text-sm font-medium text-destructive">{errors.rating}</p>}
-              </fieldset>
-              <div>
-                <label htmlFor="fb-comment" className="mb-1.5 block text-sm font-medium">{c.addMore}</label>
-                <Textarea id="fb-comment" rows={3} maxLength={1000} value={comment}
-                  onChange={(e) => setComment(e.target.value)} />
-              </div>
-              {sendError && <p role="alert" className="text-sm font-medium text-destructive">{sendError}</p>}
-              <div className="flex gap-3">
-                <Button type="button" variant="outline" size="lg" disabled={busy} onClick={() => setStep("done")}>
-                  {c.skip}
-                </Button>
-                <Button type="submit" size="lg" className="flex-1" disabled={busy}>
-                  {busy ? c.sending : c.sendRating}
+                  {busy ? c.sending : c.send}
                 </Button>
               </div>
             </form>
@@ -487,11 +454,19 @@ export default function Feedback({ code }: { code: string }) {
 
           {step === "done" && (
             <div className="space-y-4 text-center">
-              <h1 className="text-2xl font-semibold sm:text-3xl">{c.doneTitle}</h1>
-              <p className="text-muted-foreground">{c.doneBody}</p>
-              <a href={TWENTY_FOUR_HOUR_LINE.link} className="block text-xl font-semibold text-primary">
-                {TWENTY_FOUR_HOUR_LINE.display}
-              </a>
+              <h1 ref={headingRef as Ref<HTMLHeadingElement>} tabIndex={-1}
+                className="text-2xl font-semibold focus:outline-none sm:text-3xl">{c.thanksTitle}</h1>
+              <p className="leading-relaxed text-muted-foreground">
+                {c.thanksBody}{" "}
+                <a href={TWENTY_FOUR_HOUR_LINE.link} className="font-semibold text-primary">
+                  {TWENTY_FOUR_HOUR_LINE.display}
+                </a>{" "}
+                {c.orWhatsApp}{language === "zu" ? "" : " "}
+                <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary">
+                  {WHATSAPP_LINE.display}
+                </a>
+                .
+              </p>
             </div>
           )}
         </div>
@@ -502,21 +477,110 @@ export default function Feedback({ code }: { code: string }) {
   );
 }
 
+/** One question, drawn for its kind. */
+function QuestionField({ question: q, language, answer, error, placeholder, onChange, headingRef,
+  requiredSr }: {
+  headingRef: Ref<HTMLElement>;
+  requiredSr: string;
+  question: FeedbackQuestion;
+  language: Language;
+  answer: FeedbackAnswer | undefined;
+  error?: string;
+  placeholder: string;
+  onChange: (value: FeedbackAnswer) => void;
+}) {
+  const text = pick(q.text_en, q.text_zu, language);
+  const low = pick(q.low_en, q.low_zu, language);
+  const high = pick(q.high_en, q.high_zu, language);
+  const hintId = `${q.id}-scale-words`;
+  const hasHint = q.kind === "scale" && Boolean(low || high);
+  return (
+    <fieldset className="space-y-4" aria-describedby={hasHint ? hintId : undefined}>
+      <legend ref={headingRef as Ref<HTMLLegendElement>} tabIndex={-1}
+        className="text-xl font-semibold leading-snug focus:outline-none">
+        {text}
+        {q.required && (
+          <>
+            <span className="ml-1 text-primary" aria-hidden="true">*</span>
+            <span className="sr-only"> {requiredSr}</span>
+          </>
+        )}
+      </legend>
+
+      {q.kind === "choice" && (
+        <div className="grid gap-2">
+          {(q.options ?? []).map((option) => (
+            <Choice key={option.value} name={q.id} label={label(option, language)}
+              checked={answer === option.value} onChange={() => onChange(option.value)} align="start" />
+          ))}
+        </div>
+      )}
+
+      {q.kind === "scale" && q.min !== null && q.max !== null && (
+        <div>
+          <div className={`grid gap-2 ${q.max - q.min > 5 ? "grid-cols-6" : "grid-cols-5"}`}>
+            {Array.from({ length: q.max - q.min + 1 }, (_, i) => q.min! + i).map((n) => (
+              <Choice key={n} name={q.id} label={String(n)} checked={answer === n}
+                onChange={() => onChange(n)} />
+            ))}
+          </div>
+          {hasHint && (
+            <p id={hintId} className="mt-2 text-sm text-muted-foreground">
+              {[low && `${q.min} = ${low}`, high && `${q.max} = ${high}`].filter(Boolean).join(" · ")}
+            </p>
+          )}
+        </div>
+      )}
+
+      {q.kind === "grid" && (
+        <div className="space-y-5">
+          {(q.rows ?? []).map((row) => {
+            const chosen = (answer && typeof answer === "object") ? answer : {};
+            return (
+              <div key={row.value} role="radiogroup" aria-label={label(row, language)} className="space-y-2">
+                <p className="font-medium">{label(row, language)}</p>
+                <div className="flex flex-wrap gap-2">
+                  {(q.options ?? []).map((option) => (
+                    <Choice key={option.value} name={`${q.id}-${row.value}`} small
+                      label={label(option, language)} checked={chosen[row.value] === option.value}
+                      onChange={() => onChange({ ...chosen, [row.value]: option.value })} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {q.kind === "text" && (
+        <Textarea rows={5} maxLength={2000} placeholder={placeholder} aria-label={text}
+          value={typeof answer === "string" ? answer : ""}
+          onChange={(e) => onChange(e.target.value)} />
+      )}
+
+      {error && <p role="alert" className="text-sm font-medium text-destructive">{error}</p>}
+    </fieldset>
+  );
+}
+
 /** A large, tappable radio: the whole box is the target, not a small dot. */
-function Choice({ name, value, label, checked, onChange }: {
+function Choice({ name, label, checked, onChange, align = "center", small = false }: {
   name: string;
-  value: string;
   label: string;
   checked: boolean;
   onChange: () => void;
+  align?: "center" | "start";
+  small?: boolean;
 }) {
   return (
     <label
-      className={`flex cursor-pointer items-center justify-center rounded-md border-2 px-3 py-4 text-lg font-semibold transition-colors focus-within:ring-2 focus-within:ring-ring ${
+      className={`flex cursor-pointer items-center rounded-md border-2 transition-colors focus-within:ring-2 focus-within:ring-ring ${
+        align === "start" ? "justify-start text-left" : "justify-center"
+      } ${small ? "px-3 py-2 text-sm font-medium" : "min-h-12 px-3 py-3 text-base font-semibold"} ${
         checked ? "border-primary bg-primary/10 text-primary" : "border-input bg-background hover:border-primary/50"
       }`}
     >
-      <input type="radio" name={name} value={value} checked={checked} onChange={onChange} className="sr-only" />
+      <input type="radio" name={name} checked={checked} onChange={onChange} className="sr-only" />
       {label}
     </label>
   );

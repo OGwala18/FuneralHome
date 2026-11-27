@@ -1090,52 +1090,103 @@ export const fetchBannerImage = async (imageId: string): Promise<Blob> => {
 // Website settings: the private feedback questionnaire (/api/admin/feedback)
 // ---------------------------------------------------------------------------
 
-export type FeedbackQuestionKind = "text" | "yes_no" | "scale";
+export type FeedbackQuestionKind = "choice" | "scale" | "grid" | "text";
+
+export interface FeedbackChoice {
+  value: string;
+  en: string;
+  zu?: string | null;
+}
 
 export interface FeedbackQuestion {
   id: string;
   kind: FeedbackQuestionKind;
   text_en: string;
-  text_zu: string | null;
+  text_zu?: string | null;
+  /** In the five-question short version (?v=short). */
+  short?: boolean;
+  required?: boolean;
+  options?: FeedbackChoice[] | null;
+  rows?: FeedbackChoice[] | null;
+  min?: number | null;
+  max?: number | null;
+  low_en?: string | null;
+  low_zu?: string | null;
+  high_en?: string | null;
+  high_zu?: string | null;
 }
 
 export interface FeedbackSurvey {
   link_code: string;
   link: string;
+  short_link: string;
+  title_en: string;
+  title_zu: string | null;
+  intro_en: string;
+  intro_zu: string | null;
   is_open: boolean;
   questions: FeedbackQuestion[];
   updated_at: string;
   updated_by: string | null;
 }
 
+export interface FeedbackAnswerRow {
+  id: string;
+  kind: FeedbackQuestionKind;
+  question: string;
+  question_en?: string;
+  answer: string | number | Record<string, string>;
+  label: string;
+}
+
 export interface FeedbackResponseRow {
   id: string;
-  first_name: string;
-  surname: string;
-  mobile: string;
-  answers: { id: string; kind: FeedbackQuestionKind; question: string; answer: string }[];
+  name: string | null;
+  mobile: string | null;
+  answers: FeedbackAnswerRow[];
+  version: "full" | "short";
   source: "qr" | "link";
   language: "en" | "zu";
-  rating: number | null;
-  rating_comment: string | null;
   created_at: string;
+}
+
+export interface FeedbackQuestionResult {
+  id: string;
+  kind: FeedbackQuestionKind;
+  text_en: string;
+  answered: number;
+  average: number | null;
+  nps: number | null;
+  counts: Record<string, number> | null;
+  grid: Record<string, Record<string, number>> | null;
 }
 
 export interface FeedbackOverview {
   survey: FeedbackSurvey;
   summary: {
     responses: number;
-    rated: number;
-    average_rating: number | null;
-    by_rating: Record<string, number>;
+    named: number;
+    short_version: number;
+    questions: FeedbackQuestionResult[];
   };
   responses: FeedbackResponseRow[];
   can_edit: boolean;
+  /** Question ids with answers on record, current or removed: never reused. */
+  answered_ids: string[];
+}
+
+export interface FeedbackSurveyChange {
+  questions?: FeedbackQuestion[];
+  is_open?: boolean;
+  title_en?: string;
+  title_zu?: string | null;
+  intro_en?: string;
+  intro_zu?: string | null;
 }
 
 export const fetchFeedback = () => request<FeedbackOverview>("/api/admin/feedback");
 
-export const updateFeedbackSurvey = (body: { questions?: FeedbackQuestion[]; is_open?: boolean }) =>
+export const updateFeedbackSurvey = (body: FeedbackSurveyChange) =>
   mutate<FeedbackSurvey>("/api/admin/feedback/survey", "PATCH", body);
 
 export const replaceFeedbackLink = () =>

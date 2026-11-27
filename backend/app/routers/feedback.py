@@ -1,23 +1,29 @@
-"""The private feedback questionnaire.
+"""The private feedback questionnaire: the owner's post-funeral survey.
 
 It is not on the website. It opens only at /feedback/<link_code>, the link the
-office prints as a QR code and passes on to families. Without the code the
-page is the site's ordinary "page not found", and so is this API's answer.
+office sends with its WhatsApp condolence message or prints as a QR code.
+Without the code the page is the site's ordinary "page not found", and so is
+this API's answer. ?v=short asks only the questions marked short (the owner's
+five-question version).
 
 PUBLIC (the questionnaire page, no sign-in)
-    GET  /api/feedback/{code}                      the questions
-    POST /api/feedback/{code}/responses            name, surname, mobile, answers
-    POST /api/feedback/responses/{id}/rating       the 1-5 rating at the end
+    GET  /api/feedback/{code}?v=full|short     title, introduction, questions
+    POST /api/feedback/{code}/responses        the answers, optionally a name and number
 
 STAFF (the portal: Settings > Website settings)
-    GET   /api/admin/feedback                      link, questions, responses
-    PATCH /api/admin/feedback/survey               change questions, open/close (admin, owner)
-    POST  /api/admin/feedback/survey/new-link      replace the link (admin, owner)
+    GET   /api/admin/feedback                  links, questions, results, responses
+    PATCH /api/admin/feedback/survey           change the wording, questions, open/close (admin, owner)
+    POST  /api/admin/feedback/survey/new-link  replace the link (admin, owner)
 
-The response is saved before the rating is asked for, so a person who closes
-the page at "rate our service" has still been heard. The rating goes onto that
-same response, once, within two hours, addressed by the response's id: a
-random uuid only that person's browser was given.
+Answering is voluntary, and so is a name or number (the owner's wording: "Leave
+blank to stay anonymous. By giving your details you agree that Induduzo may
+contact you about your feedback"). Giving either records contact_consent.
+
+A question is one of four kinds, each in English and isiZulu:
+    choice  pick one of `options`
+    scale   a whole number from `min` to `max` (1-5, or 0-10), words at each end
+    grid    each of `rows` rated on the same `options` (e.g. Excellent ... Not used)
+    text    a written answer
 
 Logs carry the response id, never a name or a number (ARCHITECTURE.md §7.9).
 """
@@ -27,25 +33,22 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections import Counter
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (BaseModel, ConfigDict, Field, StrictInt, StrictStr, field_validator,
+                      model_validator)
 
 from ..auth import StaffUser, require_role, require_staff
 from ..config import get_settings
 from ..db import connection
 from ..errors import ApiError
-from ..ratelimit import (
-    enforce,
-    feedback_open_limiter,
-    feedback_rating_limiter,
-    feedback_send_limiter,
-)
-from ..schemas import Line, Name, Text, normalise_mobile
+from ..ratelimit import enforce, feedback_open_limiter, feedback_send_limiter
+from ..schemas import Line, Name, Text, clean_text, normalise_mobile
 from ..services.staff import log_staff_event
 
 logger = logging.getLogger(__name__)
@@ -54,17 +57,36 @@ public_router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 admin_router = APIRouter(prefix="/api/admin/feedback", tags=["admin"],
                          dependencies=[Depends(require_staff)])
 
-QuestionKind = Literal["text", "yes_no", "scale"]
+QuestionKind = Literal["choice", "scale", "grid", "text"]
+Version = Literal["full", "short"]
 
 _CODE_RE = re.compile(r"^[a-z0-9]{10,32}$")
 _MOBILE_RE = re.compile(r"^\+27[6-8][0-9]{8}$")
-_RATING_WINDOW = "2 hours"
 _LIMIT_MESSAGE = ("We have received a lot from this connection. Please try again later, "
                   "or phone us on 069 706 0387.")
+MAX_QUESTIONS = 15
+MAX_TEXT_ANSWER = 2000
 
 # The same answer for a wrong code, a closed questionnaire and a malformed
 # code, so trying codes teaches nothing.
 _NOT_FOUND = "This page does not exist."
+
+
+# ------------------------------------------------------------ questions ---
+
+class Choice(BaseModel):
+    """One option of a choice or grid question, or one row of a grid."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    value: str = Field(pattern=r"^[a-z0-9_]{1,40}$")
+    en: Line = Field(min_length=1, max_length=120)
+    zu: Line | None = Field(default=None, max_length=120)
+
+    @field_validator("zu")
+    @classmethod
+    def _blank_is_none(cls, value: str | None) -> str | None:
+        return value or None
 
 
 class Question(BaseModel):
@@ -72,34 +94,81 @@ class Question(BaseModel):
 
     id: str = Field(pattern=r"^q[0-9]{1,2}$")
     kind: QuestionKind
-    text_en: Line = Field(min_length=3, max_length=200)
-    text_zu: Line | None = Field(default=None, max_length=200)
+    text_en: Line = Field(min_length=3, max_length=300)
+    text_zu: Line | None = Field(default=None, max_length=300)
+    # In the five-question short version (?v=short).
+    short: bool = False
+    required: bool = False
+    options: list[Choice] | None = Field(default=None, max_length=12)
+    rows: list[Choice] | None = Field(default=None, max_length=12)
+    min: int | None = Field(default=None, ge=0, le=1)
+    max: int | None = Field(default=None, ge=2, le=10)
+    low_en: Line | None = Field(default=None, max_length=60)
+    low_zu: Line | None = Field(default=None, max_length=60)
+    high_en: Line | None = Field(default=None, max_length=60)
+    high_zu: Line | None = Field(default=None, max_length=60)
 
-    @field_validator("text_zu")
+    @field_validator("text_zu", "low_en", "low_zu", "high_en", "high_zu")
     @classmethod
     def _blank_is_none(cls, value: str | None) -> str | None:
         return value or None
 
+    @model_validator(mode="after")
+    def _shape(self) -> "Question":
+        def unique(items: list[Choice], what: str) -> None:
+            if len({i.value for i in items}) != len(items):
+                raise ValueError(f"Two {what} have the same wording")
+
+        if self.kind in ("choice", "grid"):
+            if not self.options or len(self.options) < 2:
+                raise ValueError("Give at least two options to choose from")
+            unique(self.options, "options")
+        else:
+            self.options = None
+        if self.kind == "grid":
+            if not self.rows:
+                raise ValueError("Give at least one thing to rate")
+            unique(self.rows, "things to rate")
+        else:
+            self.rows = None
+        if self.kind == "scale":
+            if self.min is None or self.max is None:
+                raise ValueError("A scale needs its lowest and highest number")
+        else:
+            self.min = self.max = None
+            self.low_en = self.low_zu = self.high_en = self.high_zu = None
+        return self
+
 
 class QuestionnaireOut(BaseModel):
+    title_en: str
+    title_zu: str | None
+    intro_en: str
+    intro_zu: str | None
+    version: Version
     questions: list[Question]
 
 
+# -------------------------------------------------------------- answers ---
+
 class AnswerIn(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+    # Strip whitespace also makes pydantic refuse a lone UTF-16 surrogate, which
+    # Postgres cannot store (a 500 otherwise).
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     id: str = Field(pattern=r"^q[0-9]{1,2}$")
-    answer: Text = Field(default="", max_length=1000)
+    # choice: an option's value. scale: the number. grid: {row: option}. text: the words.
+    # Strict: JSON true, false and 4.0 are not numbers on a scale.
+    answer: StrictInt | StrictStr | dict[StrictStr, StrictStr]
 
 
 class ResponseIn(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
-    first_name: Name = Field(min_length=1, max_length=80)
-    surname: Name = Field(min_length=1, max_length=80)
-    mobile: str
-    answers: list[AnswerIn] = Field(max_length=10)
-    contact_consent: bool
+    answers: list[AnswerIn] = Field(max_length=MAX_QUESTIONS)
+    name: Name | None = Field(default=None, max_length=120)
+    mobile: str | None = None
+    version: Version = "full"
     source: Literal["qr", "link"] = "link"
     language: Literal["en", "zu"] = "en"
     # Honeypot, as on the enquiry form: hidden from people, filled by bots.
@@ -112,20 +181,20 @@ class ResponseIn(BaseModel):
             raise ValueError("Enter a valid value")
         return ""
 
+    @field_validator("name", mode="before")
+    @classmethod
+    def _blank_name(cls, value: Any) -> Any:
+        return None if isinstance(value, str) and not value.strip() else value
+
     @field_validator("mobile")
     @classmethod
-    def _mobile(cls, value: str) -> str:
+    def _mobile(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
         normalised = normalise_mobile(value)
         if not _MOBILE_RE.fullmatch(normalised):
-            raise ValueError("Enter a valid South African mobile number, e.g. 082 123 4567")
+            raise ValueError("Enter a valid South African cellphone number, e.g. 082 123 4567")
         return normalised
-
-    @field_validator("contact_consent")
-    @classmethod
-    def _consent(cls, value: bool) -> bool:
-        if not value:
-            raise ValueError("We need your permission to keep your answers and contact you")
-        return value
 
     @model_validator(mode="after")
     def _one_answer_each(self) -> "ResponseIn":
@@ -139,91 +208,78 @@ class ResponseCreated(BaseModel):
     id: UUID
 
 
-class RatingIn(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
-
-    rating: int = Field(ge=1, le=5)
-    comment: Text | None = Field(default=None, max_length=1000)
-
-    @field_validator("comment")
-    @classmethod
-    def _blank_is_none(cls, value: str | None) -> str | None:
-        return value or None
+def _label(items: list[dict], value: str) -> str:
+    return next((i["en"] for i in items if i["value"] == value), value)
 
 
-class Thanks(BaseModel):
-    ok: bool = True
-
-
-# --------------------------------------------------------------- public ---
-
-def _open_survey(conn, code: str) -> dict:
-    if not _CODE_RE.fullmatch(code):
-        raise ApiError(status.HTTP_404_NOT_FOUND, "not_found", _NOT_FOUND)
-    row = conn.execute(
-        "select id, questions from feedback_surveys where link_code = %s and is_open",
-        (code,),
-    ).fetchone()
-    if row is None:
-        raise ApiError(status.HTTP_404_NOT_FOUND, "not_found", _NOT_FOUND)
-    return row
-
-
-@public_router.get("/{code}", response_model=QuestionnaireOut)
-def questionnaire(code: str, request: Request) -> QuestionnaireOut:
-    enforce(feedback_open_limiter, request, _LIMIT_MESSAGE)
-    with connection() as conn:
-        survey = _open_survey(conn, code)
-    return QuestionnaireOut(questions=[Question(**q) for q in survey["questions"]])
-
-
-def _check_answers(questions: list[dict], answers: list[AnswerIn]) -> dict[str, str]:
-    """Every question answered in its own form. A written answer may be blank."""
+def _check_answers(questions: list[dict], answers: list[AnswerIn],
+                   language: str) -> tuple[list[dict], dict[str, str]]:
+    """The answers as stored, with the wording shown and an English label, and
+    any field errors keyed answers.<id>."""
     given = {a.id: a.answer for a in answers}
     known = {q["id"] for q in questions}
     errors: dict[str, str] = {}
     for unknown in sorted(set(given) - known):
         errors[f"answers.{unknown}"] = "This question is no longer asked. Please reload the page."
+
+    stored: list[dict] = []
     for q in questions:
-        answer = given.get(q["id"], "")
-        if q["kind"] == "yes_no" and answer not in ("yes", "no"):
-            errors[f"answers.{q['id']}"] = "Please choose yes or no"
-        elif q["kind"] == "scale" and answer not in ("1", "2", "3", "4", "5"):
-            errors[f"answers.{q['id']}"] = "Please choose from 1 to 5"
-    return errors
-
-
-@public_router.post("/{code}/responses", response_model=ResponseCreated,
-                    status_code=status.HTTP_201_CREATED)
-def send_response(code: str, payload: ResponseIn, request: Request) -> ResponseCreated:
-    enforce(feedback_send_limiter, request, _LIMIT_MESSAGE)
-    with connection() as conn:
-        survey = _open_survey(conn, code)
-        questions = survey["questions"]
-        errors = _check_answers(questions, payload.answers)
-        if errors:
-            raise _field_errors(errors)
-        given = {a.id: a.answer for a in payload.answers}
-        # The wording the person actually saw, kept with the answer.
-        answers = [{
+        key = f"answers.{q['id']}"
+        raw = given.get(q["id"])
+        if raw is None or raw == "" or raw == {}:
+            if q.get("required"):
+                errors[key] = "Please answer this question"
+            continue
+        kind = q["kind"]
+        answer: Any
+        if kind == "choice":
+            if not isinstance(raw, str) or raw not in {o["value"] for o in q["options"]}:
+                errors[key] = "Please choose one of the answers"
+                continue
+            answer, label = raw, _label(q["options"], raw)
+        elif kind == "scale":
+            # One or two ASCII digits only: str.isdigit() also passes '³', which
+            # int() refuses, and a 5,000-digit string would exceed int()'s limit.
+            number = raw if isinstance(raw, int) else (
+                int(raw) if isinstance(raw, str) and re.fullmatch(r"[0-9]{1,2}", raw) else None)
+            if number is None or not q["min"] <= number <= q["max"]:
+                errors[key] = f"Please choose from {q['min']} to {q['max']}"
+                continue
+            answer, label = number, str(number)
+        elif kind == "grid":
+            rows = {r["value"]: r for r in q["rows"]}
+            options = {o["value"] for o in q["options"]}
+            if (not isinstance(raw, dict) or not set(raw) <= set(rows)
+                    or not set(raw.values()) <= options
+                    or (q.get("required") and set(raw) != set(rows))):
+                errors[key] = "Please choose one answer for each line"
+                continue
+            answer = {r: raw[r] for r in rows if r in raw}
+            label = "; ".join(f"{rows[r]['en']}: {_label(q['options'], v)}"
+                              for r, v in answer.items())
+        else:
+            if not isinstance(raw, str):
+                errors[key] = "Please write your answer"
+                continue
+            try:
+                answer = (clean_text(raw.strip()) or "")[:MAX_TEXT_ANSWER]
+            except ValueError as exc:
+                errors[key] = str(exc)
+                continue
+            if not answer:
+                if q.get("required"):
+                    errors[key] = "Please answer this question"
+                continue
+            label = answer
+        stored.append({
             "id": q["id"],
-            "kind": q["kind"],
-            "question": (q.get("text_zu") if payload.language == "zu" else None) or q["text_en"],
-            "answer": given.get(q["id"], ""),
-        } for q in questions]
-        response_id = conn.execute(
-            """
-            insert into feedback_responses
-                   (survey_id, first_name, surname, mobile, answers,
-                    contact_consent, source, language)
-            values (%s, %s, %s, %s, %s::jsonb, true, %s, %s)
-            returning id
-            """,
-            (survey["id"], payload.first_name, payload.surname, payload.mobile,
-             json.dumps(answers), payload.source, payload.language),
-        ).fetchone()["id"]
-    logger.info("Feedback response %s received (%s)", response_id, payload.source)
-    return ResponseCreated(id=response_id)
+            "kind": kind,
+            "question": (q.get("text_zu") if language == "zu" else None) or q["text_en"],
+            "question_en": q["text_en"],
+            "answer": answer,
+            "label": label,
+        })
+    return stored, errors
 
 
 def _field_errors(errors: dict[str, str]) -> RequestValidationError:
@@ -235,25 +291,71 @@ def _field_errors(errors: dict[str, str]) -> RequestValidationError:
     ])
 
 
-@public_router.post("/responses/{response_id}/rating", response_model=Thanks)
-def rate(response_id: UUID, payload: RatingIn, request: Request) -> Thanks:
-    enforce(feedback_rating_limiter, request, _LIMIT_MESSAGE)
+# --------------------------------------------------------------- public ---
+
+_SURVEY_COLUMNS = ("id, link_code, title_en, title_zu, intro_en, intro_zu, is_open, questions, "
+                   "updated_at, updated_by")
+
+
+def _open_survey(conn, code: str) -> dict:
+    if not _CODE_RE.fullmatch(code):
+        raise ApiError(status.HTTP_404_NOT_FOUND, "not_found", _NOT_FOUND)
+    row = conn.execute(
+        f"select {_SURVEY_COLUMNS} from feedback_surveys where link_code = %s and is_open",
+        (code,),
+    ).fetchone()
+    if row is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, "not_found", _NOT_FOUND)
+    return row
+
+
+def asked(questions: list[dict], version: str) -> list[dict]:
+    """The questions a version asks. A short version with none marked asks them all."""
+    if version == "short":
+        return [q for q in questions if q.get("short")] or questions
+    return questions
+
+
+@public_router.get("/{code}", response_model=QuestionnaireOut)
+def questionnaire(code: str, request: Request,
+                  v: Version = Query(default="full")) -> QuestionnaireOut:
+    enforce(feedback_open_limiter, request, _LIMIT_MESSAGE)
     with connection() as conn:
-        row = conn.execute(
-            f"""
-            update feedback_responses
-               set rating = %s, rating_comment = %s, rated_at = now()
-             where id = %s and rating is null
-               and created_at > now() - interval '{_RATING_WINDOW}'
+        survey = _open_survey(conn, code)
+    return QuestionnaireOut(
+        title_en=survey["title_en"], title_zu=survey["title_zu"],
+        intro_en=survey["intro_en"], intro_zu=survey["intro_zu"], version=v,
+        questions=[Question(**q) for q in asked(survey["questions"], v)],
+    )
+
+
+@public_router.post("/{code}/responses", response_model=ResponseCreated,
+                    status_code=status.HTTP_201_CREATED)
+def send_response(code: str, payload: ResponseIn, request: Request) -> ResponseCreated:
+    enforce(feedback_send_limiter, request, _LIMIT_MESSAGE)
+    with connection() as conn:
+        survey = _open_survey(conn, code)
+        answers, errors = _check_answers(asked(survey["questions"], payload.version),
+                                         payload.answers, payload.language)
+        if errors:
+            raise _field_errors(errors)
+        if not answers:
+            raise ApiError(422, "validation_failed",
+                           "Please answer at least one question before sending.")
+        consent = payload.name is not None or payload.mobile is not None
+        response_id = conn.execute(
+            """
+            insert into feedback_responses
+                   (survey_id, name, mobile, answers, contact_consent, version, source, language)
+            values (%s, %s, %s, %s::jsonb, %s, %s, %s, %s)
             returning id
             """,
-            (payload.rating, payload.comment, response_id),
-        ).fetchone()
-    if row is None:
-        raise ApiError(status.HTTP_404_NOT_FOUND, "not_found",
-                       "This rating has already been given, or the page has expired.")
-    logger.info("Feedback response %s rated", response_id)
-    return Thanks()
+            (survey["id"], payload.name, payload.mobile, json.dumps(answers, ensure_ascii=False),
+             consent, payload.version, payload.source, payload.language),
+        ).fetchone()["id"]
+    logger.info("Feedback response %s received (%s, %s, %s)", response_id, payload.version,
+                payload.source, "named" if consent else "anonymous")
+    return ResponseCreated(id=response_id)
 
 
 # ---------------------------------------------------------------- staff ---
@@ -261,6 +363,11 @@ def rate(response_id: UUID, payload: RatingIn, request: Request) -> Thanks:
 class SurveyOut(BaseModel):
     link_code: str
     link: str
+    short_link: str
+    title_en: str
+    title_zu: str | None
+    intro_en: str
+    intro_zu: str | None
     is_open: bool
     questions: list[Question]
     updated_at: datetime
@@ -269,23 +376,36 @@ class SurveyOut(BaseModel):
 
 class FeedbackRow(BaseModel):
     id: UUID
-    first_name: str
-    surname: str
-    mobile: str
+    name: str | None
+    mobile: str | None
     answers: list[dict]
+    version: str
     source: str
     language: str
-    rating: int | None
-    rating_comment: str | None
     created_at: datetime
+
+
+class QuestionResult(BaseModel):
+    """What everyone said to one question, counted."""
+
+    id: str
+    kind: str
+    text_en: str
+    answered: int
+    # scale: the mean, and for 0-10 the recommend score (NPS: % 9-10 minus % 0-6).
+    average: float | None = None
+    nps: int | None = None
+    # choice and scale: {value: count}. grid: {row: {option: count}}.
+    counts: dict[str, int] | None = None
+    grid: dict[str, dict[str, int]] | None = None
 
 
 class FeedbackSummary(BaseModel):
     responses: int
-    rated: int
-    # A display figure (e.g. 4.3), never money, so a float is right here.
-    average_rating: float | None
-    by_rating: dict[str, int]
+    named: int
+    short_version: int
+    # Counted from up to the latest 5,000 responses.
+    questions: list[QuestionResult]
 
 
 class FeedbackAdminOut(BaseModel):
@@ -293,13 +413,21 @@ class FeedbackAdminOut(BaseModel):
     summary: FeedbackSummary
     responses: list[FeedbackRow]
     can_edit: bool
+    # Every question id that has answers on record, current or removed. A new
+    # question must not take one, or it would inherit those answers' results.
+    answered_ids: list[str]
 
 
 class SurveyIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
-    questions: list[Question] | None = Field(default=None, min_length=1, max_length=10)
+    questions: list[Question] | None = Field(default=None, min_length=1,
+                                             max_length=MAX_QUESTIONS)
     is_open: bool | None = None
+    title_en: Line | None = Field(default=None, min_length=1, max_length=120)
+    title_zu: Line | None = Field(default=None, max_length=120)
+    intro_en: Text | None = Field(default=None, min_length=1, max_length=1000)
+    intro_zu: Text | None = Field(default=None, max_length=1000)
 
     @field_validator("questions")
     @classmethod
@@ -310,18 +438,15 @@ class SurveyIn(BaseModel):
 
 
 def _survey_out(row: dict) -> SurveyOut:
-    base = get_settings().public_site_url
+    link = f"{get_settings().public_site_url}/feedback/{row['link_code']}"
     return SurveyOut(
-        link_code=row["link_code"],
-        link=f"{base}/feedback/{row['link_code']}",
+        link_code=row["link_code"], link=link, short_link=f"{link}?v=short",
+        title_en=row["title_en"], title_zu=row["title_zu"],
+        intro_en=row["intro_en"], intro_zu=row["intro_zu"],
         is_open=row["is_open"],
         questions=[Question(**q) for q in row["questions"]],
-        updated_at=row["updated_at"],
-        updated_by=row["updated_by"],
+        updated_at=row["updated_at"], updated_by=row["updated_by"],
     )
-
-
-_SURVEY_COLUMNS = "id, link_code, is_open, questions, updated_at, updated_by"
 
 
 def _the_survey(conn) -> dict:
@@ -333,27 +458,69 @@ def _the_survey(conn) -> dict:
     return row
 
 
+def _id_order(question_id: str) -> int:
+    return int(question_id[1:]) if re.fullmatch(r"q[0-9]+", question_id or "") else 0
+
+
+def summarise(questions: list[dict], answer_sets: list[list[dict]]) -> list[QuestionResult]:
+    """Count every answer, per question, against the questions as they are now.
+    An answer for an option since removed is still counted, under its value."""
+    results = []
+    for q in questions:
+        mine = [a["answer"] for answers in answer_sets for a in answers
+                if a.get("id") == q["id"] and a.get("kind") == q["kind"]]
+        result = QuestionResult(id=q["id"], kind=q["kind"], text_en=q["text_en"],
+                                answered=len(mine))
+        if q["kind"] == "scale":
+            numbers = [n for n in mine if isinstance(n, int)]
+            tally = Counter(numbers)
+            result.counts = {str(n): tally.get(n, 0) for n in range(q["min"], q["max"] + 1)}
+            if numbers:
+                result.average = round(sum(numbers) / len(numbers), 1)
+                if q["min"] == 0 and q["max"] == 10:
+                    promoters = sum(1 for n in numbers if n >= 9)
+                    detractors = sum(1 for n in numbers if n <= 6)
+                    result.nps = round(100 * (promoters - detractors) / len(numbers))
+        elif q["kind"] == "choice":
+            tally = Counter(a for a in mine if isinstance(a, str))
+            result.counts = {o["value"]: tally.get(o["value"], 0) for o in q["options"]}
+            for value, n in tally.items():
+                result.counts.setdefault(value, n)
+        elif q["kind"] == "grid":
+            grid: dict[str, dict[str, int]] = {
+                r["value"]: {o["value"]: 0 for o in q["options"]} for r in q["rows"]}
+            for answer in mine:
+                if isinstance(answer, dict):
+                    for row, option in answer.items():
+                        cell = grid.setdefault(row, {})
+                        cell[option] = cell.get(option, 0) + 1
+            result.grid = grid
+        results.append(result)
+    return results
+
+
 @admin_router.get("", response_model=FeedbackAdminOut)
 def feedback_overview(staff: StaffUser = Depends(require_staff)) -> FeedbackAdminOut:
     with connection() as conn:
         survey = _the_survey(conn)
         counts = conn.execute(
             """
-            select count(*) as responses, count(rating) as rated,
-                   round(avg(rating)::numeric, 1)::float as average_rating,
-                   count(*) filter (where rating = 1) as r1,
-                   count(*) filter (where rating = 2) as r2,
-                   count(*) filter (where rating = 3) as r3,
-                   count(*) filter (where rating = 4) as r4,
-                   count(*) filter (where rating = 5) as r5
+            select count(*) as responses,
+                   count(*) filter (where contact_consent) as named,
+                   count(*) filter (where version = 'short') as short_version
               from feedback_responses where survey_id = %s
             """,
             (survey["id"],),
         ).fetchone()
+        answer_sets = [r["answers"] for r in conn.execute(
+            "select answers from feedback_responses where survey_id = %s "
+            "order by created_at desc limit 5000", (survey["id"],)).fetchall()]
+        conn_answered_ids = conn.execute(
+            "select distinct a->>'id' as id from feedback_responses r, "
+            "jsonb_array_elements(r.answers) a where r.survey_id = %s", (survey["id"],)).fetchall()
         rows = conn.execute(
             """
-            select id, first_name, surname, mobile, answers, source, language,
-                   rating, rating_comment, created_at
+            select id, name, mobile, answers, version, source, language, created_at
               from feedback_responses
              where survey_id = %s
              order by created_at desc
@@ -364,41 +531,45 @@ def feedback_overview(staff: StaffUser = Depends(require_staff)) -> FeedbackAdmi
         log_staff_event(conn, staff.email, "feedback_viewed", None, {"rows": len(rows)})
     return FeedbackAdminOut(
         survey=_survey_out(survey),
-        summary=FeedbackSummary(
-            responses=counts["responses"], rated=counts["rated"],
-            average_rating=counts["average_rating"],
-            by_rating={str(n): counts[f"r{n}"] for n in range(1, 6)},
-        ),
+        summary=FeedbackSummary(responses=counts["responses"], named=counts["named"],
+                                short_version=counts["short_version"],
+                                questions=summarise(survey["questions"], answer_sets)),
         responses=[FeedbackRow(**r) for r in rows],
         can_edit=staff.role in ("admin", "owner"),
+        answered_ids=sorted({r["id"] for r in conn_answered_ids}, key=_id_order),
     )
 
 
 @admin_router.patch("/survey", response_model=SurveyOut)
 def change_survey(payload: SurveyIn,
                   staff: StaffUser = Depends(require_role("admin"))) -> SurveyOut:
-    if payload.questions is None and payload.is_open is None:
-        raise ApiError(422, "validation_failed",
-                       "Nothing to change.")
+    changes = payload.model_dump(exclude_unset=True)
+    if not changes:
+        raise ApiError(422, "validation_failed", "Nothing to change.")
+    for required in ("title_en", "intro_en", "is_open", "questions"):
+        if required in changes and changes[required] is None:
+            raise ApiError(422, "validation_failed", f"{required} cannot be blank.")
     with connection() as conn:
         survey = _the_survey(conn)
-        questions = (json.dumps([q.model_dump() for q in payload.questions])
-                     if payload.questions is not None else None)
+        sets = ["updated_by = %(staff)s", "updated_at = now()"]
+        params: dict[str, Any] = {"staff": staff.email, "id": survey["id"]}
+        if payload.questions is not None:
+            sets.append("questions = %(questions)s::jsonb")
+            params["questions"] = json.dumps(
+                [q.model_dump(exclude_none=True) for q in payload.questions], ensure_ascii=False)
+        for column in ("is_open", "title_en", "title_zu", "intro_en", "intro_zu"):
+            if column in changes:
+                sets.append(f"{column} = %({column})s")
+                value = changes[column]
+                params[column] = (value or None) if column.endswith("_zu") else value
         row = conn.execute(
-            f"""
-            update feedback_surveys
-               set questions  = coalesce(%s::jsonb, questions),
-                   is_open    = coalesce(%s, is_open),
-                   updated_by = %s,
-                   updated_at = now()
-             where id = %s
-            returning {_SURVEY_COLUMNS}
-            """,
-            (questions, payload.is_open, staff.email, survey["id"]),
+            f"update feedback_surveys set {', '.join(sets)} where id = %(id)s "
+            f"returning {_SURVEY_COLUMNS}",
+            params,
         ).fetchone()
         log_staff_event(conn, staff.email, "feedback_survey_changed", str(survey["id"]), {
+            "changed": sorted(changes),
             "questions": len(payload.questions) if payload.questions is not None else None,
-            "is_open": payload.is_open,
         })
     return _survey_out(row)
 

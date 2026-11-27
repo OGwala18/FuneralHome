@@ -118,40 +118,64 @@ export const useSiteBanner = (): { banner: SiteBanner | null; ready: boolean } =
 };
 
 // ---------------------------------------------------------------------------
-// The private feedback questionnaire
+// The private feedback questionnaire (the owner's post-funeral survey)
 // ---------------------------------------------------------------------------
 
-export type QuestionKind = "text" | "yes_no" | "scale";
+export type QuestionKind = "choice" | "scale" | "grid" | "text";
+
+export interface FeedbackChoice {
+  value: string;
+  en: string;
+  zu: string | null;
+}
 
 export interface FeedbackQuestion {
   id: string;
   kind: QuestionKind;
   text_en: string;
   text_zu: string | null;
+  short: boolean;
+  required: boolean;
+  /** choice and grid: what to pick from. */
+  options: FeedbackChoice[] | null;
+  /** grid: the things being rated. */
+  rows: FeedbackChoice[] | null;
+  /** scale: 1-5 or 0-10, with words at each end. */
+  min: number | null;
+  max: number | null;
+  low_en: string | null;
+  low_zu: string | null;
+  high_en: string | null;
+  high_zu: string | null;
 }
 
-export interface FeedbackAnswers {
-  first_name: string;
-  surname: string;
-  mobile: string;
-  answers: { id: string; answer: string }[];
-  contact_consent: boolean;
+export interface Questionnaire {
+  title_en: string;
+  title_zu: string | null;
+  intro_en: string;
+  intro_zu: string | null;
+  version: "full" | "short";
+  questions: FeedbackQuestion[];
+}
+
+/** choice: an option's value. scale: the number. grid: {row: option}. text: the words. */
+export type FeedbackAnswer = string | number | Record<string, string>;
+
+export interface FeedbackResponse {
+  answers: { id: string; answer: FeedbackAnswer }[];
+  name: string | null;
+  mobile: string | null;
+  version: "full" | "short";
   source: "qr" | "link";
   language: "en" | "zu";
   website: string;
 }
 
-export const fetchQuestionnaire = (code: string) =>
-  call<{ questions: FeedbackQuestion[] }>(`/api/feedback/${encodeURIComponent(code)}`);
+export const fetchQuestionnaire = (code: string, version: "full" | "short") =>
+  call<Questionnaire>(`/api/feedback/${encodeURIComponent(code)}?v=${version}`);
 
-export const sendFeedback = (code: string, body: FeedbackAnswers) =>
+export const sendFeedback = (code: string, body: FeedbackResponse) =>
   call<{ id: string }>(`/api/feedback/${encodeURIComponent(code)}/responses`, {
     method: "POST",
     body: JSON.stringify(body),
-  });
-
-export const sendRating = (responseId: string, rating: number, comment: string) =>
-  call<{ ok: boolean }>(`/api/feedback/responses/${encodeURIComponent(responseId)}/rating`, {
-    method: "POST",
-    body: JSON.stringify({ rating, comment: comment.trim() || null }),
   });

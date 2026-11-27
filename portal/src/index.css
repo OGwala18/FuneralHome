@@ -709,3 +709,14 @@ tbody tr.clickable:hover { background: var(--paper); }
 .upload-policy { border: 1px solid var(--line); border-radius: var(--r8); padding: var(--s12) var(--s16); display: grid; gap: var(--s8); }
 .upload-policy p { margin: 0; }
 .verify-box { border-top: 1px solid var(--line); padding-top: var(--s16); }
+
+.feedback-message {
+  margin: 0;
+  padding: var(--s12) var(--s16);
+  border-left: 3px solid var(--gold);
+  border-radius: var(--r8);
+  background: var(--warm);
+  white-space: pre-wrap;
+}
+.question-result { border: 1px solid var(--line); border-radius: var(--r8); padding: var(--s12) var(--s16); }
+.question-result p { margin: 0; }

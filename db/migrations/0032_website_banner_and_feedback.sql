@@ -7,8 +7,8 @@
 --    it, live on the site at once, with no developer and no redeploy.
 -- 2. A short questionnaire that is NOT on the website. It opens only from its
 --    own link, which the office prints as a QR code and passes on to families.
---    It asks for a name, surname and mobile number, five questions, then thanks
---    the person and asks them to rate the service.
+--    The owner's post-funeral survey: ten questions (or a five-question short
+--    version), an optional name and number, then thanks.
 --
 -- THE BANNER
 -- website_banners is append-only: every save is a new row, and the newest row
@@ -25,15 +25,25 @@
 -- DELETE anywhere. The API keeps the current photo and the few most recent.
 --
 -- THE QUESTIONNAIRE
--- feedback_surveys has one row: the questions and the secret part of the link.
--- The code is made by the database the first time this runs, so it is never
--- in this public repository. Staff can replace it from the portal, which stops
--- the old link and old QR codes working at once.
+-- The owner's "Post-Funeral Family Feedback" survey (26 Nov 2026), in English
+-- and isiZulu: ten questions, five of them (marked short) also making up a
+-- short version at ?v=short. feedback_surveys has one row: the title, the
+-- introduction, the questions and the secret part of the link. The code is made
+-- by the database the first time this runs, so it is never in this public
+-- repository. Staff replace it from the portal, which stops the old link and
+-- every printed QR code at once.
 --
--- feedback_responses holds what people send. The questions' wording is copied
--- into each response, so changing a question later never changes what an
--- earlier person was asked. contact_consent must be true, as on the enquiry
--- form (ARCHITECTURE.md §7.5). No ID number, no bank details: nothing asks.
+-- A question is one of: choice (pick one), scale (1-5 or 0-10, with words at
+-- each end), grid (rate several things on the same choices) or text. Each
+-- carries both languages; staff edit them in the portal.
+--
+-- feedback_responses holds what people send. Answering is voluntary and so is
+-- giving a name and number: a response may be anonymous. When a name or number
+-- is given, contact_consent is true, because the page says plainly that giving
+-- them is agreeing to be contacted about the feedback (the owner's wording).
+-- The questions' wording is copied into each answer, so changing a question
+-- later never changes what an earlier family was asked. No ID number, no bank
+-- details: nothing asks for them.
 --
 -- WHERE IT RUNS
 -- Everywhere: the API's own database and Supabase. Grants to induduzo_api are
@@ -93,10 +103,14 @@ create table if not exists feedback_surveys (
   tenant_id   uuid not null default '00000000-0000-0000-0000-000000000001',
   -- The secret part of https://induduzo.co.za/feedback/<link_code>.
   link_code   text not null unique check (link_code ~ '^[a-z0-9]{10,32}$'),
-  -- [{"id": "q1", "kind": "text" | "yes_no" | "scale", "text_en": "...", "text_zu": "..."}]
+  title_en    text not null check (char_length(title_en) between 1 and 120),
+  title_zu    text check (char_length(title_zu) between 1 and 120),
+  intro_en    text not null check (char_length(intro_en) between 1 and 1000),
+  intro_zu    text check (char_length(intro_zu) between 1 and 1000),
+  -- See THE QUESTIONNAIRE above. The API checks each question's shape.
   questions   jsonb not null check (
                 jsonb_typeof(questions) = 'array'
-                and jsonb_array_length(questions) between 1 and 10),
+                and jsonb_array_length(questions) between 1 and 15),
   is_open     boolean not null default true,
   updated_by  text,
   created_at  timestamptz not null default now(),
@@ -113,42 +127,50 @@ create table if not exists feedback_responses (
   id              uuid primary key default gen_random_uuid(),
   tenant_id       uuid not null default '00000000-0000-0000-0000-000000000001',
   survey_id       uuid not null references feedback_surveys (id),
-  first_name      text not null check (char_length(first_name) between 1 and 80),
-  surname         text not null check (char_length(surname) between 1 and 80),
-  mobile          text not null check (mobile ~ '^\+[1-9][0-9]{7,14}$'),
-  -- [{"id": "q1", "kind": "...", "question": "<wording shown>", "answer": "..."}]
+  -- Both optional: a family may answer anonymously.
+  name            text check (char_length(name) between 1 and 120),
+  mobile          text check (mobile ~ '^\+[1-9][0-9]{7,14}$'),
+  -- [{"id": "q2", "kind": "scale", "question": "<wording shown>", "answer": ..., "label": "..."}]
   answers         jsonb not null check (jsonb_typeof(answers) = 'array'),
-  contact_consent boolean not null check (contact_consent),
+  contact_consent boolean not null default false,
+  -- full: all the questions. short: the five marked short.
+  version         text not null default 'full' check (version in ('full', 'short')),
   -- How they arrived: the printed QR code, or the link passed on.
   source          text not null default 'link' check (source in ('qr', 'link')),
   language        text not null default 'en' check (language in ('en', 'zu')),
-  rating          smallint check (rating between 1 and 5),
-  rating_comment  text check (char_length(rating_comment) between 1 and 1000),
-  rated_at        timestamptz,
   created_at      timestamptz not null default now(),
 
-  constraint feedback_responses_rated_together check ((rating is null) = (rated_at is null)),
-  constraint feedback_responses_comment_needs_rating check (rating_comment is null or rating is not null)
+  -- A name or number is only kept with the agreement to be contacted.
+  constraint feedback_responses_details_need_consent
+    check (contact_consent or (name is null and mobile is null))
 );
 
 comment on table feedback_responses is
-  'Answers to the private feedback questionnaire, with the 1-5 service rating given at the end.';
+  'Answers to the private feedback questionnaire. Name and mobile are optional; when given, contact_consent is true.';
 
 create index if not exists feedback_responses_created_idx on feedback_responses (created_at desc);
 create index if not exists feedback_responses_survey_idx on feedback_responses (survey_id);
 
--- The questionnaire, with placeholder questions until the owner supplies the
--- real ones; staff replace them in the portal. The link code comes from
--- gen_random_uuid(), whose first twelve hex digits are all random.
-insert into feedback_surveys (link_code, questions, updated_by)
+-- The owner's survey. The link code comes from gen_random_uuid(), whose first
+-- twelve hex digits are all random.
+insert into feedback_surveys (link_code, title_en, title_zu, intro_en, intro_zu, questions, updated_by)
 select substr(replace(gen_random_uuid()::text, '-', ''), 1, 12),
+       'Post-Funeral Family Feedback',
+       'Imibono Yomndeni Ngemva Komngcwabo',
+       'We are sorry for your loss, and thank you for trusting Induduzo with your family''s farewell. Your honest feedback helps us serve the next family better. Answering is voluntary. Your answers are used only to improve our service and to follow up if you ask us to.',
+       'Sidlulisa amazwi enduduzo ngokushonelwa kwenu, futhi siyabonga ngokusethemba ukuthi sisize umndeni wenu ukuphelezela othandekayo wenu. Imibono yenu eqotho isisiza ukuba sisebenzele kangcono umndeni olandelayo. Ukuphendula kuwukuzithandela. Izimpendulo zenu zizosetshenziselwa kuphela ukuthuthukisa umsebenzi wethu nokunilandelela uma nicela.',
        '[
-          {"id": "q1", "kind": "text",   "text_en": "How did you hear about Induduzo Funeral Home?"},
-          {"id": "q2", "kind": "yes_no", "text_en": "Did our staff treat you and your family with care and respect?"},
-          {"id": "q3", "kind": "scale",  "text_en": "How easy was it to reach us when you needed us?"},
-          {"id": "q4", "kind": "yes_no", "text_en": "Was everything explained clearly: the costs, the plan and the arrangements?"},
-          {"id": "q5", "kind": "text",   "text_en": "What could we do better?"}
-        ]'::jsonb,
+  {"id": "q1", "kind": "choice", "short": false, "required": false, "text_en": "Which branch assisted your family?", "text_zu": "Yiliphi igatsha elisize umndeni wakho?", "options": [{"value": "edendale", "en": "Edendale Main Road (Head Office)", "zu": "Edendale Main Road (Ihhovisi Elikhulu)"}, {"value": "boshoff", "en": "161 Boshoff Street", "zu": "161 Boshoff Street"}, {"value": "langalibalele", "en": "Longmarket (171 Langalibalele Street)", "zu": "Longmarket (171 Langalibalele Street)"}, {"value": "not_sure", "en": "Not sure", "zu": "Angiqiniseki"}]},
+  {"id": "q2", "kind": "scale", "short": true, "required": false, "text_en": "Overall, how satisfied were you with our service?", "text_zu": "Sekukonke, waneliseke kangakanani ngomsebenzi wethu?", "min": 1, "max": 5, "low_en": "Very unhappy", "low_zu": "Anganelisekile neze", "high_en": "Very satisfied", "high_zu": "Nganeliseke kakhulu"},
+  {"id": "q3", "kind": "scale", "short": true, "required": false, "text_en": "Our staff treated your family with dignity, respect and compassion.", "text_zu": "Abasebenzi bethu bawuphathe umndeni wakho ngesizotha, ngenhlonipho nangozwelo.", "min": 1, "max": 5, "low_en": "Strongly disagree", "low_zu": "Angivumi neze", "high_en": "Strongly agree", "high_zu": "Ngivuma kakhulu"},
+  {"id": "q4", "kind": "choice", "short": false, "required": false, "text_en": "Were the services and costs explained clearly before the funeral?", "text_zu": "Ingabe izinsizakalo nezindleko zachazwa kahle ngaphambi komngcwabo?", "options": [{"value": "yes_fully", "en": "Yes, fully", "zu": "Yebo, ngokuphelele"}, {"value": "partly", "en": "Partly", "zu": "Ngokwengxenye"}, {"value": "no", "en": "No", "zu": "Cha"}]},
+  {"id": "q5", "kind": "choice", "short": false, "required": false, "text_en": "How easy was the paperwork or policy claim process?", "text_zu": "Kwakulula kangakanani ukugcwalisa amaphepha noma ukufaka isicelo semali yomshwalense?", "options": [{"value": "very_easy", "en": "Very easy", "zu": "Kwakulula kakhulu"}, {"value": "easy", "en": "Easy", "zu": "Kwakulula"}, {"value": "difficult", "en": "Difficult", "zu": "Kwakulukhuni"}, {"value": "very_difficult", "en": "Very difficult", "zu": "Kwakulukhuni kakhulu"}, {"value": "not_applicable", "en": "Not applicable", "zu": "Akungithinti"}]},
+  {"id": "q6", "kind": "choice", "short": true, "required": false, "text_en": "Did our vehicles, staff and equipment arrive on time?", "text_zu": "Ingabe izimoto, abasebenzi nezinto zethu zafika ngesikhathi?", "options": [{"value": "on_time", "en": "Yes, everything was on time", "zu": "Yebo, konke kwafika ngesikhathi"}, {"value": "small_delays", "en": "There were small delays", "zu": "Kube nokubambezeleka okuncane"}, {"value": "serious_delays", "en": "There were serious delays", "zu": "Kube nokubambezeleka okukhulu"}]},
+  {"id": "q7", "kind": "grid", "short": false, "required": false, "text_en": "How would you rate each of the following?", "text_zu": "Ungakulinganisa kanjani lokhu okulandelayo?", "rows": [{"value": "casket", "en": "Casket or coffin", "zu": "Ibhokisi likamufi"}, {"value": "vehicles", "en": "Hearse and vehicles", "zu": "Imoto ethwala umufi nezinye izimoto"}, {"value": "equipment", "en": "Tent, chairs and equipment", "zu": "Ithende, izihlalo nezinye izinto"}, {"value": "programmes", "en": "Programmes and notices", "zu": "Amaphrogremu nezaziso zomngcwabo"}, {"value": "staff", "en": "Staff on the day", "zu": "Abasebenzi ngosuku lomngcwabo"}], "options": [{"value": "excellent", "en": "Excellent", "zu": "Kuhle kakhulu"}, {"value": "good", "en": "Good", "zu": "Kuhle"}, {"value": "fair", "en": "Fair", "zu": "Kuphakathi"}, {"value": "poor", "en": "Poor", "zu": "Kubi"}, {"value": "not_used", "en": "Not used", "zu": "Asikusebenzisanga"}]},
+  {"id": "q8", "kind": "choice", "short": false, "required": false, "text_en": "Did you receive everything that was promised?", "text_zu": "Ingabe nakuthola konke enakuthenjiswa?", "options": [{"value": "yes", "en": "Yes", "zu": "Yebo"}, {"value": "no", "en": "No (please explain in the last question)", "zu": "Cha (sicela uchaze embuzweni wokugcina)"}, {"value": "not_sure", "en": "Not sure", "zu": "Angiqiniseki"}]},
+  {"id": "q9", "kind": "scale", "short": true, "required": false, "text_en": "How likely are you to recommend Induduzo to family or friends?", "text_zu": "Maningi kangakanani amathuba okuthi utusele umndeni noma abangani i-Induduzo?", "min": 0, "max": 10, "low_en": "Not at all likely", "low_zu": "Cha neze", "high_en": "Extremely likely", "high_zu": "Nakanjani"},
+  {"id": "q10", "kind": "text", "short": true, "required": false, "text_en": "What did we do well, and what should we improve?", "text_zu": "Yikuphi esikwenze kahle, futhi yikuphi okufanele sikuthuthukise?"}
+]'::jsonb,
        'migration 0032'
  where not exists (select 1 from feedback_surveys);
 
@@ -174,8 +196,8 @@ begin
   grant select, insert         on website_banners       to induduzo_api;
   -- The questions and the link change; the row is never removed.
   grant select, insert, update on feedback_surveys      to induduzo_api;
-  -- A response is written once; the rating is added to it afterwards.
-  grant select, insert, update on feedback_responses    to induduzo_api;
+  -- A response is written once and never changed.
+  grant select, insert         on feedback_responses    to induduzo_api;
 
   drop policy if exists api_rw_website_banner_images on website_banner_images;
   create policy api_rw_website_banner_images on website_banner_images

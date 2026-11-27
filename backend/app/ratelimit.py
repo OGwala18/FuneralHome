@@ -103,7 +103,6 @@ password_reset_limiter = SlidingWindowLimiter(limit=30, window_seconds=3600)
 # the link is not a password, but there is no reason to make guessing cheap.
 feedback_open_limiter = SlidingWindowLimiter(limit=60, window_seconds=3600)
 feedback_send_limiter = SlidingWindowLimiter(limit=10, window_seconds=3600)
-feedback_rating_limiter = SlidingWindowLimiter(limit=20, window_seconds=3600)
 
 _ENQUIRY_LIMIT_MESSAGE = (
     "We have received several enquiries from this connection. "
