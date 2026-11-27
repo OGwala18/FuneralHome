@@ -36,8 +36,9 @@ from . import banking
 # time zone database (Windows has none without the tzdata package).
 SAST = timezone(timedelta(hours=2), "SAST")
 
-# The owner's flyer, 12 Nov 2026: a dedicated 24-hour line, then the offices.
-PHONES_24H = "069 706 0387 (24 hours), 079 751 0648 or 082 954 9241"
+# The 24-hour line, then the office. 079 751 0648 was retired from every
+# public surface on 26 Nov 2026 (owner); the website lists the same two.
+PHONES_24H = "069 706 0387 (24 hours) or 082 954 9241"
 OFFICE_ADDRESS = "Edendale Main Road, Kwadaya, Pietermaritzburg 3201"
 BRANCHES = "161 Boshoff Street and 171 Langalibalele Street, Pietermaritzburg"
 MAP_LINK = "https://www.google.com/maps/search/?api=1&query=Edendale+Main+Road+Kwadaya+Pietermaritzburg"

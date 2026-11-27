@@ -174,6 +174,10 @@ backend/
 | `POST` | `/api/whatsapp/status` | Twilio: sent, delivered, read or failed. Signature-checked |
 | `POST` | `/api/auth/password/forgot` | Staff forgot their password: emails a temporary one (30 min, one use) if the address is active staff. Always the same **202** |
 | `POST` | `/api/auth/password/reset` | The temporary password as the old one, plus a new one: sets it in Supabase. Needs `SUPABASE_SERVICE_ROLE_KEY` |
+| `GET` | `/api/site/banner` | The homepage banner staff set in the portal: words and photo, all null for the site's own. Cached 60 s |
+| `GET` | `/api/site/banner/images/{id}` | A banner photo, only one a saved banner used. Cached a year (each photo has its own address) |
+| `GET` | `/api/feedback/{code}?v=full\|short` | The owner's post-funeral survey: title, introduction and questions (choice, 1-5 or 0-10 scale, grid, text) in English and isiZulu. `short` asks only the questions marked short. A wrong or closed code is a plain 404. Rate-limited |
+| `POST` | `/api/feedback/{code}/responses` | The answers, plus an optional name and mobile: giving either records `contact_consent`. Anonymous is allowed. At least one answer. Append-only |
 
 Staff routes all sit under `/api/admin`, behind `require_staff`; every write
 also needs `require_role("admin")`. The ones that touch the book of business:
@@ -198,6 +202,12 @@ also needs `require_role("admin")`. The ones that touch the book of business:
 | `GET` | `/api/admin/whatsapp/messages/{id}/media/{n}` | A photo a family sent, fetched from Twilio. Escalated conversations only |
 | `GET` | `/api/admin/whatsapp/stats` | Growth: usage, topics and ratings. No numbers |
 | `GET` | `/api/admin/analytics?period=day\|7d\|28d\|91d` | **Owner only.** The LIVE site's Plausible figures, on every environment. Cached 5 min; needs `PLAUSIBLE_API_KEY` |
+| `GET`, `POST` | `/api/admin/website/banner` | Settings > Website settings: the live banner and its last ten changes; save a new one (admin, owner). Append-only history |
+| `POST` | `/api/admin/website/banner/images` | Upload a banner photo as the raw body, up to `MAX_BANNER_IMAGE_BYTES` (2 MB, this route only). Type and size read from the bytes |
+| `GET` | `/api/admin/feedback` | The questionnaire's full and short links (built from `PUBLIC_SITE_URL`), wording, questions, per-question results (counts, averages, the 0-10 NPS), the latest 200 responses, and the question ids that already have answers. Any staff role |
+| `PATCH` | `/api/admin/feedback/survey`; `POST` `/survey/new-link` | Change the title, introduction and questions, or open/close it; replace the link, retiring every printed QR code and sent link (admin, owner) |
+| `POST` | `/api/admin/member-upload/check` | Settings > User upload: the filled-in template (.xlsx, raw body, 2 MB) checked row by row. Policies come back ready, needing fixing (row, column, reason) or already in the book. Admin, owner. Bank columns refused |
+| `POST` | `/api/admin/member-upload/import?checksum=` | The same file again: checked from scratch, then each ready policy added in its own savepoint (premium and cover from the sheet, `source` `import:portal_upload`). Template: `portal/public/templates/`, built by `db/seed/make_member_upload_template.py` |
 
 Interactive docs run at `/docs` in development.
 

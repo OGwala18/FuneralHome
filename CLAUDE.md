@@ -52,14 +52,15 @@ All ten in `ARCHITECTURE.md` §7 apply. The ones most often broken in practice:
 
 ## Things that will bite you
 
-**Migration numbering.** `0001`–`0031` exist. `docs/feature-1-review-loop.md`
+**Migration numbering.** `0001`–`0032` exist. `docs/feature-1-review-loop.md`
 says its new tables go in "migration 0008". That number is taken, and so is
-every number up to 0031 (0026 closed Supabase's public `anon` key, 0027
+every number up to 0032 (0026 closed Supabase's public `anon` key, 0027
 repaired the API's access to business_phone_numbers, 0028 gave staff accounts
 a mobile number, 13 Nov 2026; 0029 holds forgotten-password temporary
 passwords, 16 Nov 2026; 0030 let a reset pass the second step; 0031 is
-`member_book_history`, 16 Nov 2026). It must be
-**0032**, or the next free number when it is built. A new table
+`member_book_history`, 16 Nov 2026; 0032 is the homepage banner and the
+feedback questionnaire, 26 Nov 2026). It must be
+**0033**, or the next free number when it is built. A new table
 needs its `induduzo_api` grant written out; since 0026 nothing is granted to
 `anon` or `authenticated` by default.
 

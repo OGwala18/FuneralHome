@@ -999,3 +999,267 @@ export const passSecondStepWithResetProof = (proof: string): Promise<boolean> =>
     });
   return resetPass;
 };
+
+// ---------------------------------------------------------------------------
+// Website settings: the homepage banner (/api/admin/website)
+// ---------------------------------------------------------------------------
+
+export interface WebsiteBanner {
+  headline_en: string | null;
+  headline_zu: string | null;
+  message_en: string | null;
+  message_zu: string | null;
+  image_id: string | null;
+  image_url: string | null;
+  image_width: number | null;
+  image_height: number | null;
+  updated_at: string | null;
+}
+
+export interface WebsiteBannerChange extends WebsiteBanner {
+  id: string;
+  saved_by: string;
+}
+
+export interface WebsiteBannerAdmin {
+  current: WebsiteBanner;
+  history: WebsiteBannerChange[];
+  can_edit: boolean;
+  recommended_width: number;
+  recommended_height: number;
+}
+
+export interface BannerIn {
+  headline_en: string | null;
+  headline_zu: string | null;
+  message_en: string | null;
+  message_zu: string | null;
+  image_id: string | null;
+}
+
+export interface UploadedImage {
+  id: string;
+  content_type: string;
+  width: number;
+  height: number;
+  byte_size: number;
+}
+
+export const fetchWebsiteBanner = () => request<WebsiteBannerAdmin>("/api/admin/website/banner");
+
+export const saveWebsiteBanner = (body: BannerIn) =>
+  mutate<WebsiteBanner>("/api/admin/website/banner", "POST", body);
+
+/** The photo's bytes as the body: the API reads the type and size from them. */
+export const uploadBannerImage = async (photo: Blob): Promise<UploadedImage> => {
+  const token = await getAccessToken();
+  if (!token) throw new ApiError("Your session has ended. Please sign in again.", 401);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/api/admin/website/banner/images`, {
+      method: "POST",
+      headers: authHeaders(token, { "Content-Type": photo.type || "application/octet-stream" }),
+      body: photo,
+    });
+  } catch {
+    throw new ApiError("Could not reach the server.", 0);
+  }
+  if (!response.ok) throw await readError(response, "The photo could not be uploaded.");
+  return (await response.json()) as UploadedImage;
+};
+
+/** A stored photo, saved or not, as a Blob for an object URL (an <img> cannot
+ *  send the staff token). */
+export const fetchBannerImage = async (imageId: string): Promise<Blob> => {
+  const token = await getAccessToken();
+  if (!token) throw new ApiError("Your session has ended. Please sign in again.", 401);
+  let response: Response;
+  try {
+    response = await fetch(
+      `${API_BASE}/api/admin/website/banner/images/${encodeURIComponent(imageId)}`,
+      { headers: authHeaders(token) },
+    );
+  } catch {
+    throw new ApiError("Could not reach the server.", 0);
+  }
+  if (!response.ok) throw await readError(response, "Could not load the photo.");
+  return response.blob();
+};
+
+// ---------------------------------------------------------------------------
+// Website settings: the private feedback questionnaire (/api/admin/feedback)
+// ---------------------------------------------------------------------------
+
+export type FeedbackQuestionKind = "choice" | "scale" | "grid" | "text";
+
+export interface FeedbackChoice {
+  value: string;
+  en: string;
+  zu?: string | null;
+}
+
+export interface FeedbackQuestion {
+  id: string;
+  kind: FeedbackQuestionKind;
+  text_en: string;
+  text_zu?: string | null;
+  /** In the five-question short version (?v=short). */
+  short?: boolean;
+  required?: boolean;
+  options?: FeedbackChoice[] | null;
+  rows?: FeedbackChoice[] | null;
+  min?: number | null;
+  max?: number | null;
+  low_en?: string | null;
+  low_zu?: string | null;
+  high_en?: string | null;
+  high_zu?: string | null;
+}
+
+export interface FeedbackSurvey {
+  link_code: string;
+  link: string;
+  short_link: string;
+  title_en: string;
+  title_zu: string | null;
+  intro_en: string;
+  intro_zu: string | null;
+  is_open: boolean;
+  questions: FeedbackQuestion[];
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface FeedbackAnswerRow {
+  id: string;
+  kind: FeedbackQuestionKind;
+  question: string;
+  question_en?: string;
+  answer: string | number | Record<string, string>;
+  label: string;
+}
+
+export interface FeedbackResponseRow {
+  id: string;
+  name: string | null;
+  mobile: string | null;
+  answers: FeedbackAnswerRow[];
+  version: "full" | "short";
+  source: "qr" | "link";
+  language: "en" | "zu";
+  created_at: string;
+}
+
+export interface FeedbackQuestionResult {
+  id: string;
+  kind: FeedbackQuestionKind;
+  text_en: string;
+  answered: number;
+  average: number | null;
+  nps: number | null;
+  counts: Record<string, number> | null;
+  grid: Record<string, Record<string, number>> | null;
+}
+
+export interface FeedbackOverview {
+  survey: FeedbackSurvey;
+  summary: {
+    responses: number;
+    named: number;
+    short_version: number;
+    questions: FeedbackQuestionResult[];
+  };
+  responses: FeedbackResponseRow[];
+  can_edit: boolean;
+  /** Question ids with answers on record, current or removed: never reused. */
+  answered_ids: string[];
+}
+
+export interface FeedbackSurveyChange {
+  questions?: FeedbackQuestion[];
+  is_open?: boolean;
+  title_en?: string;
+  title_zu?: string | null;
+  intro_en?: string;
+  intro_zu?: string | null;
+}
+
+export const fetchFeedback = () => request<FeedbackOverview>("/api/admin/feedback");
+
+export const updateFeedbackSurvey = (body: FeedbackSurveyChange) =>
+  mutate<FeedbackSurvey>("/api/admin/feedback/survey", "PATCH", body);
+
+export const replaceFeedbackLink = () =>
+  mutate<FeedbackSurvey>("/api/admin/feedback/survey/new-link", "POST", {});
+
+// ---------------------------------------------------------------------------
+// Settings > User upload: members from the spreadsheet (/api/admin/member-upload)
+// ---------------------------------------------------------------------------
+
+export interface UploadProblem {
+  row: number;
+  column: string;
+  message: string;
+}
+
+export interface UploadPolicy {
+  policy_number: string;
+  /** ready: will be added. fix: a row failed. exists: already in the book. */
+  state: "ready" | "fix" | "exists";
+  first_row: number;
+  last_row: number;
+  main_member: string | null;
+  lives: { row: number; member_type: string | null; name: string; id_number_given: boolean;
+    date_of_birth: string | null }[];
+  product: string | null;
+  entry_date: string | null;
+  premium_cents: number | null;
+  cover_cents: number | null;
+  currency: string;
+  status: string;
+  problems: UploadProblem[];
+}
+
+export interface UploadCheck {
+  checksum: string;
+  rows: number;
+  policies: UploadPolicy[];
+  file_problems: UploadProblem[];
+  ignored_columns: string[];
+  ready: number;
+  to_fix: number;
+  already_in_book: number;
+}
+
+export interface UploadImport {
+  added: string[];
+  failed: Record<string, string>;
+  check: UploadCheck;
+}
+
+const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+const postFile = async <T>(path: string, file: Blob, fallback: string): Promise<T> => {
+  const token = await getAccessToken();
+  if (!token) throw new ApiError("Your session has ended. Please sign in again.", 401);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: authHeaders(token, { "Content-Type": XLSX_TYPE }),
+      body: file,
+    });
+  } catch {
+    throw new ApiError("Could not reach the server.", 0);
+  }
+  if (!response.ok) throw await readError(response, fallback);
+  return (await response.json()) as T;
+};
+
+export const checkMemberUpload = (file: Blob) =>
+  postFile<UploadCheck>("/api/admin/member-upload/check", file, "The sheet could not be checked.");
+
+export const importMemberUpload = (file: Blob, checksum: string) =>
+  postFile<UploadImport>(
+    `/api/admin/member-upload/import?checksum=${encodeURIComponent(checksum)}`, file,
+    "The policies could not be added.");

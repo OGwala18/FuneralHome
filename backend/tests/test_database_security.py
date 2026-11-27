@@ -25,7 +25,7 @@ import psycopg
 import pytest
 
 SUPABASE_PUBLIC_ROLES = ("anon", "authenticated")
-APPEND_ONLY = ("enquiry_events", "staff_events")
+APPEND_ONLY = ("enquiry_events", "staff_events", "website_banners", "feedback_responses")
 # Created by db/migrate.py itself; no personal data, nothing granted on it.
 RUNNER_TABLES = {"schema_migrations"}
 
