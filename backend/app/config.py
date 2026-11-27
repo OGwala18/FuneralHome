@@ -72,6 +72,11 @@ class Settings:
     # read into memory (app/request_context.py).
     max_request_bytes: int = int(os.getenv("MAX_REQUEST_BYTES", str(256 * 1024)))
 
+    # The two uploads: a homepage banner photo, already cropped and resized by
+    # the portal to 1920 x 800 (usually 200-400 KB), and the member spreadsheet
+    # (Settings > User upload; 5,000 rows is well under 1 MB). On those routes only.
+    max_banner_image_bytes: int = int(os.getenv("MAX_BANNER_IMAGE_BYTES", str(2_000_000)))
+
     # Twilio WhatsApp. Absent in dev -> confirmations are logged, not sent, and
     # the registration still succeeds. A messaging outage must never cost a lead.
     twilio_account_sid: str | None = os.getenv("TWILIO_ACCOUNT_SID")
@@ -114,6 +119,13 @@ class Settings:
     # Optional: the WhatsApp escalation email links straight to the
     # conversation when it is set.
     portal_url: str | None = (os.getenv("PORTAL_URL") or "").strip().rstrip("/") or None
+
+    # The public website's address. The portal's Feedback page builds the
+    # questionnaire's private link (and its QR code) from it, so the internal
+    # environment sets its own site here and production keeps the default.
+    public_site_url: str = (
+        (os.getenv("PUBLIC_SITE_URL") or "").strip().rstrip("/") or "https://induduzo.co.za"
+    )
 
     # Admin notification email. Same rule as WhatsApp: absent in dev means the
     # message is logged rather than sent, and the enquiry still succeeds.

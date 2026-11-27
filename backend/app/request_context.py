@@ -63,10 +63,14 @@ class RequestTooLarge(ApiError):
 
 
 class RequestContextMiddleware:
-    def __init__(self, app, *, max_body_bytes: int, deployed: bool) -> None:
+    def __init__(self, app, *, max_body_bytes: int, deployed: bool,
+                 larger_bodies: dict[str, int] | None = None) -> None:
         self.app = app
         self.max_body_bytes = max_body_bytes
         self.extra_headers = security_headers(deployed)
+        # Exact paths that may carry a bigger body (the banner photo upload).
+        # Exact, not prefixes: one upload route must not widen its neighbours.
+        self.larger_bodies = dict(larger_bodies or {})
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
@@ -93,8 +97,9 @@ class RequestContextMiddleware:
                 message = {**message, "headers": headers}
             await send(message)
 
+        limit = self.larger_bodies.get(scope.get("path", ""), self.max_body_bytes)
         declared = _header(scope, b"content-length")
-        if declared is not None and (not declared.isdigit() or int(declared) > self.max_body_bytes):
+        if declared is not None and (not declared.isdigit() or int(declared) > limit):
             await _send_json(send_with_headers, 413, {
                 "detail": "That request is too large.",
                 "code": "request_too_large",
@@ -109,7 +114,7 @@ class RequestContextMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
-                if received > self.max_body_bytes:
+                if received > limit:
                     # Raised inside the app, where the exception handlers turn
                     # it into the same 413 the fast path above sends.
                     raise RequestTooLarge()

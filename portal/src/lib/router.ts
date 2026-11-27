@@ -34,7 +34,11 @@ export type Route =
   | { name: "whatsapp"; id?: string }
   /** The live website's visitors and clicks, from Plausible. Owner only. */
   | { name: "analytics" }
-  | { name: "settings" };
+  /** Settings has four parts, each its own address so it can be bookmarked. */
+  | { name: "settings"; section?: SettingsSection };
+
+export type SettingsSection = "team" | "website" | "uploads" | "portal";
+const SETTINGS_SECTIONS: SettingsSection[] = ["team", "website", "uploads", "portal"];
 
 const parse = (pathname: string, search: string): Route => {
   const parts = pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
@@ -66,8 +70,10 @@ const parse = (pathname: string, search: string): Route => {
       return { name: "growth" };
     case "analytics":
       return { name: "analytics" };
-    case "settings":
-      return { name: "settings" };
+    case "settings": {
+      const section = SETTINGS_SECTIONS.find((name) => name === parts[1]);
+      return section ? { name: "settings", section } : { name: "settings" };
+    }
     default:
       // Unknown path lands on Today rather than a dead end (Peak-End: a flow
       // never terminates on an apology).
@@ -96,7 +102,8 @@ export const hrefFor = (route: Route): string => {
     case "whatsapp":
       return route.id ? `/growth/whatsapp/${encodeURIComponent(route.id)}` : "/growth/whatsapp";
     case "analytics": return "/analytics";
-    case "settings": return "/settings";
+    case "settings":
+      return route.section && route.section !== "team" ? `/settings/${route.section}` : "/settings";
   }
 };
 
@@ -119,7 +126,7 @@ export const useRoute = (): Route => {
   // Every route change starts a new task, so start it at the top.
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [route.name, "id" in route ? route.id : ""]);
+  }, [route.name, "id" in route ? route.id : "", "section" in route ? route.section : ""]);
 
   return route;
 };
