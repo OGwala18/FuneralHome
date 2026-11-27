@@ -163,8 +163,11 @@ export type FeedbackAnswer = string | number | Record<string, string>;
 
 export interface FeedbackResponse {
   answers: { id: string; answer: FeedbackAnswer }[];
-  name: string | null;
+  first_name: string;
+  surname: string;
+  /** At least one of mobile and email. */
   mobile: string | null;
+  email: string | null;
   version: "full" | "short";
   source: "qr" | "link";
   language: "en" | "zu";

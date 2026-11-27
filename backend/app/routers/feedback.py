@@ -12,12 +12,15 @@ PUBLIC (the questionnaire page, no sign-in)
 
 STAFF (the portal: Settings > Website settings)
     GET   /api/admin/feedback                  links, questions, results, responses
+    GET   /api/admin/feedback/people           the families who answered, for Growth
     PATCH /api/admin/feedback/survey           change the wording, questions, open/close (admin, owner)
     POST  /api/admin/feedback/survey/new-link  replace the link (admin, owner)
 
-Answering is voluntary, and so is a name or number (the owner's wording: "Leave
-blank to stay anonymous. By giving your details you agree that Induduzo may
-contact you about your feedback"). Giving either records contact_consent.
+Answering each question is voluntary, but since 27 Nov 2026 (migration 0033)
+every family gives a first name and surname, and a cellphone number or an
+email address, so the office can follow up and see them under Growth. The page
+says plainly that giving them is agreeing to be contacted about the feedback,
+so contact_consent is recorded.
 
 A question is one of four kinds, each in English and isiZulu:
     choice  pick one of `options`
@@ -48,7 +51,8 @@ from ..config import get_settings
 from ..db import connection
 from ..errors import ApiError
 from ..ratelimit import enforce, feedback_open_limiter, feedback_send_limiter
-from ..schemas import Line, Name, Text, clean_text, normalise_mobile
+from ..schemas import (_EMAIL_RE, _FORMULA_START, Line, Name, Text, clean_text,
+                       normalise_mobile)
 from ..services.staff import log_staff_event
 
 logger = logging.getLogger(__name__)
@@ -166,8 +170,11 @@ class ResponseIn(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     answers: list[AnswerIn] = Field(max_length=MAX_QUESTIONS)
-    name: Name | None = Field(default=None, max_length=120)
+    first_name: Name = Field(min_length=1, max_length=80)
+    surname: Name = Field(min_length=1, max_length=80)
+    # At least one of the two (checked in send_response, as a field error).
     mobile: str | None = None
+    email: str | None = Field(default=None, max_length=255)
     version: Version = "full"
     source: Literal["qr", "link"] = "link"
     language: Literal["en", "zu"] = "en"
@@ -181,10 +188,14 @@ class ResponseIn(BaseModel):
             raise ValueError("Enter a valid value")
         return ""
 
-    @field_validator("name", mode="before")
+    @field_validator("email")
     @classmethod
-    def _blank_name(cls, value: Any) -> Any:
-        return None if isinstance(value, str) and not value.strip() else value
+    def _email(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        if not _EMAIL_RE.fullmatch(value) or value.startswith(_FORMULA_START):
+            raise ValueError("Enter a valid email address")
+        return value.lower()
 
     @field_validator("mobile")
     @classmethod
@@ -342,19 +353,23 @@ def send_response(code: str, payload: ResponseIn, request: Request) -> ResponseC
         if not answers:
             raise ApiError(422, "validation_failed",
                            "Please answer at least one question before sending.")
-        consent = payload.name is not None or payload.mobile is not None
+        if payload.mobile is None and payload.email is None:
+            raise _field_errors({"mobile": "Give a cellphone number or an email address"})
         response_id = conn.execute(
             """
             insert into feedback_responses
-                   (survey_id, name, mobile, answers, contact_consent, version, source, language)
-            values (%s, %s, %s, %s::jsonb, %s, %s, %s, %s)
+                   (survey_id, first_name, surname, name, mobile, email, answers,
+                    contact_consent, version, source, language)
+            values (%s, %s, %s, %s, %s, %s, %s::jsonb, true, %s, %s, %s)
             returning id
             """,
-            (survey["id"], payload.name, payload.mobile, json.dumps(answers, ensure_ascii=False),
-             consent, payload.version, payload.source, payload.language),
+            (survey["id"], payload.first_name, payload.surname,
+             f"{payload.first_name} {payload.surname}"[:120], payload.mobile, payload.email,
+             json.dumps(answers, ensure_ascii=False), payload.version, payload.source,
+             payload.language),
         ).fetchone()["id"]
-    logger.info("Feedback response %s received (%s, %s, %s)", response_id, payload.version,
-                payload.source, "named" if consent else "anonymous")
+    logger.info("Feedback response %s received (%s, %s)", response_id, payload.version,
+                payload.source)
     return ResponseCreated(id=response_id)
 
 
@@ -376,8 +391,11 @@ class SurveyOut(BaseModel):
 
 class FeedbackRow(BaseModel):
     id: UUID
+    first_name: str | None
+    surname: str | None
     name: str | None
     mobile: str | None
+    email: str | None
     answers: list[dict]
     version: str
     source: str
@@ -520,7 +538,8 @@ def feedback_overview(staff: StaffUser = Depends(require_staff)) -> FeedbackAdmi
             "jsonb_array_elements(r.answers) a where r.survey_id = %s", (survey["id"],)).fetchall()
         rows = conn.execute(
             """
-            select id, name, mobile, answers, version, source, language, created_at
+            select id, first_name, surname, name, mobile, email, answers, version, source,
+                   language, created_at
               from feedback_responses
              where survey_id = %s
              order by created_at desc
@@ -538,6 +557,65 @@ def feedback_overview(staff: StaffUser = Depends(require_staff)) -> FeedbackAdmi
         can_edit=staff.role in ("admin", "owner"),
         answered_ids=sorted({r["id"] for r in conn_answered_ids}, key=_id_order),
     )
+
+
+class FeedbackPerson(BaseModel):
+    """One family who answered, as Growth lists them."""
+
+    id: UUID
+    first_name: str | None
+    surname: str | None
+    # Responses saved before 0033 have only this.
+    name: str | None
+    mobile: str | None
+    email: str | None
+    created_at: datetime
+    version: str
+    source: str
+    # Q2 "how satisfied" (1-5) and Q9 "how likely to recommend" (0-10), when answered.
+    satisfaction: int | None = None
+    recommend: int | None = None
+
+
+class FeedbackPeople(BaseModel):
+    people: list[FeedbackPerson]
+    total: int
+    anonymous: int
+
+
+def _scale_answer(answers: list[dict], question_id: str) -> int | None:
+    value = next((a.get("answer") for a in answers if a.get("id") == question_id
+                  and a.get("kind") == "scale"), None)
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+@admin_router.get("/people", response_model=FeedbackPeople)
+def feedback_people(staff: StaffUser = Depends(require_staff)) -> FeedbackPeople:
+    """Everyone who answered the questionnaire and left their details, newest
+    first (the latest 1,000). For Growth."""
+    with connection() as conn:
+        counts = conn.execute(
+            "select count(*) filter (where contact_consent) as named, "
+            "count(*) filter (where not contact_consent) as anonymous from feedback_responses"
+        ).fetchone()
+        rows = conn.execute(
+            """
+            select id, first_name, surname, name, mobile, email, created_at, version, source,
+                   answers
+              from feedback_responses
+             where contact_consent
+             order by created_at desc
+             limit 1000
+            """
+        ).fetchall()
+        log_staff_event(conn, staff.email, "feedback_people_viewed", None, {"rows": len(rows)})
+    people = [FeedbackPerson(
+        **{k: r[k] for k in ("id", "first_name", "surname", "name", "mobile", "email",
+                              "created_at", "version", "source")},
+        satisfaction=_scale_answer(r["answers"], "q2"),
+        recommend=_scale_answer(r["answers"], "q9"),
+    ) for r in rows]
+    return FeedbackPeople(people=people, total=counts["named"], anonymous=counts["anonymous"])
 
 
 @admin_router.patch("/survey", response_model=SurveyOut)
