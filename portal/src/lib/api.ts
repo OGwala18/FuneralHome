@@ -1141,8 +1141,12 @@ export interface FeedbackAnswerRow {
 
 export interface FeedbackResponseRow {
   id: string;
+  first_name: string | null;
+  surname: string | null;
+  /** Responses before 27 Nov 2026 have only this. */
   name: string | null;
   mobile: string | null;
+  email: string | null;
   answers: FeedbackAnswerRow[];
   version: "full" | "short";
   source: "qr" | "link";
@@ -1188,6 +1192,29 @@ export const fetchFeedback = () => request<FeedbackOverview>("/api/admin/feedbac
 
 export const updateFeedbackSurvey = (body: FeedbackSurveyChange) =>
   mutate<FeedbackSurvey>("/api/admin/feedback/survey", "PATCH", body);
+
+/** Growth: everyone who completed the questionnaire, with the details they gave. */
+export interface FeedbackPerson {
+  id: string;
+  first_name: string | null;
+  surname: string | null;
+  name: string | null;
+  mobile: string | null;
+  email: string | null;
+  created_at: string;
+  version: "full" | "short";
+  source: "qr" | "link";
+  satisfaction: number | null;
+  recommend: number | null;
+}
+
+export interface FeedbackPeople {
+  people: FeedbackPerson[];
+  total: number;
+  anonymous: number;
+}
+
+export const fetchFeedbackPeople = () => request<FeedbackPeople>("/api/admin/feedback/people");
 
 export const replaceFeedbackLink = () =>
   mutate<FeedbackSurvey>("/api/admin/feedback/survey/new-link", "POST", {});

@@ -4,6 +4,7 @@ import { byArea, byPlan, conversion, formatDate, perDay, type Tally } from "@/li
 import { hrefFor, navigate } from "@/lib/router";
 import { useEnquiries } from "@/lib/useEnquiries";
 import { Badge, Button, Empty, Notice, Skeleton } from "@/components/ui";
+import FeedbackPeopleCard from "@/components/FeedbackPeopleCard";
 
 /**
  * Where enquiries are coming from.
@@ -68,6 +69,7 @@ export default function Growth() {
       </div>
 
       <WhatsAppCard />
+      <FeedbackPeopleCard />
 
       {error && (
         <div style={{ marginBottom: "var(--s16)" }}>

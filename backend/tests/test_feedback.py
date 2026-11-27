@@ -62,9 +62,11 @@ def full_answers(**overrides):
 
 
 def send(client, code, **body):
-    payload = {"answers": full_answers(), "source": "qr"}
+    payload = {"answers": full_answers(), "source": "qr", "first_name": "Ayanda",
+               "surname": "Testfamily", "mobile": "082 000 0011"}
     payload.update(body)
-    return client.post(f"/api/feedback/{code}/responses", json=payload)
+    return client.post(f"/api/feedback/{code}/responses",
+                       json={k: v for k, v in payload.items() if v is not ...})
 
 
 # --- the owner's survey, as seeded --------------------------------------------------
@@ -117,14 +119,16 @@ def test_guessing_codes_quickly_is_slowed_down(client, survey):
 
 # --- answering --------------------------------------------------------------------
 
-def test_an_anonymous_response_keeps_no_name_and_no_consent(client, survey, db):
+def test_a_response_keeps_the_familys_details_with_their_consent(client, survey, db):
     response = send(client, survey)
     assert response.status_code == 201, response.text
     row = db.execute(
-        "select name, mobile, contact_consent, version, source, language, answers "
-        "from feedback_responses where id = %s", (response.json()["id"],)).fetchone()
-    assert row[:6] == (None, None, False, "full", "qr", "en")
-    answers = {a["id"]: a for a in row[6]}
+        "select first_name, surname, name, mobile, email, contact_consent, version, source, "
+        "language, answers from feedback_responses where id = %s",
+        (response.json()["id"],)).fetchone()
+    assert row[:9] == ("Ayanda", "Testfamily", "Ayanda Testfamily", "+27820000011", None, True,
+                       "full", "qr", "en")
+    answers = {a["id"]: a for a in row[9]}
     assert answers["q1"]["label"] == "Edendale Main Road (Head Office)"
     assert answers["q7"]["answer"] == {"casket": "excellent", "vehicles": "good",
                                        "staff": "excellent"}
@@ -132,8 +136,29 @@ def test_an_anonymous_response_keeps_no_name_and_no_consent(client, survey, db):
     assert answers["q9"]["answer"] == 9
 
 
-def test_a_name_or_number_records_the_agreement_to_be_contacted(client, survey, db):
-    response = send(client, survey, name="Thandi Mkhize", mobile="082 123 4567", language="zu")
+@pytest.mark.parametrize("change, field", [
+    ({"first_name": ""}, "first_name"),
+    ({"surname": ...}, "surname"),
+    ({"mobile": None}, "mobile"),                      # no cellphone and no email
+    ({"mobile": "", "email": ""}, "mobile"),
+    ({"email": "not-an-email"}, "email"),
+])
+def test_name_surname_and_a_cellphone_or_email_are_required(client, survey, change, field):
+    response = send(client, survey, **change)
+    assert response.status_code == 422
+    assert field in response.json()["field_errors"]
+
+
+def test_an_email_instead_of_a_cellphone_is_enough(client, survey, db):
+    response = send(client, survey, mobile=None, email="Family@Example.com")
+    assert response.status_code == 201, response.text
+    assert db.execute("select email, mobile from feedback_responses where id = %s",
+                      (response.json()["id"],)).fetchone() == ("family@example.com", None)
+
+
+def test_the_isizulu_wording_seen_is_kept(client, survey, db):
+    response = send(client, survey, first_name="Thandi", surname="Mkhize",
+                    mobile="082 123 4567", language="zu")
     assert response.status_code == 201
     row = db.execute(
         "select name, mobile, contact_consent, answers from feedback_responses where id = %s",
@@ -212,7 +237,8 @@ def test_a_required_question_must_be_answered(client, survey, db):
 
 @pytest.mark.parametrize("change", [
     {"mobile": "12345"},
-    {"name": "<script>"},
+    {"first_name": "<script>"},
+    {"name": "Old field"},                       # 0032's single name field is gone
     {"website": "http://spam.example"},          # the honeypot
     {"answers": [{"id": "q1", "answer": "edendale"}, {"id": "q1", "answer": "boshoff"}]},
     {"answers": [{"id": "q99", "answer": "x"}]},
@@ -225,9 +251,11 @@ def test_what_is_sent_is_checked(client, survey, change):
 
 def test_no_name_or_number_reaches_the_log(client, survey, caplog):
     with caplog.at_level("INFO"):
-        send(client, survey, name="Thandi Mkhize", mobile="082 123 4567")
-    assert "Feedback response" in caplog.text and "named" in caplog.text
-    assert "Thandi" not in caplog.text and "4567" not in caplog.text
+        send(client, survey, first_name="Thandi", surname="Mkhize", mobile="082 123 4567",
+             email="thandi@example.com")
+    assert "Feedback response" in caplog.text
+    for secret in ("Thandi", "Mkhize", "4567", "example.com"):
+        assert secret not in caplog.text
 
 
 # --- staff ------------------------------------------------------------------------
@@ -242,7 +270,7 @@ def test_staff_see_both_links_and_the_counted_results(client, survey, staff_as):
     send(client, survey, answers=full_answers(q2=5, q9=10, q1="boshoff"))
     send(client, survey, answers=full_answers(q2=3, q9=6, q1="boshoff",
                                               q7={"casket": "poor"}),
-         name="Sipho Dube", mobile="0831234567")
+         first_name="Sipho", surname="Dube", mobile="0831234567")
     staff_as("viewer")
     overview = client.get(ADMIN).json()
     s = overview["survey"]
@@ -256,7 +284,21 @@ def test_staff_see_both_links_and_the_counted_results(client, survey, staff_as):
     assert results["q9"]["nps"] is not None and -100 <= results["q9"]["nps"] <= 100
     assert results["q7"]["grid"]["casket"]["poor"] >= 1
     latest = overview["responses"][0]
-    assert latest["name"] == "Sipho Dube" and latest["mobile"] == "+27831234567"
+    assert (latest["first_name"], latest["surname"], latest["mobile"]) == (
+        "Sipho", "Dube", "+27831234567")
+
+
+def test_growth_lists_every_family_who_answered_with_their_scores(client, survey, staff_as):
+    assert client.get(f"{ADMIN}/people").status_code == 401
+    send(client, survey, first_name="Nomsa", surname="Growthlist", mobile=None,
+         email="nomsa@example.com", answers=full_answers(q2=4, q9=10))
+    staff_as("viewer")
+    body = client.get(f"{ADMIN}/people").json()
+    first = body["people"][0]
+    assert (first["first_name"], first["surname"], first["email"], first["mobile"]) == (
+        "Nomsa", "Growthlist", "nomsa@example.com", None)
+    assert (first["satisfaction"], first["recommend"]) == (4, 10)
+    assert body["total"] >= 1
 
 
 def test_staff_are_told_which_question_ids_already_have_answers(client, survey, staff_as):

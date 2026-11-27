@@ -263,9 +263,10 @@ export default function FeedbackSettings() {
         <div className="stack-8">
           <h3 className="t-label">What families see</h3>
           <p className="t-small muted">
-            The title and introduction open the page; then the questions, one at a time; then an
-            optional name and cellphone number; then the thanks with the 24-hour line. Answering is
-            voluntary. Changing a question never changes what earlier families were asked.
+            The title and introduction open the page; then the questions, one at a time; then the
+            family's name, surname and a cellphone number or email (required, and listed under
+            Growth); then the thanks with the 24-hour line. Each question can be skipped unless marked
+            "Must be answered". Changing a question never changes what earlier families were asked.
             {survey.updated_by && ` Last changed ${formatDate(survey.updated_at)} by ${survey.updated_by}.`}
           </p>
         </div>
@@ -320,7 +321,7 @@ export default function FeedbackSettings() {
             <span className="metric-value">{summary.responses}</span>
           </div>
           <div className="fact">
-            <span className="t-micro">Left a name or number</span>
+            <span className="t-micro">Left their details</span>
             <span className="metric-value">{summary.named}</span>
           </div>
           <div className="fact">
@@ -355,7 +356,7 @@ export default function FeedbackSettings() {
                 <tr>
                   <th>Date</th>
                   <th>Family</th>
-                  <th>Cellphone</th>
+                  <th>Cellphone or email</th>
                   <th>Version</th>
                   <th>Came by</th>
                   <th><span className="sr-only">Answers</span></th>
@@ -366,8 +367,16 @@ export default function FeedbackSettings() {
                   <Fragment key={r.id}>
                     <tr>
                       <td>{formatDate(r.created_at)}</td>
-                      <td className="cell-name">{r.name ?? <span className="muted">Anonymous</span>}</td>
-                      <td>{r.mobile ? <a href={`tel:${r.mobile}`}>{r.mobile}</a> : <span className="muted">—</span>}</td>
+                      <td className="cell-name">
+                        {r.first_name ? `${r.first_name} ${r.surname ?? ""}`.trim()
+                          : r.name ?? <span className="muted">Anonymous</span>}
+                      </td>
+                      <td>
+                        {r.mobile && <a href={`tel:${r.mobile}`}>{r.mobile}</a>}
+                        {r.mobile && r.email && <br />}
+                        {r.email && <a href={`mailto:${r.email}`}>{r.email}</a>}
+                        {!r.mobile && !r.email && <span className="muted">—</span>}
+                      </td>
                       <td>{r.version === "short" ? "Short" : "Full"}</td>
                       <td>{r.source === "qr" ? "QR code" : "Link"}{r.language === "zu" ? " · isiZulu" : ""}</td>
                       <td>

@@ -47,10 +47,17 @@ const COPY = {
     back: "Back",
     of: (n: number, total: number) => `Question ${n} of ${total}`,
     typeHere: "Type your answer here",
-    contactTitle: "Would you like us to contact you? (optional)",
-    contactBody: "Leave blank to stay anonymous. By giving your details you agree that Induduzo may contact you about your feedback.",
-    name: "Your name",
+    contactTitle: "Your details",
+    contactBody: "So we can follow up on your feedback, please give your name and surname, and a cellphone number or an email address. By giving your details you agree that Induduzo may contact you about your feedback.",
+    firstName: "Your name",
+    surname: "Your surname",
     mobile: "Your cellphone number",
+    email: "Your email address",
+    oneOf: "Cellphone or email",
+    needName: "Please enter your name",
+    needSurname: "Please enter your surname",
+    needContact: "Please give a cellphone number or an email address",
+    needEmail: "Enter a valid email address",
     send: "Send",
     sending: "Sending…",
     thanksTitle: "Thank you. Siyabonga.",
@@ -78,10 +85,17 @@ const COPY = {
     back: "Emuva",
     of: (n: number, total: number) => `Umbuzo ${n} kwangu-${total}`,
     typeHere: "Bhala impendulo yakho lapha",
-    contactTitle: "Ungathanda ukuthi sikuthinte? (akuphoqelekile)",
-    contactBody: "Shiya kungenalutho uma ufuna ukungaziwa. Ngokunikeza imininingwane yakho uyavuma ukuthi i-Induduzo ingakuthinta mayelana nombono wakho.",
-    name: "Igama lakho",
+    contactTitle: "Imininingwane yakho",
+    contactBody: "Ukuze sikwazi ukulandelela umbono wakho, sicela unikeze igama nesibongo sakho, kanye nenombolo kamakhalekhukhwini noma ikheli le-imeyili. Ngokunikeza imininingwane yakho uyavuma ukuthi i-Induduzo ingakuthinta mayelana nombono wakho.",
+    firstName: "Igama lakho",
+    surname: "Isibongo sakho",
     mobile: "Inombolo yakho kamakhalekhukhwini",
+    email: "Ikheli lakho le-imeyili",
+    oneOf: "Umakhalekhukhwini noma i-imeyili",
+    needName: "Sicela ufake igama lakho",
+    needSurname: "Sicela ufake isibongo sakho",
+    needContact: "Sicela unikeze inombolo kamakhalekhukhwini noma ikheli le-imeyili",
+    needEmail: "Faka ikheli le-imeyili elivumelekile",
     send: "Thumela",
     sending: "Iyathumela…",
     thanksTitle: "Siyabonga.",
@@ -162,7 +176,9 @@ export default function Feedback({ code }: { code: string }) {
   const [step, setStep] = useState<Step>("intro");
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, FeedbackAnswer>>(() => readDraft(code, version));
-  const [contact, setContact] = useState({ name: "", mobile: "", website: "" });
+  const [contact, setContact] = useState({
+    first_name: "", surname: "", mobile: "", email: "", website: "",
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [sendError, setSendError] = useState<string | null>(null);
   // The API refused an answer to a question this page no longer has.
@@ -260,8 +276,16 @@ export default function Feedback({ code }: { code: string }) {
       setSendError(c.needSomething);
       return;
     }
-    if (contact.mobile.trim() && !isValidMobile(contact.mobile)) {
-      setErrors({ mobile: c.needMobile });
+    const problems: Record<string, string> = {};
+    if (!contact.first_name.trim()) problems.first_name = c.needName;
+    if (!contact.surname.trim()) problems.surname = c.needSurname;
+    if (contact.mobile.trim() && !isValidMobile(contact.mobile)) problems.mobile = c.needMobile;
+    if (contact.email.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(contact.email.trim())) {
+      problems.email = c.needEmail;
+    }
+    if (!contact.mobile.trim() && !contact.email.trim()) problems.mobile = c.needContact;
+    if (Object.keys(problems).length) {
+      setErrors(problems);
       return;
     }
     setBusy(true);
@@ -272,8 +296,10 @@ export default function Feedback({ code }: { code: string }) {
           const value = answers[q.id];
           return { id: q.id, answer: typeof value === "string" ? value.trim() : value };
         }),
-        name: contact.name.trim() || null,
+        first_name: contact.first_name.trim(),
+        surname: contact.surname.trim(),
         mobile: contact.mobile.trim() ? normaliseMobile(contact.mobile) : null,
+        email: contact.email.trim() || null,
         version,
         source,
         language,
@@ -293,10 +319,12 @@ export default function Feedback({ code }: { code: string }) {
         go("question", qIndex);
         setErrors({ [q.id]: c.invalidAnswer ?? fields[`answers.${q.id}`] });
         return;
-      } else if (fields.mobile || fields.name) {
+      } else if (fields.mobile || fields.email || fields.first_name || fields.surname) {
         setErrors({
-          ...(fields.mobile ? { mobile: c.needMobile } : {}),
-          ...(fields.name ? { name: c.invalidName ?? fields.name } : {}),
+          ...(fields.mobile ? { mobile: contact.mobile.trim() ? c.needMobile : c.needContact } : {}),
+          ...(fields.email ? { email: c.needEmail } : {}),
+          ...(fields.first_name ? { first_name: c.invalidName ?? fields.first_name } : {}),
+          ...(fields.surname ? { surname: c.invalidName ?? fields.surname } : {}),
         });
         return;
       } else if (language === "zu" || !(error instanceof SiteError) || error.status === 0) {
@@ -424,18 +452,33 @@ export default function Feedback({ code }: { code: string }) {
                   onChange={(e) => setContact({ ...contact, website: e.target.value })} />
               </div>
 
-              <Field label={c.name} error={errors.name} optionalLabel={c.optional}>
+              <Field label={c.firstName} error={errors.first_name} required>
                 {(props) => (
-                  <Input {...props} autoComplete="name" autoCapitalize="words" maxLength={120}
-                    value={contact.name}
-                    onChange={(e) => setContact({ ...contact, name: e.target.value })} />
+                  <Input {...props} autoComplete="given-name" autoCapitalize="words" maxLength={80}
+                    value={contact.first_name}
+                    onChange={(e) => setContact({ ...contact, first_name: e.target.value })} />
                 )}
               </Field>
-              <Field label={c.mobile} error={errors.mobile} optionalLabel={c.optional}>
+              <Field label={c.surname} error={errors.surname} required>
+                {(props) => (
+                  <Input {...props} autoComplete="family-name" autoCapitalize="words" maxLength={80}
+                    value={contact.surname}
+                    onChange={(e) => setContact({ ...contact, surname: e.target.value })} />
+                )}
+              </Field>
+              {/* One of the two is required; the tag says so instead of "Optional". */}
+              <Field label={c.mobile} error={errors.mobile} optionalLabel={c.oneOf}>
                 {(props) => (
                   <Input {...props} type="tel" inputMode="tel" autoComplete="tel" placeholder="082 123 4567"
                     value={contact.mobile}
                     onChange={(e) => setContact({ ...contact, mobile: e.target.value })} />
+                )}
+              </Field>
+              <Field label={c.email} error={errors.email} optionalLabel={c.oneOf}>
+                {(props) => (
+                  <Input {...props} type="email" inputMode="email" autoComplete="email" maxLength={255}
+                    value={contact.email}
+                    onChange={(e) => setContact({ ...contact, email: e.target.value })} />
                 )}
               </Field>
 
