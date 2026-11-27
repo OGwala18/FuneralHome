@@ -20,12 +20,16 @@ const LIVE_HOSTS = [SITE_DOMAIN, `www.${SITE_DOMAIN}`];
 
 let enabled = false;
 
+// The questionnaire's link code is what keeps that page private; Plausible
+// (and the portal's Analytics page) only ever see "/feedback/link".
+const maskPrivatePaths = (path: string): string => path.replace(/^\/feedback\/[^/]+/, "/feedback/link");
+
 const withoutQuery = (url: string): string => {
   try {
     const parsed = new URL(url);
-    return `${parsed.origin}${parsed.pathname}`;
+    return `${parsed.origin}${maskPrivatePaths(parsed.pathname)}`;
   } catch {
-    return url.split(/[?#]/)[0];
+    return maskPrivatePaths(url.split(/[?#]/)[0]);
   }
 };
 

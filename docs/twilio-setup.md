@@ -71,8 +71,8 @@ That only works once the sender's webhooks point at the API (that document's
 §9): incoming messages to `/api/whatsapp/inbound`, and status callbacks to
 `/api/whatsapp/status`. Until then, messages reach Twilio and nobody sees them.
 
-Today the website's "WhatsApp us" button goes to 079 751 0648, which staff
-answer in the WhatsApp app. It moves to 073 731 0521 once the line is proven.
+The website's "WhatsApp us" button goes to 073 731 0521. The old staff number,
+079 751 0648, was retired from every public surface on 26 Nov 2026.
 
 ---
 

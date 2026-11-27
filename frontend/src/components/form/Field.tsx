@@ -15,6 +15,8 @@ interface FieldProps {
   error?: string;
   required?: boolean;
   className?: string;
+  /** The "Optional" tag, in the page's language (the feedback page passes isiZulu). */
+  optionalLabel?: string;
 }
 
 /**
@@ -25,7 +27,9 @@ interface FieldProps {
  * interrupted mid-form). Errors are announced via role="alert" and linked with
  * aria-describedby so they are read out, not just seen.
  */
-export function Field({ label, children, hint, error, required, className }: FieldProps) {
+export function Field({
+  label, children, hint, error, required, className, optionalLabel = "Optional",
+}: FieldProps) {
   const id = useId();
   const hintId = hint ? `${id}-hint` : undefined;
   const errorId = error ? `${id}-error` : undefined;
@@ -40,7 +44,7 @@ export function Field({ label, children, hint, error, required, className }: Fie
             *
           </span>
         )}
-        {!required && <span className="ml-2 text-xs font-normal text-muted-foreground">Optional</span>}
+        {!required && <span className="ml-2 text-xs font-normal text-muted-foreground">{optionalLabel}</span>}
       </Label>
 
       {children({

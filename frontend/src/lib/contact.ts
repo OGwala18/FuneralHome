@@ -1,9 +1,13 @@
 /**
  * Contact details, in one place.
  *
- * Induduzo publishes two mobile numbers. The first is the primary: it is what
- * single-number surfaces (the header call button, WhatsApp) use. Surfaces with
- * room to list both — the Contact page and the footer — map over CONTACT_PHONES.
+ * Induduzo publishes two phone numbers. The first, the 24-hour line, is the
+ * primary: it is what single-number surfaces (the header call button, the
+ * hero's "Call us") use. Surfaces with room to list both — the Contact page and
+ * the footer — map over CONTACT_PHONES.
+ *
+ * 079 751 0648 was the primary until the owner retired it from every public
+ * surface (26 Nov 2026). Do not bring it back.
  */
 
 export interface ContactPhone {
@@ -25,7 +29,7 @@ const phone = (display: string, e164: string): ContactPhone => ({
 });
 
 export const CONTACT_PHONES: ContactPhone[] = [
-  phone("079 751 0648", "+27797510648"),
+  phone("069 706 0387", "+27697060387"),
   phone("082 954 9241", "+27829549241"),
 ];
 
@@ -40,13 +44,8 @@ export const CONTACT_PHONE_LINK = PRIMARY_PHONE.link;
 export const WHATSAPP_LINE = { display: "073 731 0521", e164: "+27737310521" };
 export const WHATSAPP_URL = "https://wa.me/27737310521";
 
-/** The 24-hour line, for a death at any hour. Not a phone() entry on purpose:
- *  the WhatsApp menu's sync test reads only the office numbers above. */
-export const TWENTY_FOUR_HOUR_LINE = {
-  display: "069 706 0387",
-  e164: "+27697060387",
-  link: "tel:+27697060387",
-};
+/** The 24-hour line, for a death at any hour. It is the primary number. */
+export const TWENTY_FOUR_HOUR_LINE = PRIMARY_PHONE;
 
 export const CONTACT_EMAIL = "info@induduzo.co.za";
 export const CONTACT_EMAIL_LINK = `mailto:${CONTACT_EMAIL}`;

@@ -16,12 +16,20 @@ import RegisterDetails from "./pages/RegisterDetails";
 import Gallery from "./pages/Gallery";
 import Testimonials from "./pages/Testimonials";
 import Founder from "./pages/Founder";
+import Feedback from "./pages/Feedback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+// The private questionnaire: /feedback/<code>. Its own plain page, outside the
+// site's header and menu, and reachable only through its link.
+const FEEDBACK_PATH = /^\/feedback\/([a-z0-9]{10,32})\/?$/;
+
 const PublicRouter = () => {
   const pathname = usePathname();
+
+  const feedback = FEEDBACK_PATH.exec(pathname);
+  if (feedback) return <Feedback code={feedback[1]} />;
 
   const page = (() => {
     switch (pathname) {

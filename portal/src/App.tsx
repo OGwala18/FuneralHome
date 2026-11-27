@@ -176,7 +176,7 @@ export default function App() {
         {route.name === "whatsapp" && <WhatsApp id={route.id} canEdit={me.role === "owner"} />}
         {/* Owner only. Anyone else who types the address lands on Today. */}
         {route.name === "analytics" && (me.role === "owner" ? <Analytics /> : <Today canEdit={canEdit} />)}
-        {route.name === "settings" && <Settings me={me} />}
+        {route.name === "settings" && <Settings me={me} section={route.section} />}
       </main>
     </>
   );

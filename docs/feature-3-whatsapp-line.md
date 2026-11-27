@@ -33,8 +33,8 @@ So the line:
 5. Lets **staff reply from the portal**, from the same number, while the
    conversation is escalated and WhatsApp's 24-hour window is open.
 
-The website's "WhatsApp us" button stays on 079 751 0648 until this is live on
-the real number (W8).
+The website's "WhatsApp us" button now goes to 073 731 0521. The old number,
+079 751 0648, was retired from every public surface on 26 Nov 2026.
 
 ---
 
@@ -53,7 +53,7 @@ the real number (W8).
 | Family details over WhatsApp | **Never ID numbers.** Any run of 13 or more digits is removed before storing, and Twilio's copy is deleted | Owner, 21 Oct 2026 |
 | Joining over WhatsApp | **Not in the menu.** "How to join" links to the website's registration, which already captures consent and sends the confirmation. The planned WhatsApp registration (old M3, M4) is dropped | 27 Oct 2026, following the owner's new menu design |
 | Language | English first, isiZulu next (M5) | Owner, 21 Oct 2026 |
-| Website button | Stays on 079 751 0648 until this works on the real number | Owner, 19 Oct 2026 |
+| Website button | Stayed on the old staff number until the line worked; that number was retired on 26 Nov 2026 | Owner, 19 Oct and 26 Nov 2026 |
 
 ## 3. Still open
 

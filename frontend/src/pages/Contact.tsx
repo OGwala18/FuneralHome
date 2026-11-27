@@ -81,13 +81,14 @@ export default function Contact() {
                       className="block text-lg font-semibold text-primary hover:underline"
                     >
                       {p.display}
+                      {p.e164 === TWENTY_FOUR_HOUR_LINE.e164 && (
+                        <span className="block text-sm font-normal text-muted-foreground">
+                          24 hours
+                        </span>
+                      )}
                     </a>
                   ))}
                 </div>
-                <a href={TWENTY_FOUR_HOUR_LINE.link}
-                  className="mt-2 block text-sm font-semibold text-primary hover:underline">
-                  24 hours: {TWENTY_FOUR_HOUR_LINE.display}
-                </a>
                 <p className="text-sm text-muted-foreground mt-2">{t("cta_call")}</p>
               </CardContent>
             </Card>

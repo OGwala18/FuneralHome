@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Facebook, Instagram, Menu, MessageCircle, Phone, X } from "lucide-react";
 
+import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { CONTACT_PHONE_LINK, FACEBOOK_URL, INSTAGRAM_URL, WHATSAPP_URL } from "@/lib/contact";
 import { useLanguage } from "@/lib/i18n";
@@ -121,9 +122,9 @@ export const Header = () => {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="container flex h-16 items-center justify-between gap-2">
+      <div className="container flex h-20 items-center justify-between gap-2">
         <NavLink to="/" className="flex shrink-0 items-center" onClick={closeMobileMenu}>
-          <span className="text-xl font-bold text-primary sm:text-2xl">Induduzo</span>
+          <BrandLogo className="h-14 sm:h-16" />
         </NavLink>
 
         <nav className="hidden items-center gap-4 text-sm font-medium lg:flex xl:gap-6 xl:text-base">
